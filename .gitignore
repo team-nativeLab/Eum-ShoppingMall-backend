@@ -38,3 +38,6 @@ out/
 
 ### 업로드 파일 (로컬 저장소) ###
 /uploads/
+
+.env
+.env.example
