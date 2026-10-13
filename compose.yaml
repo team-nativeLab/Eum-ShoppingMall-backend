@@ -1,0 +1,24 @@
+# 로컬 개발용 MySQL·Redis. 계정 정보는 application-local.yaml과 맞춘다.
+# 포트는 이 PC에서만 접속할 수 있게 127.0.0.1로 묶는다. (묶지 않으면 같은 네트워크의 다른 기기에서
+# 알려진 개발용 비밀번호로 DB에, 비밀번호 없이 Redis에 접속할 수 있다.)
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: shopping
+      MYSQL_USER: shopping
+      MYSQL_PASSWORD: shopping
+      MYSQL_ROOT_PASSWORD: root
+      TZ: Asia/Seoul
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7
+    ports:
+      - "127.0.0.1:6379:6379"
+
+volumes:
+  mysql-data:

@@ -1,0 +1,95 @@
+# 공통 설정. 비밀 값과 환경마다 다른 값은 환경변수로만 받고 기본값을 두지 않는다.
+# 프로파일 없이 띄우면 필수 환경변수가 없어 기동에 실패하는데, 이는 의도한 동작이다.
+# (로컬 개발용 값이 운영에 실수로 적용되는 일을 막는다. 로컬에서는 local 프로파일로 띄운다.)
+spring:
+  application:
+    name: shopping
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+    web:
+      pageable:
+        # ?size=에 큰 값을 넣어 한 번에 대량 조회하는 것을 막는다.
+        max-page-size: 100
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+  mvc:
+    # 검증에 실패한 입력값(비밀번호 등)이 예외 메시지에 실려 로그로 남지 않게 한다. (개발 도구가 켜져 있어도 끈다.)
+    log-resolved-exception: false
+
+server:
+  shutdown: graceful
+  forward-headers-strategy: native
+
+management:
+  health:
+    redis:
+      # Redis는 아직 쓰지 않는다. 분산락·캐시를 도입할 때 켠다.
+      enabled: false
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS}
+
+# API 문서 UI는 운영에 노출되지 않도록 기본은 끄고, 로컬 등 필요한 환경에서만 켠다.
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    # Access 토큰 15분, Refresh 토큰 14일
+    access-token-expiry: 900
+    refresh-token-expiry: 1209600
+    refresh-cookie-secure: true
+  rate-limit:
+    # 로그인·회원가입·문의 접수·주문·결제 등에 적용하는 IP별 분당 요청 한도
+    requests-per-minute: ${RATE_LIMIT_PER_MINUTE:10}
+  request:
+    # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
+    max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}
+
+admin:
+  bootstrap:
+    # 두 값이 모두 있으면, 서버가 뜰 때 이 이메일의 계정이 없는 경우에 한해 관리자 계정을 만든다.
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+
+payment:
+  toss:
+    # 토스페이먼츠 시크릿 키. 비어 있으면 결제 승인·취소가 실패한다.
+    secret-key: ${TOSS_SECRET_KEY:}
+
+upload:
+  # 업로드한 이미지를 저장할 서버 디렉터리
+  dir: ${UPLOAD_DIR:uploads}
+
+app:
+  seed:
+    # 카테고리가 하나도 없으면 기본 카테고리(안전모, 보안경, 안전장갑, 방진마스크, 안전화, 귀마개)를 만든다.
+    default-categories: ${SEED_DEFAULT_CATEGORIES:true}
+  client:
+    # 앱이 구동할 때 받아 가는 설정 (GET /api/v1/app/config)
+    min-version: ${APP_MIN_VERSION:1.0.0}
+    latest-version: ${APP_LATEST_VERSION:1.0.0}
+    maintenance: ${APP_MAINTENANCE:false}
+    maintenance-message: ${APP_MAINTENANCE_MESSAGE:}
