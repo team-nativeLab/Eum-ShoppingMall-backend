@@ -1,0 +1,43 @@
+name: ✨ Feature Request
+description: 신규 기능 및 API 개발을 제안합니다.
+body:
+- type: textarea
+  id: feature
+  attributes:
+    label: 기능 설명
+    description: 개발할 기능과 기대하는 동작을 설명해 주세요.
+  validations:
+    required: true
+- type: textarea
+  id: background
+  attributes:
+    label: 작업 배경 및 목적
+    description: 필요한 이유와 해결하려는 문제를 작성해 주세요.
+  validations:
+    required: true
+- type: textarea
+  id: tasks
+  attributes:
+    label: 상세 작업 내용
+    description: 대상 API, 요청·응답, 데이터 변경 등 구체적인 작업 범위를 작성해 주세요.
+  validations:
+    required: true
+- type: textarea
+  id: references
+  attributes:
+    label: 관련 API 명세서 및 피그마 링크
+    description: 관련 API 명세서와 피그마 링크를 작성해 주세요. 해당 자료가 없으면 생략할 수 있습니다.
+  validations:
+    required: false
+- type: textarea
+  id: acceptance
+  attributes:
+    label: 완료 조건 (체크리스트)
+    description: 작업 완료를 판단할 조건을 체크리스트로 작성해 주세요.
+    value: '- [ ] 기능 및 API 구현
+
+      - [ ] 관련 테스트 및 검증
+
+      - [ ] 필요한 API 명세서 업데이트'
+  validations:
+    required: true

@@ -1,0 +1,50 @@
+name: 🐛 Bug Report
+description: 버그 및 오류를 보고합니다.
+body:
+- type: textarea
+  id: bug
+  attributes:
+    label: 버그 설명
+    description: 발생한 문제와 영향을 받는 기능 또는 API를 설명해 주세요.
+  validations:
+    required: true
+- type: textarea
+  id: steps
+  attributes:
+    label: 재현 방법
+    description: 문제를 재현할 요청과 순서를 작성해 주세요.
+    value: '1. 실행 환경 준비
+
+      2. 요청 또는 동작 수행
+
+      3. 오류 확인'
+  validations:
+    required: true
+- type: textarea
+  id: expected
+  attributes:
+    label: 예상 동작
+    description: 정상적으로 기대한 응답이나 동작을 작성해 주세요.
+  validations:
+    required: true
+- type: textarea
+  id: actual
+  attributes:
+    label: 실제 동작
+    description: 실제 응답, 상태 코드 및 오류 내용을 작성해 주세요.
+  validations:
+    required: true
+- type: textarea
+  id: evidence
+  attributes:
+    label: 로그 및 스크린샷
+    description: 관련 로그를 붙여 넣거나 스크린샷을 첨부해 주세요. 비밀번호·토큰·개인정보는 제거해 주세요.
+  validations:
+    required: false
+- type: textarea
+  id: environment
+  attributes:
+    label: 실행 환경
+    description: OS, Java 버전, 실행 프로파일, DB 종류·버전, 브랜치·커밋 등 재현에 필요한 환경을 작성해 주세요.
+  validations:
+    required: true
