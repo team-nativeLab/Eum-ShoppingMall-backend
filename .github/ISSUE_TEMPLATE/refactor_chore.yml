@@ -1,0 +1,36 @@
+name: 🔧 Refactor / Chore
+description: 리팩터링 및 환경 설정 작업을 정리합니다.
+body:
+- type: textarea
+  id: purpose
+  attributes:
+    label: 작업 목적
+    description: 개선하려는 문제와 작업의 목적을 작성해 주세요.
+  validations:
+    required: true
+- type: textarea
+  id: targets
+  attributes:
+    label: 변경 대상
+    description: 변경할 패키지, 클래스, 파일 또는 설정과 작업 범위를 작성해 주세요.
+  validations:
+    required: true
+- type: textarea
+  id: checklist
+  attributes:
+    label: 작업 체크리스트
+    description: 수행할 작업과 검증 항목을 체크리스트로 작성해 주세요.
+    value: '- [ ] 변경 대상 수정
+
+      - [ ] 기존 동작 및 영향 범위 확인
+
+      - [ ] 필요한 검증 수행'
+  validations:
+    required: true
+- type: textarea
+  id: cautions
+  attributes:
+    label: 주의사항
+    description: 호환성, 데이터 변경, 배포 순서 등 주의할 점을 작성해 주세요. 없으면 생략할 수 있습니다.
+  validations:
+    required: false
