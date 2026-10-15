@@ -1,6 +1,9 @@
 package com.example.shopping.domain.product.entity;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -12,11 +15,14 @@ import org.springframework.util.StringUtils;
 import com.example.shopping.global.entity.BaseTimeEntity;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -61,14 +67,21 @@ public class Product extends BaseTimeEntity {
 	@Column(nullable = false)
 	private long basePrice;
 
+	// 정가. 판매가(basePrice)보다 높으면 화면에 할인 전 가격으로 줄을 그어 보여 준다. 없으면 null
+	private Long listPrice;
+
 	// false면 "금액 미표시" 상품 (WEB-006)
 	@Column(nullable = false)
 	private boolean priceVisible = true;
 
-	// 안전 인증을 받은 제품인지. "안전 인증 제품만 보기" 필터에 쓴다.
-	@ColumnDefault("false")
-	@Column(nullable = false)
-	private boolean safetyCertified;
+	// 받은 안전 인증들. 인증 종류 필터와 "안전 인증 제품만 보기"에 쓴다.
+	@ElementCollection
+	@CollectionTable(name = "product_certification", joinColumns = @JoinColumn(name = "product_id"),
+			foreignKey = @ForeignKey(name = "fk_product_certification_product"))
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(name = "certification", nullable = false, length = 30)
+	private Set<Certification> certifications = new HashSet<>();
 
 	// 추천순 정렬에 쓰는 점수. 관리자가 정하며 클수록 앞에 나온다.
 	@ColumnDefault("0")
@@ -88,22 +101,24 @@ public class Product extends BaseTimeEntity {
 	@OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
 	private List<ProductSku> skus = new ArrayList<>();
 
+	/** @param listPrice 정가. 없으면 null 또는 0 */
 	public static Product create(Category category, String name, String description, String imageUrl, long basePrice,
-			boolean priceVisible, ProductStatus status) {
+			Long listPrice, boolean priceVisible, ProductStatus status) {
 		Product product = new Product();
 		product.category = category;
 		product.name = name;
 		product.description = blankToNull(description);
 		product.imageUrl = blankToNull(imageUrl);
 		product.basePrice = basePrice;
+		product.listPrice = zeroToNull(listPrice);
 		product.priceVisible = priceVisible;
 		product.status = status;
 		return product;
 	}
 
-	/** null인 항목은 바꾸지 않는다. 설명·이미지는 빈 문자열을 주면 지운다. */
+	/** null인 항목은 바꾸지 않는다. 설명·이미지는 빈 문자열을, 정가는 0을 주면 지운다. */
 	public void update(Category category, String name, String description, String imageUrl, Long basePrice,
-			ProductStatus status) {
+			Long listPrice, ProductStatus status) {
 		if (category != null) {
 			this.category = category;
 		}
@@ -119,18 +134,26 @@ public class Product extends BaseTimeEntity {
 		if (basePrice != null) {
 			this.basePrice = basePrice;
 		}
+		if (listPrice != null) {
+			this.listPrice = zeroToNull(listPrice);
+		}
 		if (status != null) {
 			this.status = status;
 		}
 	}
 
-	/** 검색 필터·정렬에 쓰는 값. null인 항목은 바꾸지 않는다. 브랜드는 빈 문자열을 주면 지운다. */
-	public void updateSearchAttributes(String brand, Boolean safetyCertified, Integer recommendScore) {
+	/**
+	 * 검색 필터·정렬에 쓰는 값. null인 항목은 바꾸지 않는다.
+	 * 브랜드는 빈 문자열을, 인증은 빈 목록을 주면 지운다. 인증은 보낸 목록으로 통째로 바꾼다.
+	 */
+	public void updateSearchAttributes(String brand, Collection<Certification> certifications,
+			Integer recommendScore) {
 		if (brand != null) {
 			this.brand = blankToNull(brand);
 		}
-		if (safetyCertified != null) {
-			this.safetyCertified = safetyCertified;
+		if (certifications != null) {
+			this.certifications.clear();
+			this.certifications.addAll(certifications);
 		}
 		if (recommendScore != null) {
 			this.recommendScore = recommendScore;
@@ -155,7 +178,40 @@ public class Product extends BaseTimeEntity {
 		return priceVisible ? basePrice : null;
 	}
 
+	/** 정가도 판매가와 함께 숨긴다. */
+	public Long getDisplayListPrice() {
+		return priceVisible ? listPrice : null;
+	}
+
+	/** 인증을 정해진 순서(KCs 안전인증, 자율안전확인, 형식승인)로 돌려준다. */
+	public Set<Certification> getCertifications() {
+		return certifications.isEmpty() ? EnumSet.noneOf(Certification.class) : EnumSet.copyOf(certifications);
+	}
+
+	/**
+	 * 품절 여부. 관리자가 품절로 지정했거나, 옵션이 있는데 모든 옵션의 재고가 없으면 품절이다.
+	 * 옵션이 하나도 없는 상품(견적 상품 등)은 재고로 판단하지 않는다.
+	 */
+	public boolean isSoldOut() {
+		return status == ProductStatus.SOLD_OUT
+				|| (!skus.isEmpty() && skus.stream().allMatch(sku -> sku.getStock() <= 0));
+	}
+
+	/** 옵션이 여러 개라 장바구니에 담기 전에 옵션을 골라야 하는지 */
+	public boolean isOptionRequired() {
+		return skus.size() > 1;
+	}
+
+	/** 옵션이 하나뿐이면 그 옵션. 목록에서 옵션 선택 없이 바로 장바구니에 담을 때 쓴다. */
+	public Long getDefaultSkuId() {
+		return skus.size() == 1 ? skus.getFirst().getId() : null;
+	}
+
 	private static String blankToNull(String value) {
 		return StringUtils.hasText(value) ? value.trim() : null;
+	}
+
+	private static Long zeroToNull(Long value) {
+		return value == null || value == 0 ? null : value;
 	}
 }

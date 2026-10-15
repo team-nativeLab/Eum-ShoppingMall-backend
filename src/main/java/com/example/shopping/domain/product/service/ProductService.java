@@ -1,9 +1,15 @@
 package com.example.shopping.domain.product.service;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -14,8 +20,13 @@ import org.springframework.util.StringUtils;
 
 import com.example.shopping.domain.product.dto.CategoryResponse;
 import com.example.shopping.domain.product.dto.ProductDetailResponse;
+import com.example.shopping.domain.product.dto.ProductFacetsResponse;
+import com.example.shopping.domain.product.dto.ProductFacetsResponse.FacetItem;
+import com.example.shopping.domain.product.dto.ProductSearchRequest;
+import com.example.shopping.domain.product.dto.ProductSuggestionResponse;
 import com.example.shopping.domain.product.dto.ProductSummaryResponse;
 import com.example.shopping.domain.product.entity.Category;
+import com.example.shopping.domain.product.entity.Certification;
 import com.example.shopping.domain.product.entity.Product;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.CategoryRepository;
@@ -33,55 +44,77 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class ProductService {
 
+	/** 검색창 자동 완성에 보여 줄 최대 개수 */
+	private static final int SUGGESTION_LIMIT = 5;
+
 	private final ProductRepository productRepository;
 	private final CategoryRepository categoryRepository;
 
 	public List<CategoryResponse> getCategories() {
-		List<Category> visible = new ArrayList<>(categoryRepository.findByActiveTrueOrderBySortOrderAsc());
-
-		// 상위 카테고리가 비노출이면 하위 카테고리도 함께 숨긴다. 여러 단계일 수 있어 더 빠질 것이 없을 때까지 반복한다.
-		boolean removed = true;
-		while (removed) {
-			Set<Long> visibleIds = new HashSet<>();
-			visible.forEach(category -> visibleIds.add(category.getId()));
-			removed = visible.removeIf(category -> category.getParent() != null
-					&& !visibleIds.contains(category.getParent().getId()));
-		}
-		return visible.stream()
+		return visibleCategories().stream()
 				.map(CategoryResponse::from)
 				.toList();
 	}
 
-	/**
-	 * 고객용 상품 목록·검색. 모든 조건은 선택이며 함께 주면 모두 만족하는 상품만 나온다.
-	 *
-	 * @param query         상품명 또는 브랜드에 포함된 글자
-	 * @param brands        이 중 하나의 브랜드인 상품만
-	 * @param minPrice      가격 하한(원). 가격대를 지정하면 금액 미표시 상품은 결과에서 빠진다.
-	 * @param certifiedOnly true면 안전 인증 제품만
-	 * @param sort          recommended(기본), price_asc, price_desc, popular
-	 * @param pageable      페이지 번호와 크기만 쓴다
-	 */
-	public PageResponse<ProductSummaryResponse> search(Long categoryId, String query, List<String> brands,
-			Long minPrice, Long maxPrice, boolean certifiedOnly, String sort, Pageable pageable) {
+	/** 고객용 상품 목록·검색. 조건의 뜻은 ProductSearchRequest 참고 */
+	public PageResponse<ProductSummaryResponse> search(ProductSearchRequest request, Pageable pageable) {
+		Long minPrice = request.minPrice();
+		Long maxPrice = request.maxPrice();
 		if ((minPrice != null && minPrice < 0) || (maxPrice != null && maxPrice < 0)
 				|| (minPrice != null && maxPrice != null && minPrice > maxPrice)) {
 			throw new BusinessException(ErrorCode.INVALID_INPUT);
 		}
-		String keyword = StringUtils.hasText(query) ? query.trim() : null;
-		List<String> brandNames = brands == null ? List.of()
-				: brands.stream().filter(StringUtils::hasText).map(String::trim).toList();
-		ProductSearchCondition condition = new ProductSearchCondition(ProductStatus.CUSTOMER_VISIBLE, categoryId,
-				keyword, brandNames, minPrice, maxPrice, certifiedOnly);
+		List<String> brandNames = request.brand() == null ? List.of()
+				: request.brand().stream().filter(StringUtils::hasText).map(String::trim).toList();
+		Set<Certification> certifications = request.certification() == null ? Set.of()
+				: Set.copyOf(request.certification());
+		ProductSearchCondition condition = new ProductSearchCondition(ProductStatus.CUSTOMER_VISIBLE,
+				categoryScope(request.categoryId()), keyword(request.query()), brandNames, minPrice, maxPrice,
+				certifications, Boolean.TRUE.equals(request.certified()),
+				Boolean.TRUE.equals(request.excludeSoldOut()));
 
-		Page<Product> page = productRepository.searchForCustomer(condition, ProductSort.parse(sort),
+		Page<Product> page = productRepository.searchForCustomer(condition, ProductSort.parse(request.sort()),
 				PageRequest.of(pageable.getPageNumber(), pageable.getPageSize()));
 		return PageResponse.from(page.map(ProductSummaryResponse::from));
 	}
 
-	/** 브랜드 필터에 보여 줄 브랜드 목록. 고객에게 보이는 상품이 있는 브랜드만 나온다. */
+	/**
+	 * 검색 화면의 카테고리 탭과 필터(브랜드, 인증)에 보여 줄 항목별 상품 수.
+	 * 가격·브랜드·인증·품절 필터는 개수에 반영하지 않는다 (필터를 골라도 다른 선택지의 개수가 바뀌지 않게).
+	 */
+	public ProductFacetsResponse getFacets(Long categoryId, String query) {
+		List<Category> all = categoryRepository.findAll();
+		String keyword = keyword(query);
+		ProductSearchCondition keywordOnly = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE, null, keyword);
+		ProductSearchCondition scoped = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE,
+				withDescendants(all, categoryId), keyword);
+
+		long keywordTotalCount = productRepository.count(keywordOnly);
+		long totalCount = categoryId == null ? keywordTotalCount : productRepository.count(scoped);
+		return new ProductFacetsResponse(totalCount, keywordTotalCount,
+				rootCategoryFacets(all, productRepository.countByCategory(keywordOnly)),
+				facets(productRepository.countByBrand(scoped), Function.identity(), Function.identity()),
+				facets(productRepository.countByCertification(scoped), Certification::name,
+						Certification::getLabel));
+	}
+
+	/** 검색창 자동 완성. 상품명이나 브랜드에 검색어가 든 상품을 추천순으로 최대 5개 */
+	public List<ProductSuggestionResponse> suggest(String query) {
+		String keyword = keyword(query);
+		if (keyword == null) {
+			return List.of();
+		}
+		ProductSearchCondition condition = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE, null, keyword);
+		return productRepository.findTop(condition, ProductSort.RECOMMENDED, SUGGESTION_LIMIT).stream()
+				.map(ProductSuggestionResponse::from)
+				.toList();
+	}
+
+	/** 브랜드 필터에 보여 줄 브랜드 목록(가나다순). 고객에게 보이는 상품이 있는 브랜드만 나온다. */
 	public List<String> getBrands(Long categoryId) {
-		return productRepository.findBrands(ProductStatus.CUSTOMER_VISIBLE, categoryId);
+		ProductSearchCondition condition = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE,
+				categoryScope(categoryId), null);
+		return productRepository.countByBrand(condition).keySet().stream().sorted().toList();
 	}
 
 	public ProductDetailResponse getDetail(Long productId) {
@@ -89,5 +122,90 @@ public class ProductService {
 				.filter(p -> ProductStatus.CUSTOMER_VISIBLE.contains(p.getStatus()))
 				.orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
 		return ProductDetailResponse.from(product);
+	}
+
+	/** 노출 중인 카테고리. 상위 카테고리가 비노출이면 하위 카테고리도 함께 숨긴다. */
+	private List<Category> visibleCategories() {
+		List<Category> visible = new ArrayList<>(categoryRepository.findByActiveTrueOrderBySortOrderAsc());
+
+		// 여러 단계일 수 있어 더 빠질 것이 없을 때까지 반복한다.
+		boolean removed = true;
+		while (removed) {
+			Set<Long> visibleIds = new HashSet<>();
+			visible.forEach(category -> visibleIds.add(category.getId()));
+			removed = visible.removeIf(category -> category.getParent() != null
+					&& !visibleIds.contains(category.getParent().getId()));
+		}
+		return visible;
+	}
+
+	/** 상품 검색의 카테고리 조건. 카테고리를 고르지 않았으면 null(조건 없음) */
+	private Set<Long> categoryScope(Long categoryId) {
+		return categoryId == null ? null : withDescendants(categoryRepository.findAll(), categoryId);
+	}
+
+	/** 카테고리와 그 아래의 모든 하위 카테고리 ID. categoryId가 null이면 카테고리 조건 없음(null) */
+	private Set<Long> withDescendants(List<Category> all, Long categoryId) {
+		if (categoryId == null) {
+			return null;
+		}
+		Map<Long, List<Long>> childrenByParent = new HashMap<>();
+		for (Category category : all) {
+			if (category.getParent() != null) {
+				childrenByParent.computeIfAbsent(category.getParent().getId(), id -> new ArrayList<>())
+						.add(category.getId());
+			}
+		}
+		Set<Long> ids = new HashSet<>();
+		Deque<Long> pending = new ArrayDeque<>(List.of(categoryId));
+		while (!pending.isEmpty()) {
+			Long id = pending.pop();
+			if (ids.add(id)) {
+				pending.addAll(childrenByParent.getOrDefault(id, List.of()));
+			}
+		}
+		return ids;
+	}
+
+	/**
+	 * 카테고리별 상품 수를 최상위 카테고리로 합친다. 비노출 최상위 카테고리는 뺀다.
+	 * (상위가 노출 중이 아니면 하위도 숨기므로, 최상위 카테고리의 노출 여부만 보면 된다.)
+	 */
+	private List<FacetItem<Long>> rootCategoryFacets(List<Category> all, Map<Long, Long> countByCategory) {
+		Map<Long, Category> byId = new HashMap<>();
+		all.forEach(category -> byId.put(category.getId(), category));
+
+		Map<Category, Long> countByRoot = new HashMap<>();
+		countByCategory.forEach((categoryId, count) -> {
+			Category root = rootOf(byId, categoryId);
+			if (root != null && root.getParent() == null && root.isActive()) {
+				countByRoot.merge(root, count, Long::sum);
+			}
+		});
+		return facets(countByRoot, Category::getId, Category::getName);
+	}
+
+	/** 상위로 거슬러 올라가 최상위 카테고리를 찾는다. 잘못된 데이터로 순환하더라도 멈추도록 지나온 카테고리를 기억한다. */
+	private Category rootOf(Map<Long, Category> byId, Long categoryId) {
+		Category current = byId.get(categoryId);
+		Set<Long> visited = new HashSet<>();
+		while (current != null && current.getParent() != null && visited.add(current.getId())) {
+			current = byId.get(current.getParent().getId());
+		}
+		return current;
+	}
+
+	/** 상품 수가 많은 순, 같으면 이름순으로 정렬한 필터 항목 */
+	private <K, V> List<FacetItem<V>> facets(Map<K, Long> counts, Function<K, V> value, Function<K, String> label) {
+		return counts.entrySet().stream()
+				.map(entry -> new FacetItem<>(value.apply(entry.getKey()), label.apply(entry.getKey()),
+						entry.getValue()))
+				.sorted(Comparator.comparingLong((FacetItem<V> item) -> item.count()).reversed()
+						.thenComparing(FacetItem::label))
+				.toList();
+	}
+
+	private static String keyword(String query) {
+		return StringUtils.hasText(query) ? query.trim() : null;
 	}
 }

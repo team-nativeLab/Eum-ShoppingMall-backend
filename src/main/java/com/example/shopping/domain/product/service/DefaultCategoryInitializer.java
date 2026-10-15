@@ -1,6 +1,7 @@
 package com.example.shopping.domain.product.service;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -27,6 +28,15 @@ public class DefaultCategoryInitializer implements ApplicationRunner {
 	public static final List<String> DEFAULT_CATEGORIES = List.of(
 			"안전모", "보안경", "안전장갑", "방진마스크", "안전화", "귀마개");
 
+	/** 기본 카테고리의 주소 이름. 프론트 화면의 카테고리 주소와 같게 맞췄다. */
+	private static final Map<String, String> SLUGS = Map.of(
+			"안전모", "head-protection",
+			"보안경", "eye-protection",
+			"안전장갑", "hand-protection",
+			"방진마스크", "respiratory-protection",
+			"안전화", "foot-protection",
+			"귀마개", "hearing-protection");
+
 	private final CategoryRepository categoryRepository;
 
 	@Override
@@ -36,7 +46,8 @@ public class DefaultCategoryInitializer implements ApplicationRunner {
 			return;
 		}
 		for (int i = 0; i < DEFAULT_CATEGORIES.size(); i++) {
-			categoryRepository.save(Category.create(null, DEFAULT_CATEGORIES.get(i), i + 1, true));
+			String name = DEFAULT_CATEGORIES.get(i);
+			categoryRepository.save(Category.create(null, name, SLUGS.get(name), i + 1, true));
 		}
 		log.info("기본 카테고리 {}개를 만들었습니다: {}", DEFAULT_CATEGORIES.size(), DEFAULT_CATEGORIES);
 	}

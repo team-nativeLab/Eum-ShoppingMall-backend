@@ -25,17 +25,6 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
 	Page<Product> search(@Param("statuses") Collection<ProductStatus> statuses, @Param("categoryId") Long categoryId,
 			@Param("keyword") String keyword, Pageable pageable);
 
-	/** 브랜드 필터에 보여 줄 브랜드 이름들. 넘겨준 상태의 상품이 하나라도 있는 브랜드만 나온다. */
-	@Query("""
-			select distinct p.brand from Product p
-			where p.status in :statuses
-			  and p.brand is not null
-			  and (:categoryId is null or p.category.id = :categoryId)
-			order by p.brand
-			""")
-	List<String> findBrands(@Param("statuses") Collection<ProductStatus> statuses,
-			@Param("categoryId") Long categoryId);
-
 	/** 홈 화면의 신상품 */
 	List<Product> findTop8ByStatusInOrderByIdDesc(Collection<ProductStatus> statuses);
 

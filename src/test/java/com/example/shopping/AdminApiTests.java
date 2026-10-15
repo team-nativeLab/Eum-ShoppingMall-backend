@@ -139,21 +139,31 @@ class AdminApiTests {
 	@Test
 	void 카테고리를_등록_수정하고_상위를_숨기면_하위도_고객_목록에서_빠진다() throws Exception {
 		long parentId = idOf(postJson("/api/v1/admin/categories", """
-				{"name":"안전용품","sortOrder":1}
+				{"name":"안전용품","slug":"safety","description":"작업자의 안전을 위해","iconKey":"hard-hat",
+				 "sortOrder":1}
 				""").andExpect(status().isCreated()));
 		postJson("/api/v1/admin/categories", """
-				{"name":"안전모","parentId":%d}
+				{"name":"안전모","slug":"head-protection","parentId":%d}
 				""".formatted(parentId))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.parentId").value(parentId))
+				.andExpect(jsonPath("$.data.slug").value("head-protection"))
 				.andExpect(jsonPath("$.data.active").value(true));
-		mockMvc.perform(get("/api/v1/categories")).andExpect(jsonPath("$.data.length()").value(2));
+		mockMvc.perform(get("/api/v1/categories"))
+				.andExpect(jsonPath("$.data.length()").value(2))
+				// 순서(sortOrder)가 0인 하위 카테고리가 앞에 온다.
+				.andExpect(jsonPath("$.data[1].slug").value("safety"))
+				.andExpect(jsonPath("$.data[1].description").value("작업자의 안전을 위해"))
+				.andExpect(jsonPath("$.data[1].iconKey").value("hard-hat"));
 
 		patchJson("/api/v1/admin/categories/" + parentId, """
-				{"name":"안전 용품","active":false}
+				{"name":"안전 용품","slug":"safety-supplies","iconKey":"","active":false}
 				""")
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.name").value("안전 용품"))
+				.andExpect(jsonPath("$.data.slug").value("safety-supplies"))
+				.andExpect(jsonPath("$.data.description").value("작업자의 안전을 위해"))
+				.andExpect(jsonPath("$.data.iconKey").doesNotExist())
 				.andExpect(jsonPath("$.data.sortOrder").value(1))
 				.andExpect(jsonPath("$.data.active").value(false));
 
@@ -162,12 +172,43 @@ class AdminApiTests {
 	}
 
 	@Test
+	void 카테고리_주소_이름은_필수이고_다른_카테고리와_겹칠_수_없다() throws Exception {
+		long helmetId = idOf(postJson("/api/v1/admin/categories", """
+				{"name":"안전모","slug":"head-protection"}
+				""").andExpect(status().isCreated()));
+		long goggleId = idOf(postJson("/api/v1/admin/categories", """
+				{"name":"보안경","slug":"eye-protection"}
+				""").andExpect(status().isCreated()));
+
+		postJson("/api/v1/admin/categories", """
+				{"name":"주소 없음"}
+				""").andExpect(status().isBadRequest());
+		postJson("/api/v1/admin/categories", """
+				{"name":"대문자","slug":"Head Protection"}
+				""").andExpect(status().isBadRequest());
+		postJson("/api/v1/admin/categories", """
+				{"name":"안전모 2","slug":"head-protection"}
+				""")
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("CATEGORY_SLUG_EXISTS"));
+		patchJson("/api/v1/admin/categories/" + goggleId, """
+				{"slug":"head-protection"}
+				""")
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("CATEGORY_SLUG_EXISTS"));
+		// 자기 자신의 주소 이름을 그대로 보내는 것은 괜찮다.
+		patchJson("/api/v1/admin/categories/" + helmetId, """
+				{"slug":"head-protection","name":"산업용 안전모"}
+				""").andExpect(status().isOk());
+	}
+
+	@Test
 	void 하위_카테고리나_상품이_있는_카테고리는_삭제할_수_없다() throws Exception {
 		long parentId = idOf(postJson("/api/v1/admin/categories", """
-				{"name":"안전용품"}
+				{"name":"안전용품","slug":"safety"}
 				"""));
 		long childId = idOf(postJson("/api/v1/admin/categories", """
-				{"name":"안전모","parentId":%d}
+				{"name":"안전모","slug":"head-protection","parentId":%d}
 				""".formatted(parentId)));
 		long productId = idOf(postJson("/api/v1/admin/products", """
 				{"name":"산업용 안전모","basePrice":35000,"categoryId":%d}

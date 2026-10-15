@@ -45,6 +45,7 @@ public enum ErrorCode {
 	STOCK_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "재고는 옵션당 10억 개를 넘을 수 없습니다."),
 	CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "카테고리를 찾을 수 없습니다."),
 	CATEGORY_NOT_EMPTY(HttpStatus.CONFLICT, "하위 카테고리나 소속 상품이 있어 삭제할 수 없습니다."),
+	CATEGORY_SLUG_EXISTS(HttpStatus.CONFLICT, "이미 다른 카테고리가 쓰고 있는 주소 이름입니다."),
 
 	// 장바구니
 	CART_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "장바구니에 없는 상품입니다."),
