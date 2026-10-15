@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -211,6 +212,25 @@ class ProductSearchTests {
 		mockMvc.perform(get("/api/v1/products").param("sort", "cheapest"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+	}
+
+	@Test
+	void 지나치게_긴_검색어와_너무_많은_브랜드는_거절한다() throws Exception {
+		String longQuery = "가".repeat(101);
+		mockMvc.perform(get("/api/v1/products").param("query", "가".repeat(100))).andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/products").param("query", longQuery)).andExpect(status().isBadRequest());
+		mockMvc.perform(get("/api/v1/products/facets").param("query", longQuery))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(get("/api/v1/products/suggestions").param("query", longQuery))
+				.andExpect(status().isBadRequest());
+
+		String[] brands = new String[51];
+		for (int i = 0; i < brands.length; i++) {
+			brands[i] = "브랜드" + i;
+		}
+		mockMvc.perform(get("/api/v1/products").param("brand", brands)).andExpect(status().isBadRequest());
+		mockMvc.perform(get("/api/v1/products").param("brand", Arrays.copyOf(brands, 50)))
+				.andExpect(status().isOk());
 	}
 
 	// ───────── 정렬 ─────────

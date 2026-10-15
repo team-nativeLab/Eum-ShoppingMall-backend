@@ -38,7 +38,7 @@ public class CartService {
 
 		CartItem existing = cartItemRepository.findByMemberIdAndSkuId(memberId, sku.getId()).orElse(null);
 		if (existing != null) {
-			existing.changeQuantity(existing.getQuantity() + request.quantity());
+			existing.addQuantity(request.quantity());
 		} else {
 			if (cartItemRepository.countByMemberId(memberId) >= CartItem.MAX_KINDS) {
 				throw new BusinessException(ErrorCode.CART_LIMIT_EXCEEDED);

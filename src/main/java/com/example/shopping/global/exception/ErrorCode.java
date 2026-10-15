@@ -49,7 +49,7 @@ public enum ErrorCode {
 
 	// 장바구니
 	CART_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "장바구니에 없는 상품입니다."),
-	CART_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "장바구니에는 상품 50종, 상품당 99개까지 담을 수 있습니다."),
+	CART_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "장바구니에는 상품을 50종까지 담을 수 있습니다."),
 
 	// 주문
 	ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
@@ -59,6 +59,7 @@ public enum ErrorCode {
 	DELIVERY_REQUIRED(HttpStatus.CONFLICT, "배송지를 먼저 입력해 주세요."),
 	NO_ORDERABLE_ITEMS(HttpStatus.CONFLICT, "주문할 수 있는 상품이 없습니다."),
 	ORDER_AMOUNT_INVALID(HttpStatus.CONFLICT, "결제할 금액이 없는 주문은 만들 수 없습니다."),
+	ORDER_AMOUNT_TOO_LARGE(HttpStatus.BAD_REQUEST, "한 번에 결제할 수 있는 금액을 넘었습니다. 나눠서 주문해 주세요."),
 
 	// 결제
 	PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "결제 금액이 일치하지 않습니다."),

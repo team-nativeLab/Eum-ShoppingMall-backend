@@ -1,10 +1,15 @@
 package com.example.shopping;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -161,6 +166,22 @@ class SecurityTests {
 	}
 
 	@Test
+	void Access_토큰이_만료된_뒤에_로그아웃해도_Refresh_토큰이_폐기된다() throws Exception {
+		insertMember(EMAIL, "USER");
+		Cookie cookie = login(EMAIL, PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE);
+
+		// 만료되거나 위조된 Access 토큰이 붙어 있어도 로그아웃은 401로 막히지 않는다.
+		MockHttpServletResponse response = mockMvc.perform(post("/api/v1/auth/logout")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer expired.or.forged")
+						.cookie(cookie))
+				.andExpect(status().isOk())
+				.andReturn().getResponse();
+		assertThat(response.getCookie(REFRESH_COOKIE).getMaxAge()).isZero();
+
+		refresh(cookie).andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void 쿠키가_없거나_엉터리거나_만료된_토큰으로는_재발급할_수_없다() throws Exception {
 		insertMember(EMAIL, "USER");
 		Cookie cookie = login(EMAIL, PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE);
@@ -280,11 +301,39 @@ class SecurityTests {
 				.andExpect(jsonPath("$.data.size").value(100));
 	}
 
+	@Test
+	void 터무니없이_큰_페이지_번호는_500이_아니라_400으로_거절한다() throws Exception {
+		mockMvc.perform(get("/api/v1/products").param("page", "99999999").param("size", "100"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+		mockMvc.perform(get("/api/v1/notices").param("page", "99999999").param("size", "100"))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(get("/api/v1/admin/products").with(admin()).param("page", "99999999").param("size", "100"))
+				.andExpect(status().isBadRequest());
+		// 데이터가 없는 먼 페이지라도 표현할 수 있는 위치면 빈 목록을 돌려준다.
+		mockMvc.perform(get("/api/v1/products").param("page", "1000000"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content.length()").value(0));
+	}
+
+	@Test
+	void 형식이_틀린_파라미터의_오류_메시지에_서버_내부_클래스_이름이_드러나지_않는다() throws Exception {
+		mockMvc.perform(get("/api/v1/products").param("categoryId", "abc").param("certified", "maybe"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors.length()").value(2))
+				.andExpect(jsonPath("$.errors[*].reason").value(everyItem(is("값의 형식이 올바르지 않습니다."))))
+				.andExpect(content().string(not(containsString("java."))));
+	}
+
 	// ───────── 도우미 ─────────
 
 	private org.springframework.test.web.servlet.request.RequestPostProcessor member(long memberId) {
 		return jwt().jwt(token -> token.subject(String.valueOf(memberId)))
 				.authorities(new SimpleGrantedAuthority("ROLE_USER"));
+	}
+
+	private org.springframework.test.web.servlet.request.RequestPostProcessor admin() {
+		return jwt().jwt(token -> token.subject("1")).authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
 	}
 
 	private ResultActions login(String email, String password) throws Exception {

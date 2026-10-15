@@ -168,7 +168,7 @@ class CustomerApiTests {
 	}
 
 	@Test
-	void 담을_수_없는_상품과_한도를_넘는_수량은_거부한다() throws Exception {
+	void 담을_수_없는_상품은_거부하고_수량에는_상한이_없다() throws Exception {
 		long sku = insertProductWithSku("안전모", 30000, true, "ON_SALE", 10);
 		long hiddenProductSku = insertProductWithSku("비공개 상품", 30000, true, "HIDDEN", 10);
 		long deletedProductSku = insertProductWithSku("삭제된 상품", 30000, true, "DELETED", 10);
@@ -190,9 +190,39 @@ class CustomerApiTests {
 						.content(cartItem(sku, -5)))
 				.andExpect(status().isBadRequest());
 
+		// 수량에는 상한이 없다. 재고(10개)보다 많이 담으면 담기는 되지만 재고 부족으로 표시돼 주문할 수 없다.
 		addToCart(me, sku, 60);
 		mockMvc.perform(post("/api/v1/cart/items").with(me).contentType(MediaType.APPLICATION_JSON)
 						.content(cartItem(sku, 60)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[0].quantity").value(120))
+				.andExpect(jsonPath("$.data.items[0].status").value("OUT_OF_STOCK"));
+		mockMvc.perform(patch("/api/v1/cart/items/{skuId}", sku).with(me).contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"quantity":5000}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[0].quantity").value(5000));
+
+		// 옵션 하나가 가질 수 있는 재고 상한(10억 개)보다 많이는 담을 수 없다. 더한 값이 int 범위를 넘어도 마찬가지다.
+		mockMvc.perform(post("/api/v1/cart/items").with(me).contentType(MediaType.APPLICATION_JSON)
+						.content(cartItem(sku, Integer.MAX_VALUE)))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("OUT_OF_STOCK"));
+		mockMvc.perform(get("/api/v1/cart").with(me))
+				.andExpect(jsonPath("$.data.items[0].quantity").value(5000));
+	}
+
+	@Test
+	void 장바구니에는_상품을_50종까지_담을_수_있다() throws Exception {
+		RequestPostProcessor me = member(1);
+		for (int i = 1; i <= 50; i++) {
+			addToCart(me, insertProductWithSku("상품 " + i, 1000, true, "ON_SALE", 10), 1);
+		}
+		long oneMore = insertProductWithSku("상품 51", 1000, true, "ON_SALE", 10);
+
+		mockMvc.perform(post("/api/v1/cart/items").with(me).contentType(MediaType.APPLICATION_JSON)
+						.content(cartItem(oneMore, 1)))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("CART_LIMIT_EXCEEDED"));
 	}

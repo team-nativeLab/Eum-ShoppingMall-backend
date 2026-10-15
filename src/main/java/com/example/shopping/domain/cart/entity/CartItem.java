@@ -27,7 +27,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CartItem {
 
-	public static final int MAX_QUANTITY = 99;
+	/** 장바구니에 담을 수 있는 상품 종류 수. 수량에는 따로 상한을 두지 않는다 (주문할 때 재고로 판단한다). */
 	public static final int MAX_KINDS = 50;
 
 	@Id
@@ -56,11 +56,23 @@ public class CartItem {
 		return item;
 	}
 
+	/**
+	 * 수량은 1개 이상이면 된다. 옵션 하나가 가질 수 있는 재고의 상한(ProductSku.MAX_STOCK)보다 많이 담는 것은
+	 * 어떤 경우에도 주문할 수 없으므로 재고 부족으로 거절한다.
+	 */
 	public void changeQuantity(int quantity) {
-		if (quantity < 1 || quantity > MAX_QUANTITY) {
-			throw new BusinessException(ErrorCode.CART_LIMIT_EXCEEDED);
+		if (quantity < 1) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
+		}
+		if (quantity > ProductSku.MAX_STOCK) {
+			throw new BusinessException(ErrorCode.OUT_OF_STOCK);
 		}
 		this.quantity = quantity;
+	}
+
+	/** 이미 담긴 옵션을 다시 담으면 수량을 더한다. 더한 값이 int 범위를 넘어도 음수가 되지 않게 한다. */
+	public void addQuantity(int more) {
+		changeQuantity((int) Math.min((long) quantity + more, Integer.MAX_VALUE));
 	}
 
 	public void changeSelected(boolean selected) {

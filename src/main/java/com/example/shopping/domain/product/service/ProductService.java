@@ -36,6 +36,7 @@ import com.example.shopping.domain.product.repository.ProductSort;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.response.PageResponse;
+import com.example.shopping.global.validation.SortValidator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -46,6 +47,10 @@ public class ProductService {
 
 	/** 검색창 자동 완성에 보여 줄 최대 개수 */
 	private static final int SUGGESTION_LIMIT = 5;
+
+	/** 검색어 길이와 한 번에 고를 수 있는 브랜드 수. 매우 긴 검색어나 수천 개의 브랜드로 DB에 부하를 주지 못하게 한다. */
+	private static final int MAX_KEYWORD_LENGTH = 100;
+	private static final int MAX_BRANDS = 50;
 
 	private final ProductRepository productRepository;
 	private final CategoryRepository categoryRepository;
@@ -58,6 +63,7 @@ public class ProductService {
 
 	/** 고객용 상품 목록·검색. 조건의 뜻은 ProductSearchRequest 참고 */
 	public PageResponse<ProductSummaryResponse> search(ProductSearchRequest request, Pageable pageable) {
+		SortValidator.requirePageInRange(pageable);
 		Long minPrice = request.minPrice();
 		Long maxPrice = request.maxPrice();
 		if ((minPrice != null && minPrice < 0) || (maxPrice != null && maxPrice < 0)
@@ -65,7 +71,10 @@ public class ProductService {
 			throw new BusinessException(ErrorCode.INVALID_INPUT);
 		}
 		List<String> brandNames = request.brand() == null ? List.of()
-				: request.brand().stream().filter(StringUtils::hasText).map(String::trim).toList();
+				: request.brand().stream().filter(StringUtils::hasText).map(String::trim).distinct().toList();
+		if (brandNames.size() > MAX_BRANDS) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
+		}
 		Set<Certification> certifications = request.certification() == null ? Set.of()
 				: Set.copyOf(request.certification());
 		ProductSearchCondition condition = new ProductSearchCondition(ProductStatus.CUSTOMER_VISIBLE,
@@ -206,6 +215,13 @@ public class ProductService {
 	}
 
 	private static String keyword(String query) {
-		return StringUtils.hasText(query) ? query.trim() : null;
+		if (!StringUtils.hasText(query)) {
+			return null;
+		}
+		String keyword = query.trim();
+		if (keyword.length() > MAX_KEYWORD_LENGTH) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
+		}
+		return keyword;
 	}
 }
