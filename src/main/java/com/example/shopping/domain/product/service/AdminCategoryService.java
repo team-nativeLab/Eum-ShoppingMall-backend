@@ -38,16 +38,24 @@ public class AdminCategoryService {
 		Category parent = request.parentId() == null ? null : find(request.parentId());
 		int sortOrder = request.sortOrder() == null ? 0 : request.sortOrder();
 		boolean active = request.active() == null || request.active();
-		Category category = Category.create(parent, request.name().trim(), sortOrder, active);
-		return AdminCategoryResponse.from(categoryRepository.save(category));
+		if (categoryRepository.existsBySlug(request.slug())) {
+			throw new BusinessException(ErrorCode.CATEGORY_SLUG_EXISTS);
+		}
+		Category category = Category.create(parent, request.name().trim(), request.slug(), sortOrder, active);
+		category.update(null, null, request.description(), request.iconKey(), null, null);
+		return AdminCategoryResponse.from(saveCheckingSlug(category));
 	}
 
 	@Transactional
 	public AdminCategoryResponse update(Long categoryId, CategoryUpdateRequest request) {
 		Category category = find(categoryId);
+		if (request.slug() != null && categoryRepository.existsBySlugAndIdNot(request.slug(), categoryId)) {
+			throw new BusinessException(ErrorCode.CATEGORY_SLUG_EXISTS);
+		}
 		String name = request.name() == null ? null : request.name().trim();
-		category.update(name, request.sortOrder(), request.active());
-		return AdminCategoryResponse.from(category);
+		category.update(name, request.slug(), request.description(), request.iconKey(), request.sortOrder(),
+				request.active());
+		return AdminCategoryResponse.from(saveCheckingSlug(category));
 	}
 
 	/** 하위 카테고리나 소속 상품이 있으면 거부한다. 소프트 삭제된 상품은 소속 상품으로 세지 않는다. */
@@ -67,6 +75,15 @@ public class AdminCategoryService {
 		} catch (DataIntegrityViolationException e) {
 			// 위의 검사와 삭제 사이에 다른 요청이 하위 카테고리나 상품을 추가한 경우
 			throw new BusinessException(ErrorCode.CATEGORY_NOT_EMPTY);
+		}
+	}
+
+	/** 위의 중복 검사와 저장 사이에 다른 요청이 같은 주소 이름을 먼저 쓴 경우도 409로 돌려준다. */
+	private Category saveCheckingSlug(Category category) {
+		try {
+			return categoryRepository.saveAndFlush(category);
+		} catch (DataIntegrityViolationException e) {
+			throw new BusinessException(ErrorCode.CATEGORY_SLUG_EXISTS);
 		}
 	}
 

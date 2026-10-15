@@ -24,6 +24,8 @@ import lombok.extern.slf4j.Slf4j;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+	private static final String INVALID_FORMAT = "값의 형식이 올바르지 않습니다.";
+
 	@ExceptionHandler(BusinessException.class)
 	public ResponseEntity<ApiResponse<Void>> handleBusiness(BusinessException e) {
 		return toResponse(e.getErrorCode());
@@ -31,8 +33,10 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)
 	public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
+		// 형 변환 실패(숫자 자리에 문자 등)의 기본 메시지에는 서버 내부의 클래스 이름이 들어 있어 그대로 내보내지 않는다.
 		List<ApiResponse.FieldError> errors = e.getBindingResult().getFieldErrors().stream()
-				.map(error -> new ApiResponse.FieldError(error.getField(), error.getDefaultMessage()))
+				.map(error -> new ApiResponse.FieldError(error.getField(),
+						error.isBindingFailure() ? INVALID_FORMAT : error.getDefaultMessage()))
 				.toList();
 		ErrorCode errorCode = ErrorCode.INVALID_INPUT;
 		return ResponseEntity.status(errorCode.getStatus())

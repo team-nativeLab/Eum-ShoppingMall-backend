@@ -47,11 +47,16 @@ import com.example.shopping.global.security.SecurityErrorHandler;
 @EnableConfigurationProperties(JwtProperties.class)
 public class SecurityConfig {
 
-	// 로그아웃은 로그인 회원만 호출하므로 여기에 넣지 않는다.
+	/*
+	 * 로그아웃도 여기에 둔다. 로그아웃은 쿠키에 담긴 Refresh 토큰을 폐기할 뿐이라 Access 토큰이 필요 없고,
+	 * Access 토큰이 만료된 뒤(15분)에 누른 로그아웃이 401로 막히면 Refresh 토큰이 남아 다른 사람이 그 브라우저로
+	 * 로그인 상태를 되살릴 수 있다.
+	 */
 	private static final String[] PUBLIC_AUTH = {
 			"/api/v1/auth/signup",
 			"/api/v1/auth/login",
 			"/api/v1/auth/refresh",
+			"/api/v1/auth/logout",
 			"/api/v1/admin/auth/login",
 	};
 
@@ -108,7 +113,7 @@ public class SecurityConfig {
 	}
 
 	/**
-	 * 로그인·회원가입·재발급 요청에서는 토큰을 읽지 않는다.
+	 * 로그인·회원가입·재발급·로그아웃 요청에서는 토큰을 읽지 않는다.
 	 * 프론트가 만료된 토큰을 헤더에 붙인 채 로그인하더라도 토큰 오류(401)로 막히지 않게 하기 위함이다.
 	 */
 	private BearerTokenResolver bearerTokenResolver() {

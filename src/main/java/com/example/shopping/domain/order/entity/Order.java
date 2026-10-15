@@ -11,6 +11,7 @@ import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.global.entity.BaseTimeEntity;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
+import com.example.shopping.global.validation.ValidationPatterns;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -40,6 +41,9 @@ import lombok.NoArgsConstructor;
 public class Order extends BaseTimeEntity {
 
 	private static final int ORDER_NAME_MAX_LENGTH = 200;
+
+	/** 한 주문의 최대 결제 금액(1조 원). 수량에 상한이 없으므로 금액 계산이 long 범위를 넘지 않게 막는 마지막 선이다. */
+	public static final long MAX_TOTAL_AMOUNT = ValidationPatterns.MAX_PRICE;
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -121,12 +125,23 @@ public class Order extends BaseTimeEntity {
 		items.add(OrderItem.create(this, skuId, productName, optionName, price, quantity));
 	}
 
-	/** 품목을 다 담은 뒤 금액과 주문명을 확정한다. */
+	/** 품목을 다 담은 뒤 금액과 주문명을 확정한다. 금액이 상한을 넘으면 거절한다. */
 	public void finalizeAmounts(long discountAmount, long shippingFee) {
-		this.itemAmount = items.stream().mapToLong(item -> item.getOrderPrice() * item.getQuantity()).sum();
+		try {
+			long sum = 0;
+			for (OrderItem item : items) {
+				sum = Math.addExact(sum, Math.multiplyExact(item.getOrderPrice(), item.getQuantity()));
+			}
+			this.itemAmount = sum;
+			this.totalAmount = Math.addExact(Math.subtractExact(sum, discountAmount), shippingFee);
+		} catch (ArithmeticException e) {
+			throw new BusinessException(ErrorCode.ORDER_AMOUNT_TOO_LARGE);
+		}
+		if (totalAmount > MAX_TOTAL_AMOUNT) {
+			throw new BusinessException(ErrorCode.ORDER_AMOUNT_TOO_LARGE);
+		}
 		this.discountAmount = discountAmount;
 		this.shippingFee = shippingFee;
-		this.totalAmount = itemAmount - discountAmount + shippingFee;
 
 		String suffix = items.size() > 1 ? " 외 " + (items.size() - 1) + "건" : "";
 		String firstName = items.get(0).getProductName();

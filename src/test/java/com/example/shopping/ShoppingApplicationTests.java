@@ -128,10 +128,11 @@ class ShoppingApplicationTests {
 	}
 
 	@Test
-	void 내_문의_내역_조회와_로그아웃은_로그인이_필요하다() throws Exception {
+	void 내_문의_내역_조회는_로그인이_필요하고_로그아웃은_로그인_없이도_된다() throws Exception {
 		mockMvc.perform(get("/api/v1/quotes")).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/api/v1/support/inquiries")).andExpect(status().isUnauthorized());
-		mockMvc.perform(post("/api/v1/auth/logout")).andExpect(status().isUnauthorized());
+		// 로그아웃은 쿠키의 Refresh 토큰만 폐기하므로 Access 토큰이 없거나 만료돼도 처리된다.
+		mockMvc.perform(post("/api/v1/auth/logout")).andExpect(status().isOk());
 	}
 
 	@Test

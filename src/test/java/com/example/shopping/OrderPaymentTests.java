@@ -47,12 +47,14 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.service.OrderMaintenanceScheduler;
 import com.example.shopping.domain.payment.gateway.PaymentGateway;
 import com.example.shopping.domain.payment.gateway.PgPayment;
 import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.gateway.PgRejectedException;
 import com.example.shopping.domain.payment.gateway.PgUnavailableException;
+import com.example.shopping.domain.product.entity.ProductSku;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
 import com.jayway.jsonpath.JsonPath;
 
@@ -206,6 +208,41 @@ class OrderPaymentTests {
 		mockMvc.perform(post("/api/v1/orders").with(member(buyer)))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.code").value("ACCOUNT_SUSPENDED"));
+	}
+
+	@Test
+	void 수량_제한_없이_재고만큼_주문할_수_있다() throws Exception {
+		long sku = insertProductWithSku("코팅 장갑", 1500, true, 500);
+
+		String orderNo = createOrder(buyer, sku, 300);
+
+		assertThat(jdbcTemplate.queryForObject("select total_amount from orders where order_no = ?", Long.class,
+				orderNo)).isEqualTo(450_000);
+		assertThat(stockOf(sku)).isEqualTo(200);
+	}
+
+	@Test
+	void 결제_금액이_상한을_넘거나_계산이_long_범위를_넘으면_주문을_만들지_않는다() throws Exception {
+		long expensive = insertProductWithSku("고가 장비", Order.MAX_TOTAL_AMOUNT, true, 5);
+		addToCart(buyer, expensive, 2);
+		saveDelivery(buyer);
+
+		mockMvc.perform(post("/api/v1/orders").with(member(buyer)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("ORDER_AMOUNT_TOO_LARGE"));
+		assertThat(stockOf(expensive)).isEqualTo(5);
+
+		// 1조 원 × 10억 개는 long 범위를 넘는다. 장바구니 금액은 음수로 뒤집히지 않고, 주문은 거절된다.
+		long huge = insertProductWithSku("대량 재고 장비", Order.MAX_TOTAL_AMOUNT, true, ProductSku.MAX_STOCK);
+		addToCart(other, huge, ProductSku.MAX_STOCK);
+		saveDelivery(other);
+		mockMvc.perform(get("/api/v1/cart").with(member(other)))
+				.andExpect(jsonPath("$.data.items[0].amount").value(Long.MAX_VALUE))
+				.andExpect(jsonPath("$.data.totalAmount").value(Long.MAX_VALUE));
+		mockMvc.perform(post("/api/v1/orders").with(member(other)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("ORDER_AMOUNT_TOO_LARGE"));
+		assertThat(stockOf(huge)).isEqualTo(ProductSku.MAX_STOCK);
 	}
 
 	@Test

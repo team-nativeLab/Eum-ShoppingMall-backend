@@ -54,8 +54,9 @@ public class AdminProductService {
 		ProductStatus status = request.status() == null ? ProductStatus.ON_SALE : requireManageable(request.status());
 		boolean priceVisible = request.priceVisible() == null || request.priceVisible();
 		Product product = Product.create(findCategory(request.categoryId()), request.name().trim(),
-				request.description(), request.imageUrl(), request.basePrice(), priceVisible, status);
-		product.updateSearchAttributes(request.brand(), request.safetyCertified(), request.recommendScore());
+				request.description(), request.imageUrl(), request.basePrice(), request.listPrice(), priceVisible,
+				status);
+		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
 		if (request.skus() != null) {
 			request.skus().forEach(sku -> product.addSku(sku.optionName().trim(), sku.price(), sku.stock()));
 		}
@@ -68,8 +69,8 @@ public class AdminProductService {
 		ProductStatus status = request.status() == null ? null : requireManageable(request.status());
 		String name = request.name() == null ? null : request.name().trim();
 		product.update(findCategory(request.categoryId()), name, request.description(), request.imageUrl(),
-				request.basePrice(), status);
-		product.updateSearchAttributes(request.brand(), request.safetyCertified(), request.recommendScore());
+				request.basePrice(), request.listPrice(), status);
+		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
 
 		if (request.skus() != null) {
 			for (ProductSkuRequest sku : request.skus()) {

@@ -24,7 +24,7 @@ public record CartResponse(List<Item> items, int orderableCount, long totalAmoun
 			return new Item(sku.getId(), product.getId(), product.getName(), sku.getOptionName(),
 					product.getImageUrl(), item.getQuantity(), item.isSelected(), priceVisible,
 					priceVisible ? sku.getPrice() : null,
-					priceVisible ? sku.getPrice() * item.getQuantity() : null,
+					priceVisible ? multiply(sku.getPrice(), item.getQuantity()) : null,
 					item.orderStatus());
 		}
 	}
@@ -34,6 +34,27 @@ public record CartResponse(List<Item> items, int orderableCount, long totalAmoun
 		List<Item> toOrder = items.stream()
 				.filter(item -> item.selected() && item.status() == CartItemStatus.ORDERABLE)
 				.toList();
-		return new CartResponse(items, toOrder.size(), toOrder.stream().mapToLong(Item::amount).sum());
+		return new CartResponse(items, toOrder.size(),
+				toOrder.stream().mapToLong(Item::amount).reduce(0, CartResponse::add));
+	}
+
+	/*
+	 * 수량에 상한이 없어 금액이 long 범위를 넘을 수 있다. 넘으면 음수로 뒤집히지 않도록 최댓값으로 표시하고,
+	 * 실제 주문은 주문 금액 상한(Order.MAX_TOTAL_AMOUNT)에서 거절된다.
+	 */
+	private static long multiply(long price, int quantity) {
+		try {
+			return Math.multiplyExact(price, quantity);
+		} catch (ArithmeticException e) {
+			return Long.MAX_VALUE;
+		}
+	}
+
+	private static long add(long a, long b) {
+		try {
+			return Math.addExact(a, b);
+		} catch (ArithmeticException e) {
+			return Long.MAX_VALUE;
+		}
 	}
 }
