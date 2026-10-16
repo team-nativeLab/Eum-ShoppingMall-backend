@@ -22,6 +22,7 @@ public class MemberService {
 	private final MemberRepository memberRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final RefreshTokenService refreshTokenService;
+	private final AccessTokenService accessTokenService;
 
 	public MeResponse getMe(Long memberId) {
 		return MeResponse.from(findActive(memberId));
@@ -44,6 +45,7 @@ public class MemberService {
 		if (request.newPassword().equals(request.currentPassword())) {
 			throw new BusinessException(ErrorCode.PASSWORD_NOT_CHANGED);
 		}
+		accessTokenService.revokeAllForMember(memberId);
 		member.changePassword(passwordEncoder.encode(request.newPassword()));
 		memberRepository.save(member);
 		refreshTokenService.revokeAll(memberId);

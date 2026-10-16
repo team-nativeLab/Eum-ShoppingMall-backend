@@ -1,10 +1,12 @@
 package com.example.shopping.domain.member.controller;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -47,11 +49,12 @@ public class AuthController {
 		return responder.withTokens(authService.refresh(refreshToken));
 	}
 
-	/** 이 기기의 Refresh 토큰을 폐기하고 쿠키를 지운다. */
+	/** Authorization 헤더의 Access 토큰과 Refresh 쿠키를 폐기한다. */
 	@PostMapping("/logout")
 	public ResponseEntity<ApiResponse<Void>> logout(
-			@CookieValue(name = AuthTokenResponder.REFRESH_COOKIE, required = false) String refreshToken) {
-		authService.logout(refreshToken);
+			@CookieValue(name = AuthTokenResponder.REFRESH_COOKIE, required = false) String refreshToken,
+			@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader) {
+		authService.logout(refreshToken, authorizationHeader);
 		return responder.withoutTokens();
 	}
 }

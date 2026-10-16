@@ -17,9 +17,11 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -36,6 +38,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
+import com.example.shopping.global.security.AccessTokenValidator;
 import com.example.shopping.global.security.JwtProperties;
 import com.example.shopping.global.security.JwtTokenProvider;
 import com.example.shopping.global.security.RateLimitFilter;
@@ -142,8 +145,12 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	JwtDecoder jwtDecoder(JwtProperties properties) {
-		return NimbusJwtDecoder.withSecretKey(properties.secretKey()).macAlgorithm(MacAlgorithm.HS256).build();
+	JwtDecoder jwtDecoder(JwtProperties properties, AccessTokenValidator accessTokenValidator) {
+		NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(properties.secretKey())
+				.macAlgorithm(MacAlgorithm.HS256).build();
+		decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+				JwtValidators.createDefault(), accessTokenValidator));
+		return decoder;
 	}
 
 	@Bean
