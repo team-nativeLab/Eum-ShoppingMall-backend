@@ -1,13 +1,16 @@
 package com.example.shopping.domain.order.service;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
 import com.example.shopping.domain.order.dto.OrderDetailResponse;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.entity.OrderStatus;
+import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.domain.payment.entity.Payment;
 import com.example.shopping.domain.payment.entity.PaymentStatus;
 import com.example.shopping.domain.payment.gateway.PaymentGateway;
@@ -22,20 +25,18 @@ import com.example.shopping.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * 고객의 주문 취소(전액 환불). 순서는 "주문을 취소 상태로 먼저 잡는다 → PG 환불 → 결제·재고 반영"이다.
- * 주문을 먼저 잡아 두는 이유는 환불하는 사이에 관리자가 배송을 시작해 "환불됐는데 발송되는" 일을 막기 위해서다.
- * 환불이 실패하면 주문을 원래 상태로 되돌린다.
- */
+/** 고객 주문 취소와 취소 결과 보정. PG 통신은 DB 트랜잭션 밖에서 수행한다. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderCancelService {
 
-	// 배송이 시작되기 전까지만 취소할 수 있다.
 	private static final Set<OrderStatus> CANCELABLE = Set.of(OrderStatus.PAID, OrderStatus.PREPARING);
+	private static final String CANCEL_REASON = "고객 주문 취소";
+	private static final int IDEMPOTENCY_RETRY_CUTOFF_DAYS = 14;
 
 	private final OrderService orderService;
+	private final OrderRepository orderRepository;
 	private final OrderTxService orderTxService;
 	private final PaymentRepository paymentRepository;
 	private final PaymentGateway paymentGateway;
@@ -46,37 +47,145 @@ public class OrderCancelService {
 		Payment payment = paymentRepository.findFirstByOrderIdOrderByIdDesc(order.getId())
 				.filter(p -> p.getStatus() == PaymentStatus.DONE)
 				.orElse(null);
+		String cancelKey = newCancelIdempotencyKey();
 		if (!CANCELABLE.contains(previous) || payment == null
-				|| !orderTxService.claimCancel(order.getId(), previous)) {
+				|| !orderTxService.claimCancel(order.getId(), previous, cancelKey)) {
 			throw new BusinessException(ErrorCode.CANCEL_NOT_ALLOWED);
 		}
 
-		if (!refund(order, payment)) {
+		try {
+			PgPayment result = paymentGateway.cancel(payment.getPaymentKey(), CANCEL_REASON, cancelKey);
+			if (isFullyCanceled(order, payment, result)) {
+				orderTxService.completeCancel(order.getId(), payment.getId());
+				return orderService.getMyOrder(memberId, orderNo);
+			}
+			log.error("주문 {} PG 취소 응답이 전액 취소 상태가 아닙니다: status={}, balance={}",
+					orderNo, result.status(), result.balanceAmount());
+			throw pendingCancellation(orderNo);
+		} catch (PgRejectedException e) {
+			// Toss의 명확한 4xx 거절은 취소 미처리를 뜻한다. 조회가 가능하면 이전 요청의 취소 여부도 우선 대조한다.
+			if (isCanceledAtPg(order, payment)) {
+				orderTxService.completeCancel(order.getId(), payment.getId());
+				return orderService.getMyOrder(memberId, orderNo);
+			}
 			orderTxService.revertCancel(order.getId(), previous);
+			log.warn("주문 {} 환불 요청이 PG에서 거절되었습니다: {}", orderNo, e.getMessage());
 			throw new BusinessException(ErrorCode.CANCEL_FAILED);
-		}
-		orderTxService.completeCancel(order.getId(), payment.getId());
-		return orderService.getMyOrder(memberId, orderNo);
-	}
-
-	/** @return PG에서 환불된 것이 확인되면 true */
-	private boolean refund(Order order, Payment payment) {
-		try {
-			paymentGateway.cancel(payment.getPaymentKey(), "고객 주문 취소", "cancel-" + order.getOrderNo());
-			return true;
-		} catch (PgRejectedException | PgUnavailableException e) {
-			log.warn("주문 {} 환불 요청 실패: {}", order.getOrderNo(), e.getMessage());
-			// 응답만 못 받았을 뿐 실제로는 환불됐을 수 있으므로 PG에 한 번 더 확인한다.
-			return isCanceledAtPg(order.getOrderNo());
-		}
-	}
-
-	private boolean isCanceledAtPg(String orderNo) {
-		try {
-			Optional<PgPayment> actual = paymentGateway.findByOrderNo(orderNo);
-			return actual.isPresent() && actual.get().status() == PgStatus.CANCELED;
 		} catch (PgUnavailableException e) {
+			log.warn("주문 {} 환불 결과를 확인하지 못했습니다. 취소 보정 작업에서 재시도합니다: {}",
+					orderNo, e.getMessage());
+			if (isCanceledAtPg(order, payment)) {
+				orderTxService.completeCancel(order.getId(), payment.getId());
+				return orderService.getMyOrder(memberId, orderNo);
+			}
+			throw pendingCancellation(orderNo);
+		}
+	}
+
+	/** 취소 중 멈춘 주문과 과거 CANCELED/DONE 불일치 주문을 보정한다. */
+	public void reconcileCancellation(Long orderId) {
+		LocalDateTime now = LocalDateTime.now();
+		if (!orderTxService.claimCancellationRecovery(orderId, now)) {
+			return;
+		}
+		Order order = orderRepository.findById(orderId).orElse(null);
+		if (order == null) {
+			return;
+		}
+		Payment payment = paymentRepository.findFirstByOrderIdOrderByIdDesc(orderId).orElse(null);
+		if (payment == null || payment.getStatus() != PaymentStatus.DONE) {
+			if (order.getStatus() == OrderStatus.CANCEL_REQUESTED) {
+				log.error("주문 {} 취소 보정에 필요한 완료 결제 기록이 없습니다. 수동 확인이 필요합니다.", order.getOrderNo());
+			}
+			return;
+		}
+
+		Optional<PgPayment> actual;
+		try {
+			actual = paymentGateway.findByOrderNo(order.getOrderNo());
+		} catch (PgUnavailableException e) {
+			log.warn("주문 {} PG 취소 상태 조회 실패. 다음 주기에 재시도합니다: {}", order.getOrderNo(), e.getMessage());
+			return;
+		}
+
+		if (actual.isPresent() && isFullyCanceled(order, payment, actual.get())) {
+			orderTxService.completeCancel(orderId, payment.getId());
+			return;
+		}
+		if (actual.isEmpty() || !isUncanceledPayment(order, actual.get(), payment)) {
+			log.error("주문 {} PG 상태가 취소 보정 조건과 일치하지 않습니다. 수동 확인이 필요합니다.", order.getOrderNo());
+			return;
+		}
+		LocalDateTime cancelRequestedAt = order.getCancelRequestedAt() == null
+				? order.getUpdatedAt() : order.getCancelRequestedAt();
+		if (cancelRequestedAt.isBefore(now.minusDays(IDEMPOTENCY_RETRY_CUTOFF_DAYS))) {
+			log.error("주문 {} 취소 요청이 멱등 키 15일 유효기간에 근접했습니다. 자동 재요청을 중단하고 수동 확인이 필요합니다.",
+					order.getOrderNo());
+			return;
+		}
+
+		// 처음 요청과 같은 키를 사용한다. Toss 멱등 키는 최초 요청 후 15일 동안 유효하다.
+		try {
+			PgPayment result = paymentGateway.cancel(payment.getPaymentKey(), CANCEL_REASON,
+					recoveryIdempotencyKey(order));
+			if (isFullyCanceled(order, payment, result)) {
+				orderTxService.completeCancel(orderId, payment.getId());
+			} else {
+				log.error("주문 {} 재취소 응답이 전액 취소 상태가 아닙니다: status={}, balance={}",
+						order.getOrderNo(), result.status(), result.balanceAmount());
+			}
+		} catch (PgRejectedException e) {
+			if (order.getStatus() == OrderStatus.CANCEL_REQUESTED && order.getCancelPreviousStatus() != null) {
+				orderTxService.revertCancel(orderId, order.getCancelPreviousStatus());
+				log.warn("주문 {} PG가 취소를 확실히 거절해 이전 주문 상태로 복구했습니다: {}",
+						order.getOrderNo(), e.getMessage());
+			} else {
+				log.error("과거 주문 {} PG가 취소 재요청을 거절했습니다. 수동 확인이 필요합니다: {}",
+						order.getOrderNo(), e.getMessage());
+			}
+		} catch (PgUnavailableException e) {
+			log.warn("주문 {} 재취소 결과를 확인하지 못했습니다. 다음 주기에 재시도합니다: {}",
+					order.getOrderNo(), e.getMessage());
+		}
+	}
+
+	private boolean isCanceledAtPg(Order order, Payment payment) {
+		try {
+			return paymentGateway.findByOrderNo(order.getOrderNo())
+					.filter(pg -> isFullyCanceled(order, payment, pg))
+					.isPresent();
+		} catch (PgUnavailableException e) {
+			log.warn("주문 {} 환불 상태를 조회하지 못했습니다: {}", order.getOrderNo(), e.getMessage());
 			return false;
 		}
+	}
+
+	private boolean isFullyCanceled(Order order, Payment payment, PgPayment pg) {
+		return pg.status() == PgStatus.CANCELED && pg.balanceAmount() == 0
+				&& pg.totalAmount() == order.getTotalAmount()
+				&& order.getOrderNo().equals(pg.orderNo())
+				&& payment.getPaymentKey().equals(pg.paymentKey());
+	}
+
+	private boolean isUncanceledPayment(Order order, PgPayment pg, Payment payment) {
+		return pg.status() == PgStatus.DONE && pg.balanceAmount() == order.getTotalAmount()
+				&& pg.totalAmount() == order.getTotalAmount()
+				&& order.getOrderNo().equals(pg.orderNo())
+				&& payment.getPaymentKey().equals(pg.paymentKey());
+	}
+
+	private String newCancelIdempotencyKey() {
+		return "cancel-" + UUID.randomUUID();
+	}
+
+	private String recoveryIdempotencyKey(Order order) {
+		// 기존 장애 주문은 과거 취소 요청에 사용했던 키로 중복 환불을 막는다.
+		return order.getCancelIdempotencyKey() == null
+				? "cancel-" + order.getOrderNo() : order.getCancelIdempotencyKey();
+	}
+
+	private BusinessException pendingCancellation(String orderNo) {
+		log.error("주문 {} 환불 상태 미확정. 주문은 배송 불가 상태로 유지합니다.", orderNo);
+		return new BusinessException(ErrorCode.CANCEL_PENDING_CONFIRMATION);
 	}
 }

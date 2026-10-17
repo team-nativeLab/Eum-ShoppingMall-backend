@@ -73,6 +73,12 @@ public class Order extends BaseTimeEntity {
 	@Column(name = "cancel_previous_status", length = 30)
 	private OrderStatus cancelPreviousStatus;
 
+	@Column(name = "cancel_requested_at")
+	private LocalDateTime cancelRequestedAt;
+
+	@Column(name = "cancel_idempotency_key", length = 300)
+	private String cancelIdempotencyKey;
+
 	// 최종 결제 금액 = itemAmount - discountAmount + shippingFee (서버 계산값만 신뢰)
 	@Column(nullable = false)
 	private long totalAmount;

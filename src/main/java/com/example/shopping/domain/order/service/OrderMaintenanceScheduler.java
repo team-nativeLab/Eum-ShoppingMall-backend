@@ -32,6 +32,7 @@ public class OrderMaintenanceScheduler {
 
 	private final OrderRepository orderRepository;
 	private final OrderTxService orderTxService;
+	private final OrderCancelService orderCancelService;
 	private final PaymentGateway paymentGateway;
 	private final RefreshTokenService refreshTokenService;
 
@@ -62,6 +63,19 @@ public class OrderMaintenanceScheduler {
 				log.warn("주문 {} 결제 상태 확인 실패. 다음 주기에 다시 시도합니다: {}", orderId, e.getMessage());
 			} catch (RuntimeException e) {
 				log.error("주문 {} 결제 보정 실패", orderId, e);
+			}
+		}
+	}
+
+	/** PG 응답 누락으로 멈춘 취소와 과거 CANCELED/DONE 불일치를 복구한다. */
+	@Scheduled(fixedDelay = 300_000)
+	public void reconcileStuckCancellations() {
+		LocalDateTime before = LocalDateTime.now().minusMinutes(STUCK_AFTER_MINUTES);
+		for (Long orderId : orderRepository.findStuckCancellationIds(before, PageRequest.of(0, BATCH_SIZE))) {
+			try {
+				orderCancelService.reconcileCancellation(orderId);
+			} catch (RuntimeException e) {
+				log.error("주문 {} 취소 보정 실패. 주문과 재고 상태 확인이 필요합니다.", orderId, e);
 			}
 		}
 	}

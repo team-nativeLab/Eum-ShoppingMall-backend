@@ -61,6 +61,75 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 	int changeStatus(@Param("id") Long id, @Param("from") OrderStatus from, @Param("to") OrderStatus to,
 			@Param("now") LocalDateTime now);
 
+	/** 취소 전 상태를 함께 보존하고 배송을 막는다. */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Order o
+			set o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED,
+			    o.cancelPreviousStatus = :from, o.cancelRequestedAt = :now,
+			    o.cancelIdempotencyKey = :idempotencyKey,
+			    o.updatedAt = :now, o.version = o.version + 1
+			where o.id = :id and o.status = :from
+			""")
+	int claimCancel(@Param("id") Long id, @Param("from") OrderStatus from,
+			@Param("idempotencyKey") String idempotencyKey, @Param("now") LocalDateTime now);
+
+	/** PG가 취소를 확실히 거절했을 때만 취소 전 상태로 되돌린다. */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Order o
+			set o.status = o.cancelPreviousStatus, o.cancelPreviousStatus = null,
+			    o.cancelRequestedAt = null, o.cancelIdempotencyKey = null,
+			    o.updatedAt = :now, o.version = o.version + 1
+			where o.id = :id
+			  and o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED
+			  and o.cancelPreviousStatus = :to
+			""")
+	int revertCancel(@Param("id") Long id, @Param("to") OrderStatus to, @Param("now") LocalDateTime now);
+
+	/** 취소 확정 후 처리 중 상태를 최종 취소로 바꾼다. */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Order o
+			set o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCELED,
+			    o.cancelPreviousStatus = null, o.cancelRequestedAt = null, o.cancelIdempotencyKey = null,
+			    o.updatedAt = :now, o.version = o.version + 1
+			where o.id = :id
+			  and o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED
+			""")
+	int finishCancel(@Param("id") Long id, @Param("now") LocalDateTime now);
+
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Order o
+			set o.cancelRequestedAt = null, o.cancelPreviousStatus = null, o.cancelIdempotencyKey = null
+			where o.id = :id and o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCELED
+			""")
+	int clearCancelRecoveryData(@Param("id") Long id);
+
+	@Query("""
+			select count(o) > 0 from Order o
+			where o.id = :id and o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCELED
+			""")
+	boolean isCanceled(@Param("id") Long id);
+
+	/** 서버가 여러 대여도 오래된 취소 보정 작업은 한 서버만 실행한다. */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Order o
+			set o.cancelRequestedAt = coalesce(o.cancelRequestedAt, o.updatedAt),
+			    o.updatedAt = :now, o.version = o.version + 1
+			where o.id = :id and o.updatedAt < :before and (
+			    o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED
+			    or (o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCELED and exists (
+			        select p.id from Payment p where p.orderId = o.id
+			          and p.status = com.example.shopping.domain.payment.entity.PaymentStatus.DONE
+			    ))
+			)
+			""")
+	int claimCancellationRecovery(@Param("id") Long id, @Param("before") LocalDateTime before,
+			@Param("now") LocalDateTime now);
+
 	/** 결제 승인을 시작한다. 결제 기한이 지난 주문은 시작할 수 없다. */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
@@ -123,4 +192,18 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 			  and o.updatedAt < :before
 			""")
 	List<Long> findStuckProcessingIds(@Param("before") LocalDateTime before, Pageable pageable);
+
+	/** 취소 요청 중 멈췄거나 과거에 취소 상태만 먼저 반영된 주문. */
+	@Query("""
+			select o.id from Order o
+			where o.updatedAt < :before and (
+			    o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED
+			    or (o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCELED and exists (
+			        select p.id from Payment p where p.orderId = o.id
+			          and p.status = com.example.shopping.domain.payment.entity.PaymentStatus.DONE
+			    ))
+			)
+			order by o.updatedAt asc
+			""")
+	List<Long> findStuckCancellationIds(@Param("before") LocalDateTime before, Pageable pageable);
 }
