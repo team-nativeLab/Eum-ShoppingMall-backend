@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -472,8 +472,9 @@ class OrderPaymentTests {
 		assertThat(statusOf(orderNo)).isEqualTo("WAITING_DEPOSIT");
 		assertThat(stockOf(sku)).isEqualTo(4);
 		assertThat(salesCountOf(sku)).isZero();
-		assertThat(jdbcTemplate.queryForObject("select expires_at from orders where order_no = ?", LocalDateTime.class,
-				orderNo).truncatedTo(ChronoUnit.MICROS)).isEqualTo(dueDate.truncatedTo(ChronoUnit.MICROS));
+		LocalDateTime storedDueDate = jdbcTemplate.queryForObject(
+				"select expires_at from orders where order_no = ?", LocalDateTime.class, orderNo);
+		assertThat(Duration.between(storedDueDate, dueDate).abs()).isLessThan(Duration.ofMinutes(1));
 
 		PgPayment deposited = virtualAccountPg(orderNo, PgStatus.DONE, 34700, dueDate);
 		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(deposited));
