@@ -1,5 +1,6 @@
 package com.example.shopping;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -26,6 +27,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.jayway.jsonpath.JsonPath;
+import com.example.shopping.domain.member.service.RefreshTokenService;
 
 /** 로그인한 회원이 쓰는 API (내 정보, 장바구니, 문의, 견적)와 공개 콘텐츠 API */
 @SpringBootTest
@@ -44,6 +46,9 @@ class CustomerApiTests {
 
 	@Autowired
 	private PasswordEncoder passwordEncoder;
+
+	@Autowired
+	private RefreshTokenService refreshTokenService;
 
 	// ───────── 내 정보 ─────────
 
@@ -83,6 +88,38 @@ class CustomerApiTests {
 
 		mockMvc.perform(get("/api/v1/me").with(member(suspendedId))).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/api/v1/me").with(member(999_999))).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void 회원은_비밀번호를_확인해_탈퇴하고_진행중_주문이_있으면_탈퇴할_수_없다() throws Exception {
+		long memberId = insertMember("withdraw@example.com", "ACTIVE");
+		refreshTokenService.issue(memberId, 0);
+		mockMvc.perform(delete("/api/v1/me").with(member(memberId)).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"password\":\"wrong-password\"}"))
+			.andExpect(status().isBadRequest());
+
+		mockMvc.perform(delete("/api/v1/me").with(member(memberId)).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"password\":\"test-pass-1234\"}"))
+			.andExpect(status().isOk());
+		assertThat(jdbcTemplate.queryForObject("select status from member where id = ?", String.class, memberId))
+				.isEqualTo("WITHDRAWN");
+		assertThat(jdbcTemplate.queryForObject("select withdrawn_at from member where id = ?", Object.class, memberId))
+				.isNotNull();
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where member_id = ?", Long.class,
+				memberId)).isZero();
+		assertThat(jdbcTemplate.queryForObject("select email from member where id = ?", String.class, memberId))
+				.isEqualTo("withdrawn+" + memberId + "@invalid.local");
+
+		long activeMemberId = insertMember("active-order@example.com", "ACTIVE");
+		jdbcTemplate.update("""
+				insert into orders (order_no, member_id, status, total_amount, item_amount, discount_amount,
+				                    shipping_fee, order_name, recipient, expires_at, version, created_at, updated_at)
+				values ('ORD-ACTIVE-WITHDRAW', ?, 'PAID', 10000, 10000, 0, 0, '상품', '홍길동', now(), 0, now(), now())
+				""", activeMemberId);
+		mockMvc.perform(delete("/api/v1/me").with(member(activeMemberId)).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"password\":\"test-pass-1234\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("ACCOUNT_HAS_ACTIVE_ORDERS"));
 	}
 
 	// ───────── 장바구니 ─────────

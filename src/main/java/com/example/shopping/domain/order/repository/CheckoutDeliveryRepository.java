@@ -5,4 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.example.shopping.domain.order.entity.CheckoutDelivery;
 
 public interface CheckoutDeliveryRepository extends JpaRepository<CheckoutDelivery, Long> {
+	void deleteByMemberId(Long memberId);
 }

@@ -213,6 +213,31 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
 	}
 
+	@Test
+	void 관리자가_회원_계정을_정지하고_해제한다() throws Exception {
+		long adminId = insertMember("status-admin@example.com", "운영자", "ADMIN");
+		long memberId = insertMember("status-target@example.com", "대상", "USER");
+		refreshTokenService.issue(memberId, 0);
+
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/status", memberId).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"status":"SUSPENDED","reason":"비정상 주문 반복"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("SUSPENDED"))
+				.andExpect(jsonPath("$.data.suspensionReason").value("비정상 주문 반복"));
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where member_id = ?", Long.class,
+				memberId)).isZero();
+
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/status", memberId).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"status":"ACTIVE"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("ACTIVE"))
+				.andExpect(jsonPath("$.data.suspensionReason").doesNotExist());
+	}
+
 	// ───────── 카테고리 ─────────
 
 	@Test
