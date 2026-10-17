@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.shopping.domain.member.dto.LoginRequest;
 import com.example.shopping.domain.member.dto.PasswordChangeRequest;
 import com.example.shopping.domain.member.dto.SignupRequest;
+import com.example.shopping.domain.member.service.RefreshTokenService;
 import com.jayway.jsonpath.JsonPath;
 
 import jakarta.persistence.EntityManager;
@@ -57,6 +58,9 @@ class SecurityTests {
 
 	@Autowired
 	private PasswordEncoder passwordEncoder;
+
+	@Autowired
+	private RefreshTokenService refreshTokenService;
 
 	@Autowired
 	private EntityManager entityManager;
@@ -254,6 +258,10 @@ class SecurityTests {
 								{"currentPassword":"%s","newPassword":"new-pass-5678"}
 								""".formatted(PASSWORD)))
 				.andExpect(status().isOk());
+
+		// A pre-change refresh generation must not mint a usable token after the password update.
+		String lateRefresh = refreshTokenService.issue(memberId, 0);
+		refresh(new Cookie(REFRESH_COOKIE, lateRefresh)).andExpect(status().isUnauthorized());
 
 		login(EMAIL, PASSWORD).andExpect(status().isUnauthorized());
 		login(EMAIL, "new-pass-5678").andExpect(status().isOk());

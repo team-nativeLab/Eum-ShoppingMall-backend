@@ -21,16 +21,15 @@ public class JwtTokenProvider {
 
 	private final JwtEncoder jwtEncoder;
 	private final JwtProperties properties;
-	private final AccessTokenStateStore stateStore;
 
 	/** sub에는 회원 ID, role에는 권한 이름(USER, ADMIN)을 담는다. */
-	public String createAccessToken(Long memberId, String role) {
+	public String createAccessToken(Long memberId, String role, long tokenVersion) {
 		Instant now = Instant.now();
 		JwtClaimsSet claims = JwtClaimsSet.builder()
 				.subject(String.valueOf(memberId))
 				.id(UUID.randomUUID().toString())
 				.claim(ROLE_CLAIM, role)
-				.claim(VERSION_CLAIM, stateStore.versionForIssuing(memberId))
+				.claim(VERSION_CLAIM, tokenVersion)
 				.issuedAt(now)
 				.expiresAt(now.plusSeconds(properties.accessTokenExpiry()))
 				.build();

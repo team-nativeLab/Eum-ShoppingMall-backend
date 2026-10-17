@@ -57,6 +57,11 @@ public class Member extends BaseTimeEntity {
 	@Column(nullable = false)
 	private int failedLoginCount;
 
+	/** Persisted generation used to invalidate access and refresh tokens after credential changes. */
+	@ColumnDefault("0")
+	@Column(name = "access_token_version", nullable = false)
+	private long accessTokenVersion;
+
 	// 기존 DB 스키마 호환을 위해 유지한다. 로그인 실패 제한에는 사용하지 않는다.
 	private LocalDateTime lockedUntil;
 
@@ -88,5 +93,6 @@ public class Member extends BaseTimeEntity {
 
 	public void changePassword(String passwordHash) {
 		this.passwordHash = passwordHash;
+		this.accessTokenVersion++;
 	}
 }

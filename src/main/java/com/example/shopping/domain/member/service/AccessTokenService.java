@@ -9,7 +9,6 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 
 import com.example.shopping.global.security.AccessTokenStateStore;
-import com.example.shopping.global.security.JwtProperties;
 
 import lombok.RequiredArgsConstructor;
 
@@ -21,7 +20,6 @@ public class AccessTokenService {
 
 	private final JwtDecoder jwtDecoder;
 	private final AccessTokenStateStore stateStore;
-	private final JwtProperties properties;
 
 	/** Revokes a valid bearer token. Expired or malformed tokens need no revocation. */
 	public void revokeIfValid(String authorizationHeader) {
@@ -42,10 +40,5 @@ public class AccessTokenService {
 		} catch (JwtException ignored) {
 			// Logout must still revoke the refresh cookie when the access token has expired or is malformed.
 		}
-	}
-
-	/** Invalidates all access tokens issued before a password change. */
-	public void revokeAllForMember(Long memberId) {
-		stateStore.incrementVersion(memberId);
 	}
 }
