@@ -61,6 +61,7 @@ public class AdminProductService {
 		if (request.skus() != null) {
 			request.skus().forEach(sku -> product.addSku(sku.optionName().trim(), sku.price(), sku.stock()));
 		}
+		validateVisibleProductHasSku(product);
 		AdminProductDetailResponse response = AdminProductDetailResponse.from(productRepository.save(product));
 		readCache.invalidateAfterCommit();
 		return response;
@@ -85,6 +86,7 @@ public class AdminProductService {
 				}
 			}
 		}
+		validateVisibleProductHasSku(product);
 		// 새로 추가된 옵션의 ID와 갱신된 수정 시각을 응답에 싣기 위해 먼저 DB에 반영한다.
 		AdminProductDetailResponse response = AdminProductDetailResponse.from(productRepository.saveAndFlush(product));
 		readCache.invalidateAfterCommit();
@@ -132,6 +134,13 @@ public class AdminProductService {
 				.filter(sku -> sku.getId().equals(skuId))
 				.findFirst()
 				.orElseThrow(() -> new BusinessException(ErrorCode.SKU_NOT_FOUND));
+	}
+
+	/** 고객에게 노출되는 상품은 장바구니·주문이 참조할 옵션이 하나 이상 있어야 한다. */
+	private void validateVisibleProductHasSku(Product product) {
+		if (ProductStatus.CUSTOMER_VISIBLE.contains(product.getStatus()) && product.getSkus().isEmpty()) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
+		}
 	}
 
 	private Category findCategory(Long categoryId) {

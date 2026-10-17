@@ -22,7 +22,7 @@ import jakarta.validation.constraints.Size;
  * @param certifications  받은 안전 인증 (KCS, SELF_CONFIRMATION, TYPE_APPROVAL). 없으면 생략
  * @param recommendScore  추천순 정렬 점수. 클수록 앞에 나온다. 생략하면 0
  * @param status          생략하면 판매중(ON_SALE)
- * @param skus            옵션 목록. 옵션이 없는 상품이면 생략
+ * @param skus            옵션 목록. 고객에게 노출하는 상품은 하나 이상 필요하고, 비공개 상품은 생략 가능
  */
 public record ProductCreateRequest(
 		Long categoryId,
