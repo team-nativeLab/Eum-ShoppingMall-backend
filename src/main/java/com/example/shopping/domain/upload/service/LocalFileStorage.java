@@ -4,9 +4,11 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.CacheControl;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -41,6 +43,8 @@ public class LocalFileStorage implements FileStorage, WebMvcConfigurer {
 
 	@Override
 	public void addResourceHandlers(ResourceHandlerRegistry registry) {
-		registry.addResourceHandler(PUBLIC_PATH + "/**").addResourceLocations(root.toUri().toString());
+		registry.addResourceHandler(PUBLIC_PATH + "/**")
+				.addResourceLocations(root.toUri().toString())
+				.setCacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable());
 	}
 }

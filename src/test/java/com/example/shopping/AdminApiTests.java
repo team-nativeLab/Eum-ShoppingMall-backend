@@ -720,10 +720,13 @@ class AdminApiTests {
 
 		// 클라이언트가 보낸 파일명·확장자가 아니라 내용으로 판별한 확장자가 붙는다.
 		assertThat(url).matches("/files/[0-9a-f-]{36}\\.png");
-		mockMvc.perform(get(url).with(anonymous()))
+		var response = mockMvc.perform(get(url).with(anonymous()))
 				.andExpect(status().isOk())
 				.andExpect(content().contentType(MediaType.IMAGE_PNG))
-				.andExpect(content().bytes(png));
+				.andExpect(content().bytes(png))
+				.andReturn().getResponse();
+		assertThat(response.getHeader("Cache-Control"))
+				.contains("public", "max-age=31536000", "immutable");
 	}
 
 	@Test
