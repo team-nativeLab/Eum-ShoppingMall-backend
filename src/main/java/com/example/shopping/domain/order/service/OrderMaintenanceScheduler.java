@@ -100,7 +100,8 @@ public class OrderMaintenanceScheduler {
 		});
 	}
 
-	@Scheduled(cron = "0 0 4 * * *")
+	// Drain bounded cleanup batches frequently instead of issuing one large daily DELETE.
+	@Scheduled(fixedDelay = 60_000)
 	public void purgeExpiredRefreshTokens() {
 		runLocked("purgeExpiredRefreshTokens", (stats, owner) -> stats.processed = refreshTokenService.purgeExpired());
 	}
