@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -447,6 +448,18 @@ class CustomerApiTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.minVersion").value("1.0.0"))
 				.andExpect(jsonPath("$.data.maintenance").value(false));
+	}
+
+	@Test
+	void 요청_ID를_검증해_응답에_돌려준다() throws Exception {
+		mockMvc.perform(get("/api/v1/app/config").header("X-Request-Id", "support.case_17-abc"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("X-Request-Id", "support.case_17-abc"));
+
+		String generated = mockMvc.perform(get("/api/v1/app/config").header("X-Request-Id", "invalid request id"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getHeader("X-Request-Id");
+		org.assertj.core.api.Assertions.assertThat(generated).matches("[0-9a-f-]{36}");
 	}
 
 	// ───────── 도우미 ─────────

@@ -49,6 +49,10 @@ spring:
     # 검증에 실패한 입력값(비밀번호 등)이 예외 메시지에 실려 로그로 남지 않게 한다. (개발 도구가 켜져 있어도 끈다.)
     log-resolved-exception: false
 
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] [requestId=%X{requestId:-}] %-5level %logger{36} - %msg%n%ex"
+
 server:
   shutdown: graceful
   forward-headers-strategy: native
@@ -61,6 +65,10 @@ server:
       protocol-header: X-Forwarded-Proto
 
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
   endpoint:
     health:
       probes:
