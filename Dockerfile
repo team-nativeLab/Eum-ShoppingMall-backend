@@ -7,10 +7,11 @@ RUN bash gradlew bootJar --no-daemon && \
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
+ENV TZ=Asia/Seoul
 RUN groupadd --system --gid 10001 app && \
     useradd --system --uid 10001 --gid app --home-dir /app app && \
     mkdir -p /app/uploads && chown -R app:app /app
 COPY --from=build --chown=app:app /out/app.jar /app/app.jar
 USER 10001:10001
 EXPOSE 8080
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", "-Duser.timezone=Asia/Seoul", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
