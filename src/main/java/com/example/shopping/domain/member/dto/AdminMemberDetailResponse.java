@@ -11,7 +11,8 @@ import com.example.shopping.domain.order.entity.OrderStatus;
 
 /** recentOrders는 최근 주문 20건 */
 public record AdminMemberDetailResponse(Long id, String email, String name, String phone, MemberRole role,
-		MemberStatus status, LocalDateTime createdAt, List<OrderSummary> recentOrders) {
+		MemberStatus status, LocalDateTime createdAt, LocalDateTime withdrawnAt, String suspensionReason,
+		List<OrderSummary> recentOrders) {
 
 	public record OrderSummary(Long id, String orderNo, OrderStatus status, String orderName, long totalAmount,
 			LocalDateTime createdAt) {
@@ -24,7 +25,8 @@ public record AdminMemberDetailResponse(Long id, String email, String name, Stri
 
 	public static AdminMemberDetailResponse of(Member member, List<Order> recentOrders) {
 		return new AdminMemberDetailResponse(member.getId(), member.getEmail(), member.getName(), member.getPhone(),
-				member.getRole(), member.getStatus(), member.getCreatedAt(),
+				member.getRole(), member.getStatus(), member.getCreatedAt(), member.getWithdrawnAt(),
+				member.getSuspensionReason(),
 				recentOrders.stream().map(OrderSummary::from).toList());
 	}
 }

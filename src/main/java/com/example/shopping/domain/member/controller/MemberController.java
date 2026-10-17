@@ -4,6 +4,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,6 +44,13 @@ public class MemberController {
 	public ApiResponse<Void> changePassword(@AuthenticationPrincipal Jwt jwt,
 			@Valid @RequestBody PasswordChangeRequest request) {
 		memberService.changePassword(CurrentMember.id(jwt), request);
+		return ApiResponse.ok(null);
+	}
+
+	@DeleteMapping
+	public ApiResponse<Void> withdraw(@AuthenticationPrincipal Jwt jwt,
+			@Valid @RequestBody com.example.shopping.domain.member.dto.AccountWithdrawalRequest request) {
+		memberService.withdraw(CurrentMember.id(jwt), request.password());
 		return ApiResponse.ok(null);
 	}
 }

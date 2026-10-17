@@ -52,6 +52,11 @@ public class Member extends BaseTimeEntity {
 	@Column(nullable = false, length = 20)
 	private MemberStatus status = MemberStatus.ACTIVE;
 
+	private LocalDateTime withdrawnAt;
+
+	@Column(length = 200)
+	private String suspensionReason;
+
 	// 기존 DB 스키마 호환을 위해 유지한다. 로그인 실패 제한에는 사용하지 않는다.
 	@ColumnDefault("0")
 	@Column(nullable = false)
@@ -104,5 +109,21 @@ public class Member extends BaseTimeEntity {
 	public void changePassword(String passwordHash) {
 		this.passwordHash = passwordHash;
 		this.accessTokenVersion++;
+	}
+
+	public void withdraw() {
+		this.status = MemberStatus.WITHDRAWN;
+		this.withdrawnAt = LocalDateTime.now();
+		this.email = "withdrawn+" + id + "@invalid.local";
+		this.name = "탈퇴한 회원";
+		this.phone = null;
+		this.passwordHash = "!withdrawn!" + id;
+		this.suspensionReason = null;
+		this.accessTokenVersion++;
+	}
+
+	public void changeStatus(MemberStatus status, String reason) {
+		this.status = status;
+		this.suspensionReason = status == MemberStatus.SUSPENDED ? reason : null;
 	}
 }

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.Valid;
 import com.example.shopping.domain.member.dto.AdminMemberDetailResponse;
 import com.example.shopping.domain.member.dto.AdminMemberRoleUpdateRequest;
+import com.example.shopping.domain.member.dto.AdminMemberStatusUpdateRequest;
 import com.example.shopping.domain.member.dto.AdminMemberSummaryResponse;
 import com.example.shopping.domain.member.service.AdminMemberService;
 import com.example.shopping.global.response.ApiResponse;
@@ -50,5 +51,11 @@ public class AdminMemberController {
 	public ApiResponse<AdminMemberDetailResponse> changeRole(@AuthenticationPrincipal Jwt jwt,
 			@PathVariable Long userId, @Valid @RequestBody AdminMemberRoleUpdateRequest request) {
 		return ApiResponse.ok(adminMemberService.changeRole(CurrentMember.id(jwt), userId, request.role()));
+	}
+
+	@PatchMapping("/{userId}/status")
+	public ApiResponse<AdminMemberDetailResponse> changeStatus(@AuthenticationPrincipal Jwt jwt,
+			@PathVariable Long userId, @Valid @RequestBody AdminMemberStatusUpdateRequest request) {
+		return ApiResponse.ok(adminMemberService.changeStatus(CurrentMember.id(jwt), userId, request));
 	}
 }

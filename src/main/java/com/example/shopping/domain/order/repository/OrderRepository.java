@@ -266,6 +266,18 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 			""")
 	List<Long> findPendingIdsByMemberId(@Param("memberId") Long memberId);
 
+	@Query("""
+			select count(o) from Order o
+			where o.memberId = :memberId and o.status in (
+				com.example.shopping.domain.order.entity.OrderStatus.PENDING,
+				com.example.shopping.domain.order.entity.OrderStatus.PAYMENT_PROCESSING,
+				com.example.shopping.domain.order.entity.OrderStatus.WAITING_DEPOSIT,
+				com.example.shopping.domain.order.entity.OrderStatus.PAID,
+				com.example.shopping.domain.order.entity.OrderStatus.PREPARING,
+				com.example.shopping.domain.order.entity.OrderStatus.SHIPPED)
+			""")
+	long countOrdersBlockingWithdrawal(@Param("memberId") Long memberId);
+
 	/** 결제 승인을 시작한 뒤 결과가 반영되지 않은 채 멈춘 주문 */
 	@Query("""
 			select o.id from Order o
