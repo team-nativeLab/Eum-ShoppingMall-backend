@@ -103,24 +103,34 @@ public class OrderTxService {
 
 	/** 취소를 시작한다. 그사이 상태가 바뀌었으면(배송 시작 등) false */
 	@Transactional
-	public boolean claimCancel(Long orderId, OrderStatus from) {
-		return orderRepository.changeStatus(orderId, from, OrderStatus.CANCELED, LocalDateTime.now()) == 1;
+	public boolean claimCancel(Long orderId, OrderStatus from, String idempotencyKey) {
+		return orderRepository.claimCancel(orderId, from, idempotencyKey, LocalDateTime.now()) == 1;
 	}
 
-	/** PG 취소가 실패했을 때 주문을 취소 전 상태로 되돌린다. */
+	/** PG 취소가 확실히 거절됐을 때 주문을 취소 전 상태로 되돌린다. */
 	@Transactional
 	public void revertCancel(Long orderId, OrderStatus to) {
-		orderRepository.changeStatus(orderId, OrderStatus.CANCELED, to, LocalDateTime.now());
+		orderRepository.revertCancel(orderId, to, LocalDateTime.now());
 	}
 
-	/** PG 취소가 끝난 뒤 결제·품목 상태를 바꾸고 재고를 되돌린다. 두 번 불려도 한 번만 반영된다. */
+	/** PG 취소가 확인된 뒤 결제·주문·품목 상태와 재고를 반영한다. 두 번 불려도 한 번만 반영된다. */
 	@Transactional
 	public void completeCancel(Long orderId, Long paymentId) {
-		if (paymentRepository.markCanceled(paymentId) == 1) {
+		orderRepository.finishCancel(orderId, LocalDateTime.now());
+		if (orderRepository.isCanceled(orderId)) {
+			orderRepository.clearCancelRecoveryData(orderId);
+		}
+		if (orderRepository.isCanceled(orderId) && paymentRepository.markCanceled(paymentId) == 1) {
 			orderRepository.cancelItems(orderId);
 			restoreStock(orderId);
 			addSalesCount(orderId, -1);
 		}
+	}
+
+	/** 주기 보정 작업을 조건부로 점유한다. 동시 실행 중 한 서버만 PG를 호출한다. */
+	@Transactional
+	public boolean claimCancellationRecovery(Long orderId, LocalDateTime now) {
+		return orderRepository.claimCancellationRecovery(orderId, now.minusMinutes(5), now) == 1;
 	}
 
 	private void restoreStock(Long orderId) {

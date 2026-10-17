@@ -67,6 +67,7 @@ public enum ErrorCode {
 	PAYMENT_IN_PROGRESS(HttpStatus.CONFLICT, "이미 결제가 진행 중이거나 완료된 주문입니다."),
 	PAYMENT_PENDING_CONFIRMATION(HttpStatus.ACCEPTED, "결제 결과를 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요."),
 	CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "취소할 수 없는 상태입니다."),
+	CANCEL_PENDING_CONFIRMATION(HttpStatus.ACCEPTED, "취소 결과를 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요."),
 	CANCEL_FAILED(HttpStatus.BAD_GATEWAY, "결제 취소에 실패했습니다. 잠시 후 다시 시도해 주세요."),
 
 	// 고객지원

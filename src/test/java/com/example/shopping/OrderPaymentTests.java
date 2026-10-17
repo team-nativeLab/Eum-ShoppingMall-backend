@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -488,7 +489,7 @@ class OrderPaymentTests {
 	}
 
 	@Test
-	void PG_환불이_실패하면_주문을_원래_상태로_되돌리고_재고는_그대로_둔다() throws Exception {
+	void PG_환불_응답이_없으면_취소_중으로_유지하고_재고는_보정_전까지_그대로_둔다() throws Exception {
 		long sku = insertProductWithSku("안전모", 30000, true, 5);
 		String orderNo = payOrder(buyer, sku, 2);
 		when(paymentGateway.cancel(anyString(), anyString(), anyString()))
@@ -496,11 +497,97 @@ class OrderPaymentTests {
 		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(pg(orderNo, PgStatus.DONE, 64400)));
 
 		mockMvc.perform(post("/api/v1/orders/{orderNo}/cancel", orderNo).with(member(buyer)))
-				.andExpect(status().isBadGateway())
-				.andExpect(jsonPath("$.code").value("CANCEL_FAILED"));
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.code").value("CANCEL_PENDING_CONFIRMATION"));
 
-		assertThat(statusOf(orderNo)).isEqualTo("PAID");
+		assertThat(statusOf(orderNo)).isEqualTo("CANCEL_REQUESTED");
 		assertThat(stockOf(sku)).isEqualTo(3);
+		assertThat(salesCountOf(sku)).isEqualTo(2);
+	}
+
+	@Test
+	void PG_취소_타임아웃_후_보정_작업이_같은_멱등키로_재시도하고_재고를_한번만_복구한다() throws Exception {
+		long sku = insertProductWithSku("안전모", 30000, true, 5);
+		String orderNo = payOrder(buyer, sku, 2);
+		when(paymentGateway.cancel(anyString(), anyString(), anyString()))
+				.thenThrow(new PgUnavailableException("timeout", null))
+				.thenReturn(pg(orderNo, PgStatus.CANCELED, 64400));
+		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(pg(orderNo, PgStatus.DONE, 64400)));
+
+		mockMvc.perform(post("/api/v1/orders/{orderNo}/cancel", orderNo).with(member(buyer)))
+				.andExpect(status().isAccepted());
+		assertThat(statusOf(orderNo)).isEqualTo("CANCEL_REQUESTED");
+		assertThat(stockOf(sku)).isEqualTo(3);
+
+		jdbcTemplate.update("update orders set updated_at = ? where order_no = ?",
+				LocalDateTime.now().minusMinutes(10), orderNo);
+		entityManager.clear();
+		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 64400))).when(paymentGateway).findByOrderNo(orderNo);
+
+		scheduler.reconcileStuckCancellations();
+		scheduler.reconcileStuckCancellations();
+
+		assertThat(statusOf(orderNo)).isEqualTo("CANCELED");
+		assertThat(stockOf(sku)).isEqualTo(5);
+		assertThat(salesCountOf(sku)).isZero();
+		ArgumentCaptor<String> idempotencyKey = ArgumentCaptor.forClass(String.class);
+		verify(paymentGateway, times(2)).cancel(eq(PAYMENT_KEY), anyString(), idempotencyKey.capture());
+		assertThat(idempotencyKey.getAllValues()).hasSize(2).allMatch(key -> key.startsWith("cancel-"));
+		assertThat(idempotencyKey.getAllValues().get(1)).isEqualTo(idempotencyKey.getAllValues().get(0));
+	}
+
+	@Test
+	void 과거_CANCELED_Done_불일치도_PG를_조회하고_전액환불_확인_후_재고를_복구한다() throws Exception {
+		long sku = insertProductWithSku("안전모", 30000, true, 5);
+		String orderNo = payOrder(buyer, sku, 2);
+		jdbcTemplate.update("update orders set status = 'CANCELED', updated_at = ? where order_no = ?",
+				LocalDateTime.now().minusMinutes(10), orderNo);
+		entityManager.clear();
+		doReturn(Optional.of(pg(orderNo, PgStatus.CANCELED, 64400))).when(paymentGateway).findByOrderNo(orderNo);
+
+		scheduler.reconcileStuckCancellations();
+
+		assertThat(statusOf(orderNo)).isEqualTo("CANCELED");
+		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("CANCELED");
+		assertThat(stockOf(sku)).isEqualTo(5);
+		assertThat(salesCountOf(sku)).isZero();
+	}
+
+	@Test
+	void 과거_CANCELED_Done_불일치에서_PG가_미취소면_기존_멱등키로_재요청한다() throws Exception {
+		long sku = insertProductWithSku("안전모", 30000, true, 5);
+		String orderNo = payOrder(buyer, sku, 2);
+		jdbcTemplate.update("update orders set status = 'CANCELED', updated_at = ? where order_no = ?",
+				LocalDateTime.now().minusMinutes(10), orderNo);
+		entityManager.clear();
+		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 64400))).when(paymentGateway).findByOrderNo(orderNo);
+		when(paymentGateway.cancel(PAYMENT_KEY, "고객 주문 취소", "cancel-" + orderNo))
+				.thenReturn(pg(orderNo, PgStatus.CANCELED, 64400));
+
+		scheduler.reconcileStuckCancellations();
+
+		assertThat(statusOf(orderNo)).isEqualTo("CANCELED");
+		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("CANCELED");
+		assertThat(stockOf(sku)).isEqualTo(5);
+		assertThat(salesCountOf(sku)).isZero();
+		verify(paymentGateway).cancel(PAYMENT_KEY, "고객 주문 취소", "cancel-" + orderNo);
+	}
+
+	@Test
+	void 멱등키_유효기간을_넘긴_미취소_주문은_자동으로_재요청하지_않는다() throws Exception {
+		long sku = insertProductWithSku("안전모", 30000, true, 5);
+		String orderNo = payOrder(buyer, sku, 2);
+		jdbcTemplate.update("update orders set status = 'CANCELED', updated_at = ? where order_no = ?",
+				LocalDateTime.now().minusDays(20), orderNo);
+		entityManager.clear();
+		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 64400))).when(paymentGateway).findByOrderNo(orderNo);
+
+		scheduler.reconcileStuckCancellations();
+
+		assertThat(statusOf(orderNo)).isEqualTo("CANCELED");
+		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("DONE");
+		assertThat(stockOf(sku)).isEqualTo(3);
+		verify(paymentGateway, never()).cancel(anyString(), anyString(), anyString());
 	}
 
 	@Test
