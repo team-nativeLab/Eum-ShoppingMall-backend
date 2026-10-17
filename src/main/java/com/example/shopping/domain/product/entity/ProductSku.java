@@ -51,9 +51,8 @@ public class ProductSku {
 		return sku;
 	}
 
-	public void update(String optionName, long price, int stock) {
+	public void update(String optionName, long price) {
 		this.optionName = optionName;
 		this.price = price;
-		this.stock = stock;
 	}
 }
