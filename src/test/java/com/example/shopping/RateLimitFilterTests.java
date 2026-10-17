@@ -65,6 +65,17 @@ class RateLimitFilterTests {
 	}
 
 	@Test
+	void 회원과_관리자_로그인은_같은_IP_한도를_공유한다() throws Exception {
+		assertThat(call("POST", "/api/v1/auth/login", "10.0.0.1")).isEqualTo(200);
+		assertThat(call("POST", "/api/v1/admin/auth/login", "10.0.0.1")).isEqualTo(200);
+		assertThat(call("POST", "/api/v1/auth/login", "10.0.0.1")).isEqualTo(200);
+		assertThat(call("POST", "/api/v1/admin/auth/login", "10.0.0.1")).isEqualTo(429);
+
+		// 다른 IP의 사용자는 같은 이메일이라도 독립적으로 시도할 수 있다.
+		assertThat(call("POST", "/api/v1/auth/login", "10.0.0.2")).isEqualTo(200);
+	}
+
+	@Test
 	void 주문_취소처럼_주문번호가_들어가는_API는_번호가_달라도_한_묶음으로_센다() throws Exception {
 		assertThat(call("POST", "/api/v1/orders/ORDER-A/cancel", "10.0.0.1")).isEqualTo(200);
 		assertThat(call("POST", "/api/v1/orders/ORDER-B/cancel", "10.0.0.1")).isEqualTo(200);

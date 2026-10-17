@@ -1,6 +1,5 @@
 package com.example.shopping.domain.member.service;
 
-import java.time.LocalDateTime;
 import java.util.Locale;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -25,10 +24,6 @@ import com.example.shopping.global.security.JwtTokenProvider;
  */
 @Service
 public class AuthService {
-
-	// 연속으로 이만큼 틀리면 LOCK_MINUTES 동안 로그인을 막는다. 비밀번호를 하나씩 대입해 보는 공격을 늦춘다.
-	static final int MAX_LOGIN_FAILURES = 5;
-	static final int LOCK_MINUTES = 10;
 
 	private final MemberRepository memberRepository;
 	private final PasswordEncoder passwordEncoder;
@@ -96,16 +91,6 @@ public class AuthService {
 
 	private Member authenticate(LoginRequest request) {
 		Member member = memberRepository.findByEmail(normalizeEmail(request.email())).orElse(null);
-		LocalDateTime now = LocalDateTime.now();
-
-		if (member != null && member.isLoginLocked(now)) {
-			// 잠긴 동안에는 비밀번호가 맞는지조차 확인하지 않는다 (맞았다는 사실이 새어 나가지 않도록).
-			throw new BusinessException(ErrorCode.LOGIN_LOCKED);
-		}
-		if (member != null && member.getLockedUntil() != null) {
-			// 잠금 시간이 지났으면 실패 횟수를 처음부터 다시 센다.
-			memberRepository.resetLoginFailures(member.getId());
-		}
 
 		String passwordHash = member == null ? dummyPasswordHash : member.getPasswordHash();
 		boolean passwordMatches = passwordEncoder.matches(request.password(), passwordHash);
@@ -115,11 +100,7 @@ public class AuthService {
 			throw new BusinessException(ErrorCode.LOGIN_FAILED);
 		}
 		if (!passwordMatches) {
-			memberRepository.recordLoginFailure(member.getId(), MAX_LOGIN_FAILURES, now.plusMinutes(LOCK_MINUTES));
 			throw new BusinessException(ErrorCode.LOGIN_FAILED);
-		}
-		if (member.getFailedLoginCount() > 0) {
-			memberRepository.resetLoginFailures(member.getId());
 		}
 		// 계정 상태는 본인 확인(비밀번호 일치)이 끝난 뒤에만 알려준다.
 		if (member.getStatus() == MemberStatus.SUSPENDED) {

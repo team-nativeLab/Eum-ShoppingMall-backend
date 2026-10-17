@@ -52,12 +52,12 @@ public class Member extends BaseTimeEntity {
 	@Column(nullable = false, length = 20)
 	private MemberStatus status = MemberStatus.ACTIVE;
 
-	// 연속 로그인 실패 횟수. 로그인에 성공하면 0으로 돌아간다.
+	// 기존 DB 스키마 호환을 위해 유지한다. 로그인 실패 제한에는 사용하지 않는다.
 	@ColumnDefault("0")
 	@Column(nullable = false)
 	private int failedLoginCount;
 
-	// 이 시각까지 로그인이 잠긴다. 잠기지 않았으면 null
+	// 기존 DB 스키마 호환을 위해 유지한다. 로그인 실패 제한에는 사용하지 않는다.
 	private LocalDateTime lockedUntil;
 
 	/** 일반 회원(USER, ACTIVE)으로 생성한다. */
@@ -74,10 +74,6 @@ public class Member extends BaseTimeEntity {
 		Member member = create(email, passwordHash, name, null);
 		member.role = MemberRole.ADMIN;
 		return member;
-	}
-
-	public boolean isLoginLocked(LocalDateTime now) {
-		return lockedUntil != null && lockedUntil.isAfter(now);
 	}
 
 	/** null인 항목은 바꾸지 않는다. 연락처는 빈 문자열을 주면 지운다. */
