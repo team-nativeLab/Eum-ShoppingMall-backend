@@ -99,8 +99,29 @@ class OrderPaymentTests {
 
 	@BeforeEach
 	void createMembers() {
+		createSchedulerLocks();
 		buyer = insertMember();
 		other = insertMember();
+	}
+
+	private void createSchedulerLocks() {
+		jdbcTemplate.execute("""
+				CREATE TABLE IF NOT EXISTS scheduler_lock (
+					lock_name VARCHAR(100) PRIMARY KEY,
+					lock_until TIMESTAMP(6) NOT NULL,
+					lock_owner VARCHAR(36),
+					last_order_id BIGINT NOT NULL DEFAULT 0
+				)
+				""");
+		jdbcTemplate.update("DELETE FROM scheduler_lock");
+		jdbcTemplate.update("""
+				INSERT INTO scheduler_lock (lock_name, lock_until, lock_owner, last_order_id)
+				VALUES
+					('reconcileStuckPayments', DATEADD(SECOND, -1, CURRENT_TIMESTAMP), NULL, 0),
+					('reconcileStuckCancellations', DATEADD(SECOND, -1, CURRENT_TIMESTAMP), NULL, 0),
+					('purgeExpiredRefreshTokens', DATEADD(SECOND, -1, CURRENT_TIMESTAMP), NULL, 0),
+					('reconcileWaitingDeposits', DATEADD(SECOND, -1, CURRENT_TIMESTAMP), NULL, 0)
+				""");
 	}
 
 	@Test
