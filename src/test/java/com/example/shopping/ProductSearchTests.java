@@ -401,7 +401,8 @@ class ProductSearchTests {
 		String created = mockMvc.perform(post("/api/v1/admin/products").contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"name":"경량 안전모","basePrice":30000,"listPrice":35000,"brand":"3M",
-								 "certifications":["SELF_CONFIRMATION","KCS"],"recommendScore":70}
+								 "certifications":["SELF_CONFIRMATION","KCS"],"recommendScore":70,
+								 "skus":[{"optionName":"기본","price":30000,"stock":10}]}
 								"""))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.brand").value("3M"))

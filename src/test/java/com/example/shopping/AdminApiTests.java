@@ -216,7 +216,7 @@ class AdminApiTests {
 				{"name":"안전모","slug":"head-protection","parentId":%d}
 				""".formatted(parentId)));
 		long productId = idOf(postJson("/api/v1/admin/products", """
-				{"name":"산업용 안전모","basePrice":35000,"categoryId":%d}
+				{"name":"산업용 안전모","basePrice":35000,"categoryId":%d,"status":"HIDDEN"}
 				""".formatted(childId)));
 
 		mockMvc.perform(delete("/api/v1/admin/categories/{id}", parentId))
@@ -318,6 +318,26 @@ class AdminApiTests {
 	}
 
 	@Test
+	void 고객에게_노출되는_상품에는_옵션이_필요하다() throws Exception {
+		postJson("/api/v1/admin/products", """
+				{"name":"옵션 없는 판매 상품","basePrice":5000}
+				""")
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+		String hidden = postJson("/api/v1/admin/products", """
+				{"name":"옵션 준비 중 상품","basePrice":5000,"status":"HIDDEN"}
+				""").andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		long productId = ((Number) JsonPath.read(hidden, "$.data.id")).longValue();
+
+		patchJson("/api/v1/admin/products/" + productId, """
+				{"status":"ON_SALE"}
+				""")
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+	}
+
+	@Test
 	void 입고하면_현재_재고에_수량이_더해지고_그사이_주문으로_줄어든_재고를_덮어쓰지_않는다() throws Exception {
 		String created = postJson("/api/v1/admin/products", """
 				{"name":"산업용 안전모","basePrice":30000,
@@ -415,7 +435,7 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.code").value("CATEGORY_NOT_FOUND"));
 
 		long productId = idOf(postJson("/api/v1/admin/products", """
-				{"name":"안전모","basePrice":1000}
+				{"name":"안전모","basePrice":1000,"status":"HIDDEN"}
 				"""));
 		patchJson("/api/v1/admin/products/" + productId, """
 				{"skus":[{"id":999999,"optionName":"흰색","price":1000,"stock":1}]}
