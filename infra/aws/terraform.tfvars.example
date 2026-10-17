@@ -1,0 +1,20 @@
+aws_region           = "ap-northeast-2"
+name                 = "eum-shopping"
+certificate_arn      = "arn:aws:acm:ap-northeast-2:123456789012:certificate/replace-me"
+api_domain           = "api.example.com"
+cors_allowed_origins = "https://shop.example.com"
+image_tag            = "replace-with-immutable-git-sha"
+
+# Create these values in AWS Secrets Manager first; enter ARNs, never secret values.
+application_secret_arns = {
+  JWT_SECRET     = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/jwt-replace"
+  TOSS_SECRET_KEY = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/toss-replace"
+}
+database_app_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/db-app-replace"
+
+# Inject at runtime from a secure shell/CI secret store; do not put it in this file.
+# export TF_VAR_redis_auth_token="<16-128 character Redis AUTH token>"
+
+db_multi_az = false
+# For production, enable Multi-AZ and scale ECS/Redis after reviewing the cost estimate.
+enable_ecs_service = false
