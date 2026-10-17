@@ -291,8 +291,15 @@ class SecurityTests {
 	@Test
 	void 헬스_체크_외의_운영_엔드포인트는_관리자가_아니면_접근할_수_없다() throws Exception {
 		mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
+		mockMvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
 		mockMvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/actuator/env").with(member(1))).andExpect(status().isForbidden());
+	}
+
+	@Test
+	void 허용되지_않은_Origin의_Refresh_쿠키_요청은_거부한다() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/refresh").header("Origin", "https://evil.example"))
+				.andExpect(status().isForbidden());
 	}
 
 	@Test

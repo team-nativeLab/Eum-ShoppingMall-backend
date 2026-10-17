@@ -43,6 +43,7 @@ import com.example.shopping.global.security.AccessTokenValidator;
 import com.example.shopping.global.security.JwtProperties;
 import com.example.shopping.global.security.JwtTokenProvider;
 import com.example.shopping.global.security.RateLimitFilter;
+import com.example.shopping.global.security.RefreshCookieOriginFilter;
 import com.example.shopping.global.security.RequestSizeLimitFilter;
 import com.example.shopping.global.security.SecurityErrorHandler;
 
@@ -81,6 +82,7 @@ public class SecurityConfig {
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity http, SecurityErrorHandler errorHandler,
 			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
+			@Value("${cors.allowed-origins}") List<String> allowedOrigins,
 			StringRedisTemplate redisTemplate,
 			@Value("${security.rate-limit.requests-per-minute}") int requestsPerMinute,
 			@Value("${security.request.max-body-bytes}") long maxBodyBytes) throws Exception {
@@ -113,6 +115,8 @@ public class SecurityConfig {
 				.addFilterBefore(new RequestSizeLimitFilter(maxBodyBytes, exceptionResolver),
 						BearerTokenAuthenticationFilter.class)
 				.addFilterBefore(new RateLimitFilter(requestsPerMinute, exceptionResolver, Clock.systemUTC(), redisTemplate),
+						BearerTokenAuthenticationFilter.class)
+				.addFilterBefore(new RefreshCookieOriginFilter(allowedOrigins, exceptionResolver),
 						BearerTokenAuthenticationFilter.class);
 		return http.build();
 	}
