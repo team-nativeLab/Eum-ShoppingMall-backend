@@ -12,3 +12,7 @@ The `local` profile also uses Flyway and Hibernate validation. It baselines a pr
 ## Admin order cancellation API
 
 `POST /api/v1/admin/orders/{orderId}/cancel` is available to administrators. Send a JSON body with a required `reason` of up to 200 characters. Paid and preparing orders are fully refunded through the payment gateway; pending orders expire and release reserved stock. Waiting virtual-account orders are canceled at the gateway before they expire and release stock. Shipped or delivered orders and partial refunds are not supported by this endpoint. The admin order detail response includes `cancelReason`, `cancelledByMemberId`, and `cancelledAt` after a successful cancellation.
+
+## Admin member role API
+
+`PATCH /api/v1/admin/users/{userId}/role` accepts `{"role":"USER"}` or `{"role":"ADMIN"}` and can only be called by a `SUPER_ADMIN`. A user cannot change their own role, another `SUPER_ADMIN` role, or a withdrawn account. Suspended accounts cannot be granted `ADMIN`. Changing a role deletes all that member's refresh tokens. Already issued access tokens remain usable until they expire; immediate access-token invalidation is outside this endpoint's scope. The configured bootstrap admin is created or promoted as `SUPER_ADMIN`; an existing regular member with the configured email is not promoted.

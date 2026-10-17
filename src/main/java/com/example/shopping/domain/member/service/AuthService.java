@@ -69,7 +69,7 @@ public class AuthService {
 	/** 관리자 로그인. 일반 회원 계정이면 계정이 없는 것과 똑같이 응답한다. */
 	public AuthTokens adminLogin(LoginRequest request) {
 		Member member = authenticate(request);
-		if (member.getRole() != MemberRole.ADMIN) {
+		if (!member.getRole().canAccessAdminApi()) {
 			throw new BusinessException(ErrorCode.LOGIN_FAILED);
 		}
 		return issueTokens(member);
