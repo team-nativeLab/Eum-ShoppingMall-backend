@@ -11,9 +11,13 @@ import org.springframework.stereotype.Component;
 import com.example.shopping.domain.member.service.RefreshTokenService;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.repository.OrderRepository;
+import com.example.shopping.domain.payment.entity.Payment;
+import com.example.shopping.domain.payment.entity.PaymentStatus;
 import com.example.shopping.domain.payment.gateway.PaymentGateway;
 import com.example.shopping.domain.payment.gateway.PgPayment;
+import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.gateway.PgUnavailableException;
+import com.example.shopping.domain.payment.repository.PaymentRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +37,7 @@ public class OrderMaintenanceScheduler {
 	private final OrderRepository orderRepository;
 	private final OrderTxService orderTxService;
 	private final OrderCancelService orderCancelService;
+	private final PaymentRepository paymentRepository;
 	private final PaymentGateway paymentGateway;
 	private final RefreshTokenService refreshTokenService;
 
@@ -45,6 +50,14 @@ public class OrderMaintenanceScheduler {
 				orderTxService.expire(orderId);
 			} catch (RuntimeException e) {
 				log.error("주문 {} 만료 처리 실패", orderId, e);
+			}
+		}
+		for (Long orderId : orderRepository.findExpiredWaitingDepositIds(LocalDateTime.now(),
+				PageRequest.of(0, BATCH_SIZE))) {
+			try {
+				reconcileVirtualAccount(orderId);
+			} catch (RuntimeException e) {
+				log.error("주문 {} 가상계좌 만료 보정 실패", orderId, e);
 			}
 		}
 	}
@@ -99,6 +112,71 @@ public class OrderMaintenanceScheduler {
 					order.getTotalAmount(), actual.get().totalAmount());
 			return;
 		}
-		orderTxService.completePayment(orderId, actual.get());
+		if (!orderTxService.completePayment(orderId, actual.get())
+				&& actual.get().status() == PgStatus.WAITING_FOR_DEPOSIT) {
+			log.error("주문 {} 가상계좌 정보가 부족해 승인 보정을 보류합니다.", order.getOrderNo());
+		}
+	}
+
+	/** 웹훅을 놓쳐도 PG를 조회해 입금 완료를 반영하거나 입금 기한이 지난 재고를 해제한다. */
+	@Scheduled(fixedDelay = 300_000)
+	public void reconcileWaitingDeposits() {
+		long afterId = 0;
+		while (true) {
+			List<Long> orderIds = orderRepository.findWaitingDepositIdsAfter(afterId, PageRequest.of(0, BATCH_SIZE));
+			if (orderIds.isEmpty()) {
+				return;
+			}
+			for (Long orderId : orderIds) {
+				afterId = Math.max(afterId, orderId);
+				try {
+					reconcileVirtualAccount(orderId);
+				} catch (RuntimeException e) {
+					log.error("주문 {} 가상계좌 상태 보정 실패", orderId, e);
+				}
+			}
+		}
+	}
+
+	private void reconcileVirtualAccount(Long orderId) {
+		Order order = orderRepository.findById(orderId).orElse(null);
+		Payment payment = paymentRepository.findFirstByOrderIdOrderByIdDesc(orderId)
+				.filter(p -> p.getStatus() == PaymentStatus.WAITING_DEPOSIT)
+				.orElse(null);
+		if (order == null || payment == null) {
+			return;
+		}
+
+		Optional<PgPayment> actual;
+		try {
+			actual = paymentGateway.findByOrderNo(order.getOrderNo());
+		} catch (PgUnavailableException e) {
+			log.warn("주문 {} PG 입금 상태 조회 실패. 다음 주기에 재시도합니다: {}", order.getOrderNo(), e.getMessage());
+			return;
+		}
+		if (actual.isEmpty() || !matchesVirtualAccount(order, payment, actual.get())) {
+			log.error("주문 {} 가상계좌 PG 정보 불일치. 수동 확인이 필요합니다.", order.getOrderNo());
+			return;
+		}
+
+		PgPayment pg = actual.get();
+		if (pg.status() == PgStatus.DONE) {
+			orderTxService.completeVirtualAccountDeposit(orderId, payment.getId(), pg);
+			return;
+		}
+		if ((pg.status() == PgStatus.WAITING_FOR_DEPOSIT || pg.status() == PgStatus.CANCELED)
+				&& !payment.getVirtualAccountDueAt().isAfter(LocalDateTime.now())) {
+			orderTxService.expireVirtualAccount(orderId, payment.getId());
+		}
+	}
+
+	private boolean matchesVirtualAccount(Order order, Payment payment, PgPayment pg) {
+		return "가상계좌".equals(payment.getMethod())
+				&& payment.getVirtualAccountDueAt() != null
+				&& payment.getVirtualAccountNumber() != null
+				&& order.getOrderNo().equals(pg.orderNo())
+				&& payment.getPaymentKey().equals(pg.paymentKey())
+				&& pg.totalAmount() == order.getTotalAmount()
+				&& payment.matchesWebhookSecret(pg.secret());
 	}
 }

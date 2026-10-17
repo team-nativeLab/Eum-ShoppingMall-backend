@@ -39,14 +39,25 @@ public record AdminOrderDetailResponse(Long id, String orderNo, Long memberId, O
 	}
 
 	public record PaymentResponse(String method, PaymentStatus status, long approvedAmount, long balanceAmount,
-			LocalDateTime approvedAt) {
+			LocalDateTime approvedAt, VirtualAccountResponse virtualAccount) {
+
+		public record VirtualAccountResponse(String bankCode, String accountNumber, String customerName,
+				LocalDateTime dueDate, boolean expired) {
+		}
 
 		static PaymentResponse from(Payment payment) {
 			if (payment == null) {
 				return null;
 			}
+			VirtualAccountResponse virtualAccount = null;
+			if (payment.getStatus() == PaymentStatus.WAITING_DEPOSIT && payment.getVirtualAccountDueAt() != null) {
+				virtualAccount = new VirtualAccountResponse(payment.getVirtualAccountBankCode(),
+						payment.getVirtualAccountNumber(), payment.getVirtualAccountCustomerName(),
+						payment.getVirtualAccountDueAt(),
+						!payment.getVirtualAccountDueAt().isAfter(LocalDateTime.now()));
+			}
 			return new PaymentResponse(payment.getMethod(), payment.getStatus(), payment.getApprovedAmount(),
-					payment.getBalanceAmount(), payment.getApprovedAt());
+					payment.getBalanceAmount(), payment.getApprovedAt(), virtualAccount);
 		}
 	}
 
