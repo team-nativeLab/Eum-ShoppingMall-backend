@@ -22,7 +22,7 @@ public class JwtTokenProvider {
 	private final JwtEncoder jwtEncoder;
 	private final JwtProperties properties;
 
-	/** sub에는 회원 ID, role에는 권한 이름(USER, ADMIN)을 담는다. */
+	/** sub에는 회원 ID, role에는 권한 이름(USER, ADMIN, SUPER_ADMIN)을 담는다. */
 	public String createAccessToken(Long memberId, String role, long tokenVersion) {
 		Instant now = Instant.now();
 		JwtClaimsSet claims = JwtClaimsSet.builder()

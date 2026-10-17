@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -26,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -38,6 +40,7 @@ import jakarta.persistence.EntityManager;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.domain.member.service.AdminAccountInitializer;
 import com.example.shopping.domain.member.service.AdminBootstrapProperties;
+import com.example.shopping.domain.member.service.RefreshTokenService;
 import com.jayway.jsonpath.JsonPath;
 
 /** 관리자 API. 따로 표시하지 않은 테스트는 관리자 권한으로 호출한다. */
@@ -64,6 +67,9 @@ class AdminApiTests {
 
 	@Autowired
 	private MemberRepository memberRepository;
+
+	@Autowired
+	private RefreshTokenService refreshTokenService;
 
 	// ───────── 관리자 로그인·계정 ─────────
 
@@ -93,21 +99,89 @@ class AdminApiTests {
 	@WithAnonymousUser
 	void 설정된_초기_관리자_계정은_없을_때만_만들고_기존_계정은_건드리지_않는다() throws Exception {
 		insertMember("existing@example.com", "기존회원", "USER");
+		long existingAdminId = insertMember("existing-admin@example.com", "기존 관리자", "ADMIN");
+		refreshTokenService.issue(existingAdminId, 0);
 
 		AdminAccountInitializer initializer = new AdminAccountInitializer(
-				new AdminBootstrapProperties("Boot@Example.com", PASSWORD), memberRepository, passwordEncoder);
+				new AdminBootstrapProperties("Boot@Example.com", PASSWORD), memberRepository, passwordEncoder,
+				refreshTokenService);
 		initializer.run(null);
 		initializer.run(null);
 		new AdminAccountInitializer(new AdminBootstrapProperties("existing@example.com", "another-pass-1234"),
-				memberRepository, passwordEncoder).run(null);
-		new AdminAccountInitializer(new AdminBootstrapProperties("", ""), memberRepository, passwordEncoder).run(null);
+				memberRepository, passwordEncoder, refreshTokenService).run(null);
+		new AdminAccountInitializer(new AdminBootstrapProperties("", ""), memberRepository, passwordEncoder,
+				refreshTokenService).run(null);
 
-		assertThat(jdbcTemplate.queryForObject("select count(*) from member", Long.class)).isEqualTo(2);
-		assertThat(roleOf("boot@example.com")).isEqualTo("ADMIN");
+		new AdminAccountInitializer(new AdminBootstrapProperties("existing-admin@example.com", PASSWORD),
+				memberRepository, passwordEncoder, refreshTokenService).run(null);
+
+		assertThat(jdbcTemplate.queryForObject("select count(*) from member", Long.class)).isEqualTo(3);
+		assertThat(roleOf("boot@example.com")).isEqualTo("SUPER_ADMIN");
 		assertThat(roleOf("existing@example.com")).isEqualTo("USER");
+		assertThat(roleOf("existing-admin@example.com")).isEqualTo("SUPER_ADMIN");
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where member_id = ?", Long.class,
+				existingAdminId)).isZero();
 		adminLogin("boot@example.com", PASSWORD).andExpect(status().isOk());
 		// 기존 회원의 비밀번호가 설정값으로 덮어써지지 않았다.
 		adminLogin("existing@example.com", "another-pass-1234").andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void 최고관리자만_역할을_바꾸고_변경된_회원의_토큰을_폐기한다() throws Exception {
+		long superAdminId = insertMember("super@example.com", "최고관리자", "SUPER_ADMIN");
+		long memberId = insertMember("role-target@example.com", "대상 회원", "ADMIN");
+		String accessToken = JsonPath.read(adminLogin("role-target@example.com", PASSWORD)
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.data.accessToken");
+		refreshTokenService.issue(memberId, 0);
+
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"USER"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.role").value("USER"));
+
+		assertThat(roleOf("role-target@example.com")).isEqualTo("USER");
+		assertThat(jdbcTemplate.queryForObject("select access_token_version from member where id = ?", Long.class,
+				memberId)).isZero();
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where member_id = ?", Long.class,
+				memberId)).isZero();
+		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+				.andExpect(status().isOk());
+
+		long adminId = insertMember("ordinary-admin@example.com", "관리자", "ADMIN");
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"USER"}
+						"""))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", superAdminId).with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"USER"}
+						"""))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"SUPER_ADMIN"}
+						"""))
+				.andExpect(status().isBadRequest());
+
+		entityManager.flush();
+		jdbcTemplate.update("update member set status = 'SUSPENDED' where id = ?", memberId);
+		entityManager.clear();
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"ADMIN"}
+						"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("ACCOUNT_SUSPENDED"));
+		jdbcTemplate.update("update member set status = 'WITHDRAWN' where id = ?", memberId);
+		entityManager.clear();
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"USER"}
+						"""))
+				.andExpect(status().isForbidden());
 	}
 
 	// ───────── 회원 ─────────
@@ -886,6 +960,17 @@ class AdminApiTests {
 
 	private String roleOf(String email) {
 		return jdbcTemplate.queryForObject("select role from member where email = ?", String.class, email);
+	}
+
+	private org.springframework.test.web.servlet.request.RequestPostProcessor admin(long memberId) {
+		return jwt().jwt(token -> token.subject(String.valueOf(memberId)))
+				.authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+	}
+
+	private org.springframework.test.web.servlet.request.RequestPostProcessor superAdmin(long memberId) {
+		return jwt().jwt(token -> token.subject(String.valueOf(memberId)))
+				.authorities(new SimpleGrantedAuthority("ROLE_ADMIN"),
+						new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
 	}
 
 	private long insertOrder(String orderNo, long memberId, String status, long totalAmount, LocalDateTime paidAt) {

@@ -1,7 +1,9 @@
 package com.example.shopping.global.config;
 
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -18,6 +20,8 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -137,14 +141,22 @@ public class SecurityConfig {
 		return request -> publicAuth.matches(request) ? null : delegate.resolve(request);
 	}
 
-	/** 토큰의 role 클레임(USER, ADMIN)을 ROLE_USER, ROLE_ADMIN 권한으로 바꾼다. */
+	/** 최고 관리자는 관리자 API 전체 권한과 최고 관리자 전용 권한을 모두 받는다. */
 	private JwtAuthenticationConverter jwtAuthenticationConverter() {
 		JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
 		authorities.setAuthoritiesClaimName(JwtTokenProvider.ROLE_CLAIM);
 		authorities.setAuthorityPrefix("ROLE_");
 
 		JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-		converter.setJwtGrantedAuthoritiesConverter(authorities);
+		converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+			Collection<GrantedAuthority> tokenAuthorities = authorities.convert(jwt);
+			List<GrantedAuthority> result = tokenAuthorities == null
+					? new ArrayList<>() : new ArrayList<>(tokenAuthorities);
+			if ("SUPER_ADMIN".equals(jwt.getClaimAsString(JwtTokenProvider.ROLE_CLAIM))) {
+				result.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+			}
+			return result;
+		});
 		return converter;
 	}
 
