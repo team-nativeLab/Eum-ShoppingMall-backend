@@ -64,30 +64,29 @@ class SecurityTests {
 	// ───────── 로그인 잠금 ─────────
 
 	@Test
-	void 비밀번호를_다섯_번_틀리면_맞는_비밀번호로도_로그인할_수_없다가_잠금이_풀리면_다시_된다() throws Exception {
+	void 다른_IP의_회원_로그인_실패가_계정을_잠그지_않는다() throws Exception {
 		insertMember(EMAIL, "USER");
 
 		for (int i = 0; i < 5; i++) {
-			login(EMAIL, "wrong-pass-" + i)
+			loginFrom("/api/v1/auth/login", EMAIL, "wrong-pass-" + i, "198.51.100.10")
 					.andExpect(status().isUnauthorized())
 					.andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
 		}
-		login(EMAIL, PASSWORD)
-				.andExpect(status().isTooManyRequests())
-				.andExpect(jsonPath("$.code").value("LOGIN_LOCKED"));
-		// 관리자 로그인 경로로도 우회할 수 없다.
-		mockMvc.perform(post("/api/v1/admin/auth/login").contentType(MediaType.APPLICATION_JSON)
-						.content(credentials(EMAIL, PASSWORD)))
-				.andExpect(status().isTooManyRequests());
+		loginFrom("/api/v1/auth/login", EMAIL, PASSWORD, "198.51.100.11")
+				.andExpect(status().isOk());
+	}
 
-		// 잠금 시간이 지난 상황을 만든다.
-		jdbcTemplate.update("update member set locked_until = ? where email = ?",
-				LocalDateTime.now().minusSeconds(1), EMAIL);
-		entityManager.clear();
+	@Test
+	void 다른_IP의_관리자_로그인_실패가_관리자_계정을_잠그지_않는다() throws Exception {
+		insertMember(EMAIL, "ADMIN");
 
-		login(EMAIL, PASSWORD).andExpect(status().isOk());
-		assertThat(jdbcTemplate.queryForObject("select failed_login_count from member where email = ?",
-				Integer.class, EMAIL)).isZero();
+		for (int i = 0; i < 5; i++) {
+			loginFrom("/api/v1/admin/auth/login", EMAIL, "wrong-pass-" + i, "198.51.100.20")
+					.andExpect(status().isUnauthorized())
+					.andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
+		}
+		loginFrom("/api/v1/admin/auth/login", EMAIL, PASSWORD, "198.51.100.21")
+				.andExpect(status().isOk());
 	}
 
 	@Test
@@ -360,6 +359,13 @@ class SecurityTests {
 	private ResultActions login(String email, String password) throws Exception {
 		return mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
 				.content(credentials(email, password)));
+	}
+
+	private ResultActions loginFrom(String path, String email, String password, String remoteAddress) throws Exception {
+		return mockMvc.perform(post(path).with(request -> {
+			request.setRemoteAddr(remoteAddress);
+			return request;
+		}).contentType(MediaType.APPLICATION_JSON).content(credentials(email, password)));
 	}
 
 	private ResultActions refresh(Cookie cookie) throws Exception {

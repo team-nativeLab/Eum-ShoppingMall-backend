@@ -30,10 +30,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
 	// 보안 설정과 같은 방식으로 경로를 비교한다. *는 경로 한 칸(주문번호 등)을 뜻한다.
 	private static final List<Rule> RULES = List.of(
-			rule(HttpMethod.POST, "/api/v1/auth/login"),
+			rule(HttpMethod.POST, "/api/v1/auth/login", "POST /api/v1/login"),
 			rule(HttpMethod.POST, "/api/v1/auth/signup"),
 			rule(HttpMethod.POST, "/api/v1/auth/refresh"),
-			rule(HttpMethod.POST, "/api/v1/admin/auth/login"),
+			rule(HttpMethod.POST, "/api/v1/admin/auth/login", "POST /api/v1/login"),
 			rule(HttpMethod.PATCH, "/api/v1/me/password"),
 			rule(HttpMethod.POST, "/api/v1/quotes"),
 			rule(HttpMethod.POST, "/api/v1/support/inquiries"),
@@ -70,7 +70,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 		sweepOldWindows(currentWindow);
 
 		// 주문번호가 달라도 같은 API면 한 묶음으로 센다.
-		String key = request.getRemoteAddr() + " " + rule.name;
+		String key = request.getRemoteAddr() + " " + rule.bucket;
 		Window window = windows.compute(key, (k, existing) -> existing == null || existing.id != currentWindow
 				? new Window(currentWindow, 1)
 				: new Window(currentWindow, existing.count + 1));
@@ -94,10 +94,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
 	}
 
 	private static Rule rule(HttpMethod method, String pattern) {
-		return new Rule(method + " " + pattern, PathPatternRequestMatcher.withDefaults().matcher(method, pattern));
+		return rule(method, pattern, method + " " + pattern);
 	}
 
-	private record Rule(String name, RequestMatcher matcher) {
+	private static Rule rule(HttpMethod method, String pattern, String bucket) {
+		return new Rule(bucket, PathPatternRequestMatcher.withDefaults().matcher(method, pattern));
+	}
+
+	private record Rule(String bucket, RequestMatcher matcher) {
 	}
 
 	private record Window(long id, int count) {
