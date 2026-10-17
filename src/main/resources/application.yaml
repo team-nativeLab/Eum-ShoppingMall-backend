@@ -95,6 +95,8 @@ security:
   rate-limit:
     # 로그인·회원가입·문의 접수·주문·결제 등에 적용하는 IP별 분당 요청 한도
     requests-per-minute: ${RATE_LIMIT_PER_MINUTE:10}
+    # 자동완성을 포함한 공개 상품 조회의 IP별 분당 한도
+    public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:120}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
     max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}
@@ -115,6 +117,9 @@ upload:
   dir: ${UPLOAD_DIR:uploads}
 
 app:
+  cache:
+    # 공개 상품 조회의 공유 Redis 캐시 TTL (초)
+    product-ttl-seconds: ${PRODUCT_READ_CACHE_TTL_SECONDS:60}
   seed:
     # 카테고리가 하나도 없으면 기본 카테고리(안전모, 보안경, 안전장갑, 방진마스크, 안전화, 귀마개)를 만든다.
     default-categories: ${SEED_DEFAULT_CATEGORIES:true}

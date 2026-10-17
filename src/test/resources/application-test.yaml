@@ -36,6 +36,9 @@ upload:
   dir: build/test-uploads
 
 app:
+  cache:
+    # 검색 캐시 Redis 호출은 단위 테스트에서 대역으로 검증한다.
+    product-ttl-seconds: 0
   scheduling:
     # 주기 작업은 테스트에서 직접 호출한다.
     enabled: false

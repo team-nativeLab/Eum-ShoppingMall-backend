@@ -85,6 +85,7 @@ public class SecurityConfig {
 			@Value("${cors.allowed-origins}") List<String> allowedOrigins,
 			StringRedisTemplate redisTemplate,
 			@Value("${security.rate-limit.requests-per-minute}") int requestsPerMinute,
+			@Value("${security.rate-limit.public-product-requests-per-minute:120}") int publicProductRequestsPerMinute,
 			@Value("${security.request.max-body-bytes}") long maxBodyBytes) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
@@ -115,7 +116,8 @@ public class SecurityConfig {
 						.accessDeniedHandler(errorHandler))
 				.addFilterBefore(new RequestSizeLimitFilter(maxBodyBytes, exceptionResolver),
 						BearerTokenAuthenticationFilter.class)
-				.addFilterBefore(new RateLimitFilter(requestsPerMinute, exceptionResolver, Clock.systemUTC(), redisTemplate),
+				.addFilterBefore(new RateLimitFilter(requestsPerMinute, publicProductRequestsPerMinute,
+						exceptionResolver, Clock.systemUTC(), redisTemplate),
 						BearerTokenAuthenticationFilter.class)
 				.addFilterBefore(new RefreshCookieOriginFilter(allowedOrigins, exceptionResolver),
 						BearerTokenAuthenticationFilter.class);

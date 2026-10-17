@@ -53,12 +53,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
 			rule(HttpMethod.POST, "/api/v1/support/inquiries"),
 			rule(HttpMethod.POST, "/api/v1/orders"),
 			rule(HttpMethod.POST, "/api/v1/orders/*/cancel"),
-			rule(HttpMethod.POST, "/api/v1/payments/confirm"));
+			rule(HttpMethod.POST, "/api/v1/payments/confirm"),
+			new Rule("GET /api/v1/products", PathPatternRequestMatcher.withDefaults()
+					.matcher(HttpMethod.GET, "/api/v1/products/**"), true));
 
 	private static final long WINDOW_MILLIS = 60_000;
 	private static final int MAX_TRACKED_KEYS = 100_000;
 
 	private final int requestsPerMinute;
+	private final int publicProductRequestsPerMinute;
 	private final HandlerExceptionResolver resolver;
 	private final Clock clock;
 	private final StringRedisTemplate redisTemplate;
@@ -69,7 +72,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
 	public RateLimitFilter(int requestsPerMinute, HandlerExceptionResolver resolver, Clock clock,
 			StringRedisTemplate redisTemplate) {
+		this(requestsPerMinute, 120, resolver, clock, redisTemplate);
+	}
+
+	public RateLimitFilter(int requestsPerMinute, int publicProductRequestsPerMinute,
+			HandlerExceptionResolver resolver, Clock clock, StringRedisTemplate redisTemplate) {
 		this.requestsPerMinute = requestsPerMinute;
+		this.publicProductRequestsPerMinute = publicProductRequestsPerMinute;
 		this.resolver = resolver;
 		this.clock = clock;
 		this.redisTemplate = redisTemplate;
@@ -91,7 +100,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
 		// 주문번호가 달라도 같은 API면 한 묶음으로 센다.
 		String key = request.getRemoteAddr() + " " + rule.bucket;
 		long count = incrementShared(key, currentWindow, now);
-		if (count > requestsPerMinute) {
+		int limit = rule.publicRead ? publicProductRequestsPerMinute : requestsPerMinute;
+		if (count > limit) {
 			long retryAfterSeconds = Math.max(1, (WINDOW_MILLIS - now % WINDOW_MILLIS + 999) / 1000);
 			response.setHeader("Retry-After", Long.toString(retryAfterSeconds));
 			resolver.resolveException(request, response, null, new BusinessException(ErrorCode.TOO_MANY_REQUESTS));
@@ -143,10 +153,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
 	}
 
 	private static Rule rule(HttpMethod method, String pattern, String bucket) {
-		return new Rule(bucket, PathPatternRequestMatcher.withDefaults().matcher(method, pattern));
+		return new Rule(bucket, PathPatternRequestMatcher.withDefaults().matcher(method, pattern), false);
 	}
 
-	private record Rule(String bucket, RequestMatcher matcher) {
+	private record Rule(String bucket, RequestMatcher matcher, boolean publicRead) {
 	}
 
 	private record Window(long id, int count) {

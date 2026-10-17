@@ -11,6 +11,7 @@ import com.example.shopping.domain.home.repository.SiteContentRepository;
 import com.example.shopping.domain.product.dto.ProductSummaryResponse;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.ProductRepository;
+import com.example.shopping.domain.product.service.ProductReadCache;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 
@@ -24,15 +25,16 @@ public class HomeService {
 	private final BannerRepository bannerRepository;
 	private final ProductRepository productRepository;
 	private final SiteContentRepository siteContentRepository;
+	private final ProductReadCache readCache;
 
 	public HomeResponse getHome() {
-		return new HomeResponse(
+		return readCache.getOrLoad("home", HomeResponse.class, () -> new HomeResponse(
 				bannerRepository.findByVisibleTrueOrderBySortOrderAscIdAsc().stream()
 						.map(HomeResponse.BannerItem::from)
 						.toList(),
 				productRepository.findTop8ByStatusInOrderByIdDesc(ProductStatus.CUSTOMER_VISIBLE).stream()
 						.map(ProductSummaryResponse::from)
-						.toList());
+						.toList()));
 	}
 
 	public ContentResponse getCompany() {

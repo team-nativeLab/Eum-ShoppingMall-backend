@@ -17,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import tools.jackson.core.type.TypeReference;
 
 import com.example.shopping.domain.product.dto.CategoryResponse;
 import com.example.shopping.domain.product.dto.ProductDetailResponse;
@@ -44,6 +45,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ProductService {
+	private static final TypeReference<List<CategoryResponse>> CATEGORY_LIST = new TypeReference<>() {};
+	private static final TypeReference<List<ProductSuggestionResponse>> SUGGESTION_LIST = new TypeReference<>() {};
+	private static final TypeReference<List<String>> BRAND_LIST = new TypeReference<>() {};
+	private static final TypeReference<PageResponse<ProductSummaryResponse>> SEARCH_PAGE = new TypeReference<>() {};
 
 	/** 검색창 자동 완성에 보여 줄 최대 개수 */
 	private static final int SUGGESTION_LIMIT = 5;
@@ -54,11 +59,11 @@ public class ProductService {
 
 	private final ProductRepository productRepository;
 	private final CategoryRepository categoryRepository;
+	private final ProductReadCache readCache;
 
 	public List<CategoryResponse> getCategories() {
-		return visibleCategories().stream()
-				.map(CategoryResponse::from)
-				.toList();
+		return readCache.getOrLoad(new ReadKey("categories", null, null), CATEGORY_LIST,
+				() -> visibleCategories().stream().map(CategoryResponse::from).toList());
 	}
 
 	/** 고객용 상품 목록·검색. 조건의 뜻은 ProductSearchRequest 참고 */
@@ -77,14 +82,22 @@ public class ProductService {
 		}
 		Set<Certification> certifications = request.certification() == null ? Set.of()
 				: Set.copyOf(request.certification());
-		ProductSearchCondition condition = new ProductSearchCondition(ProductStatus.CUSTOMER_VISIBLE,
-				categoryScope(request.categoryId()), keyword(request.query()), brandNames, minPrice, maxPrice,
-				certifications, Boolean.TRUE.equals(request.certified()),
-				Boolean.TRUE.equals(request.excludeSoldOut()));
-
-		Page<Product> page = productRepository.searchForCustomer(condition, ProductSort.parse(request.sort()),
-				PageRequest.of(pageable.getPageNumber(), pageable.getPageSize()));
-		return PageResponse.from(page.map(ProductSummaryResponse::from));
+		String keyword = keyword(request.query());
+		ProductSort sort = ProductSort.parse(request.sort());
+		int pageNumber = pageable.getPageNumber();
+		int pageSize = pageable.getPageSize();
+		SearchKey key = new SearchKey(request.categoryId(), keyword, brandNames.stream().sorted().toList(), minPrice,
+				maxPrice, Boolean.TRUE.equals(request.certified()), certifications.stream().sorted().toList(),
+				Boolean.TRUE.equals(request.excludeSoldOut()), sort, pageNumber, pageSize);
+		return readCache.getOrLoad(key, SEARCH_PAGE, () -> {
+			ProductSearchCondition condition = new ProductSearchCondition(ProductStatus.CUSTOMER_VISIBLE,
+					categoryScope(request.categoryId()), keyword, brandNames, minPrice, maxPrice,
+					certifications, Boolean.TRUE.equals(request.certified()),
+					Boolean.TRUE.equals(request.excludeSoldOut()));
+			Page<Product> page = productRepository.searchForCustomer(condition, sort,
+					PageRequest.of(pageNumber, pageSize));
+			return PageResponse.from(page.map(ProductSummaryResponse::from));
+		});
 	}
 
 	/**
@@ -92,8 +105,13 @@ public class ProductService {
 	 * 가격·브랜드·인증·품절 필터는 개수에 반영하지 않는다 (필터를 골라도 다른 선택지의 개수가 바뀌지 않게).
 	 */
 	public ProductFacetsResponse getFacets(Long categoryId, String query) {
-		List<Category> all = categoryRepository.findAll();
 		String keyword = keyword(query);
+		return readCache.getOrLoad(new ReadKey("facets", categoryId, keyword), ProductFacetsResponse.class,
+				() -> loadFacets(categoryId, keyword));
+	}
+
+	private ProductFacetsResponse loadFacets(Long categoryId, String keyword) {
+		List<Category> all = categoryRepository.findAll();
 		ProductSearchCondition keywordOnly = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE, null, keyword);
 		ProductSearchCondition scoped = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE,
 				withDescendants(all, categoryId), keyword);
@@ -113,17 +131,20 @@ public class ProductService {
 		if (keyword == null) {
 			return List.of();
 		}
-		ProductSearchCondition condition = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE, null, keyword);
-		return productRepository.findTop(condition, ProductSort.RECOMMENDED, SUGGESTION_LIMIT).stream()
-				.map(ProductSuggestionResponse::from)
-				.toList();
+		return readCache.getOrLoad(new ReadKey("suggestions", null, keyword), SUGGESTION_LIST, () -> {
+			ProductSearchCondition condition = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE, null, keyword);
+			return productRepository.findTop(condition, ProductSort.RECOMMENDED, SUGGESTION_LIMIT).stream()
+					.map(ProductSuggestionResponse::from).toList();
+		});
 	}
 
 	/** 브랜드 필터에 보여 줄 브랜드 목록(가나다순). 고객에게 보이는 상품이 있는 브랜드만 나온다. */
 	public List<String> getBrands(Long categoryId) {
-		ProductSearchCondition condition = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE,
-				categoryScope(categoryId), null);
-		return productRepository.countByBrand(condition).keySet().stream().sorted().toList();
+		return readCache.getOrLoad(new ReadKey("brands", categoryId, null), BRAND_LIST, () -> {
+			ProductSearchCondition condition = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE,
+					categoryScope(categoryId), null);
+			return productRepository.countByBrand(condition).keySet().stream().sorted().toList();
+		});
 	}
 
 	public ProductDetailResponse getDetail(Long productId) {
@@ -223,5 +244,13 @@ public class ProductService {
 			throw new BusinessException(ErrorCode.INVALID_INPUT);
 		}
 		return keyword;
+	}
+
+	private record ReadKey(String operation, Long categoryId, String query) {
+	}
+
+	private record SearchKey(Long categoryId, String query, List<String> brands, Long minPrice, Long maxPrice,
+			boolean certified, List<Certification> certifications, boolean excludeSoldOut, ProductSort sort, int page,
+			int size) {
 	}
 }
