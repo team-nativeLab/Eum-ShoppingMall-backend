@@ -6,6 +6,8 @@
 
 Terraform은 VPC(공용·앱·데이터 서브넷 2개 AZ), NAT Gateway 1개, ALB, ECS, ECR, RDS MySQL 8.4, TLS/AUTH Redis, 암호화된 EFS 업로드 볼륨, CloudWatch 로그 그룹을 만듭니다. 기본 용량은 개발 검증에 맞춘 최소치입니다. `db_multi_az=false`, ECS 1개, Redis 단일 노드는 운영 고가용성 설정이 아닙니다. 운영 전에는 예상 비용을 확인하고 DB Multi-AZ, ECS 2개 이상, Redis 복제/자동 장애 조치를 정해야 합니다. 단일 NAT Gateway는 비용을 줄이는 대신 NAT 장애 시 앱 서브넷의 외부 통신도 영향을 받습니다.
 
+애플리케이션은 업무 시간대를 `Asia/Seoul`로 고정하고 Hibernate JDBC에도 같은 시간대를 지정합니다. API의 `LocalDateTime` 값은 시간대 오프셋을 포함하지 않으므로 한국 현지 시각으로 해석해야 합니다. DB의 `DATETIME(6)` 값도 같은 기준으로 저장됩니다.
+
 ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTED_PROXY_CIDRS`에는 ALB가 위치한 정확한 공용 서브넷 CIDR만 전달하고, ECS 작업 포트는 ALB 보안 그룹에서만 받습니다. AWS 문서: [ALB forwarded headers](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/x-forwarded-headers.html), [Fargate task networking](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-task-networking.html).
 
 업로드는 현재 로컬 파일 저장 구현이므로 Fargate의 임시 디스크에 두지 않고 암호화된 EFS에 마운트합니다. 이미지 파일을 S3에 저장하는 Issue #13이 반영되면 EFS 대신 S3로 옮기는 것이 다음 단계입니다.
