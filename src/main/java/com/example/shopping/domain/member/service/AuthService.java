@@ -34,16 +34,19 @@ public class AuthService {
 	private final PasswordEncoder passwordEncoder;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final RefreshTokenService refreshTokenService;
+	private final AccessTokenService accessTokenService;
 
 	// 없는 이메일로 로그인해도 해시 비교를 한 번 수행해, 응답 시간으로 가입 여부를 추측하지 못하게 한다.
 	private final String dummyPasswordHash;
 
 	public AuthService(MemberRepository memberRepository, PasswordEncoder passwordEncoder,
-			JwtTokenProvider jwtTokenProvider, RefreshTokenService refreshTokenService) {
+			JwtTokenProvider jwtTokenProvider, RefreshTokenService refreshTokenService,
+			AccessTokenService accessTokenService) {
 		this.memberRepository = memberRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtTokenProvider = jwtTokenProvider;
 		this.refreshTokenService = refreshTokenService;
+		this.accessTokenService = accessTokenService;
 		this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-timing");
 	}
 
@@ -85,8 +88,9 @@ public class AuthService {
 		return issueTokens(member);
 	}
 
-	/** 이 기기의 Refresh 토큰을 폐기한다. 이미 발급된 Access 토큰은 만료될 때까지(최대 15분) 유효하다. */
-	public void logout(String refreshToken) {
+	/** Refresh 토큰과 요청에 포함된 유효한 Access 토큰을 폐기한다. */
+	public void logout(String refreshToken, String authorizationHeader) {
+		accessTokenService.revokeIfValid(authorizationHeader);
 		refreshTokenService.revoke(refreshToken);
 	}
 

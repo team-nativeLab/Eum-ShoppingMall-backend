@@ -152,17 +152,21 @@ class SecurityTests {
 	}
 
 	@Test
-	void 로그아웃하면_Refresh_토큰이_폐기되고_쿠키가_지워진다() throws Exception {
-		long memberId = insertMember(EMAIL, "USER");
-		Cookie cookie = login(EMAIL, PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE);
+	void 로그아웃하면_Access와_Refresh_토큰이_폐기되고_쿠키가_지워진다() throws Exception {
+		insertMember(EMAIL, "USER");
+		MockHttpServletResponse loginResponse = login(EMAIL, PASSWORD).andReturn().getResponse();
+		Cookie cookie = loginResponse.getCookie(REFRESH_COOKIE);
+		String accessToken = JsonPath.read(loginResponse.getContentAsString(), "$.data.accessToken");
 
-		MockHttpServletResponse response = mockMvc.perform(post("/api/v1/auth/logout").with(member(memberId))
-						.cookie(cookie))
+		MockHttpServletResponse response = mockMvc.perform(post("/api/v1/auth/logout")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken).cookie(cookie))
 				.andExpect(status().isOk())
 				.andReturn().getResponse();
 		assertThat(response.getCookie(REFRESH_COOKIE).getMaxAge()).isZero();
 
 		refresh(cookie).andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/v1/cart").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+				.andExpect(status().isUnauthorized());
 	}
 
 	@Test
@@ -205,12 +209,27 @@ class SecurityTests {
 		refresh(cookie).andExpect(status().isUnauthorized());
 	}
 
+	@Test
+	void 계정이_정지되면_이미_발급된_Access_토큰도_거절한다() throws Exception {
+		insertMember(EMAIL, "USER");
+		MockHttpServletResponse loginResponse = login(EMAIL, PASSWORD).andReturn().getResponse();
+		String accessToken = JsonPath.read(loginResponse.getContentAsString(), "$.data.accessToken");
+
+		jdbcTemplate.update("update member set status = 'SUSPENDED' where email = ?", EMAIL);
+		entityManager.clear();
+
+		mockMvc.perform(get("/api/v1/cart").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+				.andExpect(status().isUnauthorized());
+	}
+
 	// ───────── 비밀번호 변경 ─────────
 
 	@Test
 	void 비밀번호를_바꾸면_새_비밀번호로만_로그인되고_다른_기기의_로그인이_끊긴다() throws Exception {
 		long memberId = insertMember(EMAIL, "USER");
-		Cookie otherDevice = login(EMAIL, PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE);
+		MockHttpServletResponse otherDeviceLogin = login(EMAIL, PASSWORD).andReturn().getResponse();
+		Cookie otherDevice = otherDeviceLogin.getCookie(REFRESH_COOKIE);
+		String oldAccessToken = JsonPath.read(otherDeviceLogin.getContentAsString(), "$.data.accessToken");
 
 		mockMvc.perform(patch("/api/v1/me/password").with(member(memberId))
 						.contentType(MediaType.APPLICATION_JSON).content("""
@@ -240,6 +259,8 @@ class SecurityTests {
 		login(EMAIL, PASSWORD).andExpect(status().isUnauthorized());
 		login(EMAIL, "new-pass-5678").andExpect(status().isOk());
 		refresh(otherDevice).andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/v1/cart").header(HttpHeaders.AUTHORIZATION, "Bearer " + oldAccessToken))
+				.andExpect(status().isUnauthorized());
 	}
 
 	// ───────── 가격 비공개 ─────────

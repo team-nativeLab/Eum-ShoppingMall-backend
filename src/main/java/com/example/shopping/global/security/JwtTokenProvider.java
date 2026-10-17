@@ -17,9 +17,11 @@ import lombok.RequiredArgsConstructor;
 public class JwtTokenProvider {
 
 	public static final String ROLE_CLAIM = "role";
+	public static final String VERSION_CLAIM = "token_version";
 
 	private final JwtEncoder jwtEncoder;
 	private final JwtProperties properties;
+	private final AccessTokenStateStore stateStore;
 
 	/** sub에는 회원 ID, role에는 권한 이름(USER, ADMIN)을 담는다. */
 	public String createAccessToken(Long memberId, String role) {
@@ -28,6 +30,7 @@ public class JwtTokenProvider {
 				.subject(String.valueOf(memberId))
 				.id(UUID.randomUUID().toString())
 				.claim(ROLE_CLAIM, role)
+				.claim(VERSION_CLAIM, stateStore.versionForIssuing(memberId))
 				.issuedAt(now)
 				.expiresAt(now.plusSeconds(properties.accessTokenExpiry()))
 				.build();
