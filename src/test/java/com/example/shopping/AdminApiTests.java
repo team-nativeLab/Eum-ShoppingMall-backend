@@ -32,6 +32,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.domain.member.service.AdminAccountInitializer;
 import com.example.shopping.domain.member.service.AdminBootstrapProperties;
@@ -52,6 +54,9 @@ class AdminApiTests {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private EntityManager entityManager;
 
 	@Autowired
 	private PasswordEncoder passwordEncoder;
@@ -274,6 +279,9 @@ class AdminApiTests {
 				""").andReturn().getResponse().getContentAsString();
 		long productId = ((Number) JsonPath.read(created, "$.data.id")).longValue();
 		long skuId = ((Number) JsonPath.read(created, "$.data.skus[0].id")).longValue();
+		// 관리자가 화면을 연 뒤 주문이 들어와 현재 재고가 10 → 7로 줄어든 상태.
+		jdbcTemplate.update("update product_sku set stock = 7, version = version + 1 where id = ?", skuId);
+		entityManager.clear();
 
 		patchJson("/api/v1/admin/products/" + productId, """
 				{"name":"경량 안전모","status":"HIDDEN","description":"",
@@ -287,7 +295,7 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.data.basePrice").value(35000))
 				.andExpect(jsonPath("$.data.skus.length()").value(2))
 				.andExpect(jsonPath("$.data.skus[0].price").value(40000))
-				.andExpect(jsonPath("$.data.skus[0].stock").value(5))
+				.andExpect(jsonPath("$.data.skus[0].stock").value(7))
 				.andExpect(jsonPath("$.data.skus[1].id").isNumber())
 				.andExpect(jsonPath("$.data.skus[1].optionName").value("파랑"));
 

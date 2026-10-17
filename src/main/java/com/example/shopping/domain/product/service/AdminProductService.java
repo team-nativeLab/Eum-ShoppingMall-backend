@@ -80,7 +80,8 @@ public class AdminProductService {
 				if (sku.id() == null) {
 					product.addSku(sku.optionName().trim(), sku.price(), sku.stock());
 				} else {
-					findSku(product, sku.id()).update(sku.optionName().trim(), sku.price(), sku.stock());
+					// 수정 화면이 보관한 오래된 재고 값으로 주문 이후 재고를 되돌리지 않는다.
+					findSku(product, sku.id()).update(sku.optionName().trim(), sku.price());
 				}
 			}
 		}
