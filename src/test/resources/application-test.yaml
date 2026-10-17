@@ -11,6 +11,12 @@ spring:
 cors:
   allowed-origins: http://localhost:3000
 
+management:
+  health:
+    redis:
+      # 이 프로파일은 Redis 없이 실행하며, Redis 연동 검증은 필터 단위 테스트에서 대역으로 수행한다.
+      enabled: false
+
 security:
   jwt:
     secret: test-only-jwt-secret-0123456789abcdef
