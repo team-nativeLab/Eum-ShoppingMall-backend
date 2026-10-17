@@ -44,7 +44,7 @@ public class AuthTokenResponder {
 		return ResponseCookie.from(REFRESH_COOKIE, value)
 				.httpOnly(true)
 				.secure(jwtProperties.refreshCookieSecure())
-				.sameSite("Strict")
+				.sameSite(jwtProperties.refreshCookieSameSite())
 				.path(COOKIE_PATH)
 				.maxAge(maxAge)
 				.build();
