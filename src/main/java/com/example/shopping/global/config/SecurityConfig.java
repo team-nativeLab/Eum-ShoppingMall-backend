@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -80,6 +81,7 @@ public class SecurityConfig {
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity http, SecurityErrorHandler errorHandler,
 			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
+			StringRedisTemplate redisTemplate,
 			@Value("${security.rate-limit.requests-per-minute}") int requestsPerMinute,
 			@Value("${security.request.max-body-bytes}") long maxBodyBytes) throws Exception {
 		http
@@ -110,7 +112,7 @@ public class SecurityConfig {
 						.accessDeniedHandler(errorHandler))
 				.addFilterBefore(new RequestSizeLimitFilter(maxBodyBytes, exceptionResolver),
 						BearerTokenAuthenticationFilter.class)
-				.addFilterBefore(new RateLimitFilter(requestsPerMinute, exceptionResolver, Clock.systemUTC()),
+				.addFilterBefore(new RateLimitFilter(requestsPerMinute, exceptionResolver, Clock.systemUTC(), redisTemplate),
 						BearerTokenAuthenticationFilter.class);
 		return http.build();
 	}
