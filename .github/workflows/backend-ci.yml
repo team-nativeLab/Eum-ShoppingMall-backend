@@ -15,6 +15,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  terraform:
+    name: Validate AWS infrastructure
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/aws
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
+
+      - name: Initialize providers without AWS credentials
+        run: terraform init -backend=false -input=false
+
+      - name: Validate Terraform configuration
+        run: terraform validate
+
+  container-image:
+    name: Build production container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Build container image
+        run: docker build --tag eum-shopping-backend:ci .
+
   build-and-test:
     name: Build and test
     runs-on: ubuntu-latest

@@ -41,3 +41,10 @@ out/
 
 .env
 .env.example
+# Terraform / AWS deployment values and state
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+backend.hcl
+crash.log
