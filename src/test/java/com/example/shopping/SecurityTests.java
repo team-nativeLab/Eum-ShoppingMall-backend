@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -152,6 +154,33 @@ class SecurityTests {
 		refresh(stolen).andExpect(status().isUnauthorized());
 		refresh(current).andExpect(status().isUnauthorized());
 		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token", Long.class)).isZero();
+	}
+
+	@Test
+	void 오래된_사용_토큰과_만료_토큰을_500개씩_나눠_지우고_최근_사용_토큰은_남긴다() {
+		long memberId = insertMember(EMAIL, "USER");
+		LocalDateTime now = LocalDateTime.now();
+		List<Object[]> tokens = new ArrayList<>(1202);
+		for (int i = 0; i < 600; i++) {
+			tokens.add(new Object[] {memberId, String.format("%064x", i + 1), now.minusDays(2), null});
+		}
+		for (int i = 0; i < 600; i++) {
+			tokens.add(new Object[] {memberId, String.format("%064x", i + 601), now.plusDays(12), now.minusDays(2)});
+		}
+		tokens.add(new Object[] {memberId, String.format("%064x", 1201), now.plusDays(12), now.minusHours(1)});
+		tokens.add(new Object[] {memberId, String.format("%064x", 1202), now.plusDays(12), null});
+		jdbcTemplate.batchUpdate("""
+				INSERT INTO refresh_token (member_id, token_hash, expires_at, used_at, token_version)
+				VALUES (?, ?, ?, ?, 0)
+				""", tokens);
+
+		assertThat(refreshTokenService.purgeExpired()).isEqualTo(1000);
+		assertThat(refreshTokenService.purgeExpired()).isEqualTo(200);
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token", Long.class)).isEqualTo(2);
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where used_at >= ?", Long.class,
+				now.minusDays(1))).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where used_at is null", Long.class))
+				.isEqualTo(1);
 	}
 
 	@Test

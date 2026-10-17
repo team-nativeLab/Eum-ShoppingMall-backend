@@ -4,10 +4,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import com.example.shopping.domain.member.entity.RefreshToken;
@@ -30,6 +33,8 @@ public class RefreshTokenService {
 
 	// 프론트가 동시에 보낸 재발급 요청 중 늦은 쪽을 탈취로 오인하지 않기 위한 여유 시간
 	private static final int REUSE_GRACE_SECONDS = 10;
+	private static final Duration USED_TOKEN_REPLAY_RETENTION = Duration.ofDays(1);
+	private static final int PURGE_BATCH_SIZE = 500;
 
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final JwtProperties jwtProperties;
@@ -83,7 +88,17 @@ public class RefreshTokenService {
 	}
 
 	public int purgeExpired() {
-		return refreshTokenRepository.deleteExpired(LocalDateTime.now());
+		LocalDateTime now = LocalDateTime.now();
+		List<Long> expiredIds = refreshTokenRepository.findExpiredIds(now, PageRequest.of(0, PURGE_BATCH_SIZE));
+		int deleted = deleteBatch(expiredIds);
+
+		List<Long> usedIds = refreshTokenRepository.findUsedIdsBefore(now.minus(USED_TOKEN_REPLAY_RETENTION),
+				PageRequest.of(0, PURGE_BATCH_SIZE));
+		return deleted + deleteBatch(usedIds);
+	}
+
+	private int deleteBatch(List<Long> tokenIds) {
+		return tokenIds.isEmpty() ? 0 : refreshTokenRepository.deleteBatchByIds(tokenIds);
 	}
 
 	private String hash(String token) {
