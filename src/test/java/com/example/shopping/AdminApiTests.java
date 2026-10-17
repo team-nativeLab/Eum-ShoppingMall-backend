@@ -215,6 +215,30 @@ class AdminApiTests {
 	}
 
 	@Test
+	void 관리자_변경을_기록하고_최고관리자만_감사로그를_조회한다() throws Exception {
+		long superAdminId = insertMember("audit-super@example.com", "최고관리자", "SUPER_ADMIN");
+		long adminId = insertMember("audit-admin@example.com", "관리자", "ADMIN");
+
+		mockMvc.perform(put("/api/v1/admin/contents/terms").with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"title":"이용약관","body":"서비스 이용 약관"}
+						"""))
+			.andExpect(status().isOk());
+		assertThat(jdbcTemplate.queryForObject("select count(*) from admin_audit_log where actor_member_id = ?",
+				Long.class, superAdminId)).isEqualTo(1L);
+		assertThat(jdbcTemplate.queryForObject("select target_type from admin_audit_log where actor_member_id = ?",
+				String.class, superAdminId)).isEqualTo("contents");
+		assertThat(jdbcTemplate.queryForObject("select target_id from admin_audit_log where actor_member_id = ?",
+				String.class, superAdminId)).isEqualTo("terms");
+
+		mockMvc.perform(get("/api/v1/admin/audit-logs").with(admin(adminId)))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.totalElements").value(1));
+	}
+
+	@Test
 	void 관리자가_회원_계정을_정지하고_해제한다() throws Exception {
 		long adminId = insertMember("status-admin@example.com", "운영자", "ADMIN");
 		long memberId = insertMember("status-target@example.com", "대상", "USER");
