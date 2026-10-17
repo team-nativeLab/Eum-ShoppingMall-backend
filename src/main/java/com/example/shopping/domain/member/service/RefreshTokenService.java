@@ -36,13 +36,13 @@ public class RefreshTokenService {
 	private final SecureRandom secureRandom = new SecureRandom();
 
 	/** @return 클라이언트에 내려줄 토큰 원문 */
-	public String issue(Long memberId) {
+	public String issue(Long memberId, long tokenVersion) {
 		byte[] bytes = new byte[32];
 		secureRandom.nextBytes(bytes);
 		String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 
 		LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(jwtProperties.refreshTokenExpiry());
-		refreshTokenRepository.save(RefreshToken.create(memberId, hash(token), expiresAt));
+		refreshTokenRepository.save(RefreshToken.create(memberId, hash(token), expiresAt, tokenVersion));
 		return token;
 	}
 
@@ -50,7 +50,7 @@ public class RefreshTokenService {
 	 * 토큰을 사용 처리하고 주인의 회원 ID를 돌려준다. 쓸 수 없는 토큰이면 401.
 	 * 이미 사용된 토큰이 다시 들어오면 탈취된 것으로 보고 그 회원의 Refresh 토큰을 전부 폐기한다.
 	 */
-	public Long consume(String token) {
+	public RefreshToken consume(String token) {
 		if (token == null || token.isBlank()) {
 			throw new BusinessException(ErrorCode.UNAUTHORIZED);
 		}
@@ -68,7 +68,7 @@ public class RefreshTokenService {
 		if (stored.getExpiresAt().isBefore(now) || refreshTokenRepository.markUsed(stored.getId(), now) == 0) {
 			throw new BusinessException(ErrorCode.UNAUTHORIZED);
 		}
-		return stored.getMemberId();
+		return stored;
 	}
 
 	public void revoke(String token) {

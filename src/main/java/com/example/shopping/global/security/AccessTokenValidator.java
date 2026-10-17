@@ -42,7 +42,7 @@ public class AccessTokenValidator implements OAuth2TokenValidator<Jwt> {
 				return OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
 			}
 			long issuedVersion = versionClaim == null ? 0 : ((Number) versionClaim).longValue();
-			if (issuedVersion != stateStore.currentVersion(memberId)) {
+			if (issuedVersion != member.getAccessTokenVersion()) {
 				return OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
 			}
 			return OAuth2TokenValidatorResult.success();

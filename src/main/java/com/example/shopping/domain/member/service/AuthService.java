@@ -13,6 +13,7 @@ import com.example.shopping.domain.member.dto.SignupResponse;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberRole;
 import com.example.shopping.domain.member.entity.MemberStatus;
+import com.example.shopping.domain.member.entity.RefreshToken;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
@@ -76,10 +77,13 @@ public class AuthService {
 
 	/** Refresh 토큰으로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. */
 	public AuthTokens refresh(String refreshToken) {
-		Long memberId = refreshTokenService.consume(refreshToken);
-		Member member = memberRepository.findById(memberId)
+		RefreshToken consumed = refreshTokenService.consume(refreshToken);
+		Member member = memberRepository.findById(consumed.getMemberId())
 				.filter(m -> m.getStatus() == MemberStatus.ACTIVE)
 				.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+		if (consumed.getTokenVersion() != member.getAccessTokenVersion()) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED);
+		}
 		return issueTokens(member);
 	}
 
@@ -110,8 +114,9 @@ public class AuthService {
 	}
 
 	private AuthTokens issueTokens(Member member) {
-		String accessToken = jwtTokenProvider.createAccessToken(member.getId(), member.getRole().name());
-		String refreshToken = refreshTokenService.issue(member.getId());
+		String accessToken = jwtTokenProvider.createAccessToken(member.getId(), member.getRole().name(),
+				member.getAccessTokenVersion());
+		String refreshToken = refreshTokenService.issue(member.getId(), member.getAccessTokenVersion());
 		return new AuthTokens(accessToken, jwtTokenProvider.accessTokenExpiry(), refreshToken);
 	}
 
