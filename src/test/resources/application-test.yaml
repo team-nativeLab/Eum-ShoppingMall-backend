@@ -7,6 +7,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+  flyway:
+    # H2 테스트는 JPA가 스키마를 만들고, MySQL 전용 Flyway SQL은 CI의 MySQL 검증에서 실행한다.
+    enabled: false
 
 cors:
   allowed-origins: http://localhost:3000
