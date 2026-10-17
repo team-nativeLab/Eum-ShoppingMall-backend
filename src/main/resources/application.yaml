@@ -121,8 +121,13 @@ payment:
     secret-key: ${TOSS_SECRET_KEY:}
 
 upload:
-  # 업로드한 이미지를 저장할 서버 디렉터리
+  # local stores files on disk; s3 uses the bucket/CDN settings below.
+  storage: ${UPLOAD_STORAGE:local}
   dir: ${UPLOAD_DIR:uploads}
+  s3:
+    bucket: ${UPLOAD_S3_BUCKET:}
+    region: ${AWS_REGION:}
+    cdn-base-url: ${UPLOAD_CDN_BASE_URL:}
 
 app:
   cache:
