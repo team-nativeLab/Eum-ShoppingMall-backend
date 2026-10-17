@@ -101,9 +101,9 @@ public class OrderService {
 			order.addItem(sku.getId(), sku.getProduct().getName(), sku.getOptionName(), sku.getPrice(),
 					item.getQuantity());
 		}
-		// 배송비·할인 정책이 정해지면 여기서 계산한다.
-		order.finalizeAmounts(0, 0);
-		if (order.getTotalAmount() <= 0) {
+		// 상품 합계에 배송비·할인 정책을 적용하고 주문 시점의 금액을 저장한다.
+		order.finalizeAmounts();
+		if (order.getItemAmount() <= 0 || order.getTotalAmount() <= 0) {
 			// 결제할 수 없는 주문이 재고만 잡아 두지 않도록 만들지 않는다.
 			throw new BusinessException(ErrorCode.ORDER_AMOUNT_INVALID);
 		}
