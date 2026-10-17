@@ -6,6 +6,7 @@
 
 - `TRUSTED_PROXY_CIDRS`: 전달 헤더를 신뢰할 프록시의 정확한 CIDR 목록. 여러 대역은 쉼표로 구분합니다. 예: `10.20.1.0/24,2001:db8:1234::/64`. 실제 프록시 대역으로 교체하고 `0.0.0.0/0`, `::/0` 또는 모든 사설망을 넣지 않습니다.
 - `REFRESH_COOKIE_SAME_SITE`: 기본값은 `Strict`입니다. 웹 프론트와 API가 서로 다른 사이트일 때만 `None`으로 바꾸고, HTTPS와 `Secure` 쿠키를 유지합니다. `None`과 `Secure=false` 조합은 애플리케이션 시작 시 거부됩니다.
+- `CORS_ALLOWED_ORIGINS`: 쿠키 자격 증명을 쓰는 CORS 허용 프론트엔드 주소를 정확히 지정합니다. 와일드카드 대신 실제 origin 목록을 사용합니다. Refresh/logout 요청은 이 목록에 없는 `Origin`에서 오면 거부합니다.
 - `CORS_ALLOWED_ORIGINS`: 쿠키 자격 증명을 쓰는 CORS 허용 프론트엔드 주소를 정확히 지정합니다. 와일드카드 대신 실제 origin 목록을 사용합니다.
 - Redis 연결 환경 변수는 공유 가능한 운영 Redis를 가리켜야 합니다. 로컬 단일 인스턴스용 주소를 운영에 그대로 쓰지 않습니다.
 

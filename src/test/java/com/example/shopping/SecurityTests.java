@@ -297,6 +297,12 @@ class SecurityTests {
 	}
 
 	@Test
+	void 허용되지_않은_Origin의_Refresh_쿠키_요청은_거부한다() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/refresh").header("Origin", "https://evil.example"))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
 	void 지나치게_큰_요청_본문은_읽지_않고_413으로_거절한다() throws Exception {
 		String hugeBody = "{\"email\":\"a@example.com\",\"password\":\"" + "x".repeat(2 * 1024 * 1024) + "\"}";
 
