@@ -34,6 +34,7 @@ public class CartService {
 	public CartResponse addItem(Long memberId, CartItemAddRequest request) {
 		// CartItem이 아직 없을 때도 동시 삽입이 겹치지 않도록 SKU 행을 잠근다.
 		ProductSku sku = productSkuRepository.findWithProductByIdForUpdate(request.skuId())
+				.filter(ProductSku::isActive)
 				.filter(s -> ProductStatus.CUSTOMER_VISIBLE.contains(s.getProduct().getStatus()))
 				.orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
 

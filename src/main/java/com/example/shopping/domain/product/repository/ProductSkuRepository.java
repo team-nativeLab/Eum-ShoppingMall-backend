@@ -27,7 +27,7 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long> {
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
 			update ProductSku s set s.stock = s.stock - :quantity, s.version = s.version + 1
-			where s.id = :id and s.stock >= :quantity
+			where s.id = :id and s.active = true and s.stock >= :quantity
 			""")
 	int decreaseStock(@Param("id") Long id, @Param("quantity") int quantity);
 

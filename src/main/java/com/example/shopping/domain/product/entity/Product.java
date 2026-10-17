@@ -164,6 +164,10 @@ public class Product extends BaseTimeEntity {
 		skus.add(ProductSku.create(this, optionName, price, stock));
 	}
 
+	public List<ProductSku> getActiveSkus() {
+		return skus.stream().filter(ProductSku::isActive).toList();
+	}
+
 	public void changePriceVisibility(boolean priceVisible) {
 		this.priceVisible = priceVisible;
 	}
@@ -193,18 +197,20 @@ public class Product extends BaseTimeEntity {
 	 * 옵션이 하나도 없는 상품(견적 상품 등)은 재고로 판단하지 않는다.
 	 */
 	public boolean isSoldOut() {
+		List<ProductSku> activeSkus = getActiveSkus();
 		return status == ProductStatus.SOLD_OUT
-				|| (!skus.isEmpty() && skus.stream().allMatch(sku -> sku.getStock() <= 0));
+				|| (!activeSkus.isEmpty() && activeSkus.stream().allMatch(sku -> sku.getStock() <= 0));
 	}
 
 	/** 옵션이 여러 개라 장바구니에 담기 전에 옵션을 골라야 하는지 */
 	public boolean isOptionRequired() {
-		return skus.size() > 1;
+		return getActiveSkus().size() > 1;
 	}
 
 	/** 옵션이 하나뿐이면 그 옵션. 목록에서 옵션 선택 없이 바로 장바구니에 담을 때 쓴다. */
 	public Long getDefaultSkuId() {
-		return skus.size() == 1 ? skus.getFirst().getId() : null;
+		List<ProductSku> activeSkus = getActiveSkus();
+		return activeSkus.size() == 1 ? activeSkus.getFirst().getId() : null;
 	}
 
 	private static String blankToNull(String value) {

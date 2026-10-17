@@ -19,10 +19,10 @@ public record AdminProductDetailResponse(Long id, Long categoryId, String name, 
 		List<CertificationResponse> certifications, int recommendScore, long salesCount, ProductStatus status,
 		List<SkuResponse> skus, LocalDateTime createdAt, LocalDateTime updatedAt) {
 
-	public record SkuResponse(Long id, String optionName, long price, int stock) {
+	public record SkuResponse(Long id, String optionName, long price, int stock, boolean active) {
 
 		static SkuResponse from(ProductSku sku) {
-			return new SkuResponse(sku.getId(), sku.getOptionName(), sku.getPrice(), sku.getStock());
+			return new SkuResponse(sku.getId(), sku.getOptionName(), sku.getPrice(), sku.getStock(), sku.isActive());
 		}
 	}
 
