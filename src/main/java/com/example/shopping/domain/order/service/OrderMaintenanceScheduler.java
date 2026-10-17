@@ -1,8 +1,10 @@
 package com.example.shopping.domain.order.service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,21 +20,23 @@ import com.example.shopping.domain.payment.gateway.PgPayment;
 import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.gateway.PgUnavailableException;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
+import com.example.shopping.global.scheduling.SchedulerLockService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * 주기적으로 도는 정리 작업. 서버가 여러 대여도 같은 주문을 두 번 처리하지 않는다
- * (실제 변경은 OrderTxService의 조건부 상태 변경을 통과한 한 서버만 수행한다).
- */
+/** Scheduled maintenance is serialized across application instances by database leases. */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class OrderMaintenanceScheduler {
 
-	private static final int BATCH_SIZE = 200;
+	private static final int DB_BATCH_SIZE = 50;
+	private static final int PG_BATCH_SIZE = 10;
 	private static final int STUCK_AFTER_MINUTES = 5;
+	private static final Duration JOB_TIME_LIMIT = Duration.ofMinutes(8);
+	// PG calls have 2s connect and 10s read timeouts; this lease covers bounded work plus DB overhead.
+	private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
 
 	private final OrderRepository orderRepository;
 	private final OrderTxService orderTxService;
@@ -40,62 +44,65 @@ public class OrderMaintenanceScheduler {
 	private final PaymentRepository paymentRepository;
 	private final PaymentGateway paymentGateway;
 	private final RefreshTokenService refreshTokenService;
+	private final SchedulerLockService schedulerLockService;
 
 	/** 결제 기한이 지난 결제 대기 주문을 만료시키고 잡아 둔 재고를 되돌린다. */
 	@Scheduled(fixedDelay = 60_000)
 	public void expireUnpaidOrders() {
-		List<Long> orderIds = orderRepository.findExpiredPendingIds(LocalDateTime.now(), PageRequest.of(0, BATCH_SIZE));
-		for (Long orderId : orderIds) {
-			try {
-				orderTxService.expire(orderId);
-			} catch (RuntimeException e) {
-				log.error("주문 {} 만료 처리 실패", orderId, e);
+		runLocked("expireUnpaidOrders", "reconcileWaitingDeposits", (stats, owner) -> {
+			List<Long> pendingIds = orderRepository.findExpiredPendingIds(LocalDateTime.now(),
+					PageRequest.of(0, DB_BATCH_SIZE));
+			for (Long orderId : pendingIds) {
+				if (stats.timeLimitReached()) {
+					break;
+				}
+				process(stats, "주문 만료 처리", orderId, () -> orderTxService.expire(orderId));
 			}
-		}
-		for (Long orderId : orderRepository.findExpiredWaitingDepositIds(LocalDateTime.now(),
-				PageRequest.of(0, BATCH_SIZE))) {
-			try {
-				reconcileVirtualAccount(orderId);
-			} catch (RuntimeException e) {
-				log.error("주문 {} 가상계좌 만료 보정 실패", orderId, e);
+
+			List<Long> expiredDepositIds = orderRepository.findExpiredWaitingDepositIds(LocalDateTime.now(),
+					PageRequest.of(0, PG_BATCH_SIZE));
+			for (Long orderId : expiredDepositIds) {
+				if (stats.timeLimitReached()) {
+					break;
+				}
+				process(stats, "가상계좌 만료 보정", orderId, () -> reconcileVirtualAccount(orderId));
 			}
-		}
+		});
 	}
 
-	/**
-	 * 결제 승인 도중 응답을 못 받았거나 서버가 죽어 "승인 중"에 멈춘 주문을 PG의 실제 상태에 맞춘다.
-	 * PG에서 결제된 것이 확인되면 결제 완료로, 결제 기록이 없으면 결제 전으로 되돌린다(이후 기한이 지나면 만료된다).
-	 */
+	/** 결제 승인 도중 응답을 못 받은 주문을 PG의 실제 상태에 맞춘다. */
 	@Scheduled(fixedDelay = 300_000)
 	public void reconcileStuckPayments() {
-		LocalDateTime before = LocalDateTime.now().minusMinutes(STUCK_AFTER_MINUTES);
-		for (Long orderId : orderRepository.findStuckProcessingIds(before, PageRequest.of(0, BATCH_SIZE))) {
-			try {
-				reconcile(orderId);
-			} catch (PgUnavailableException e) {
-				log.warn("주문 {} 결제 상태 확인 실패. 다음 주기에 다시 시도합니다: {}", orderId, e.getMessage());
-			} catch (RuntimeException e) {
-				log.error("주문 {} 결제 보정 실패", orderId, e);
+		runLocked("reconcileStuckPayments", (stats, owner) -> {
+			LocalDateTime before = LocalDateTime.now().minusMinutes(STUCK_AFTER_MINUTES);
+			List<Long> orderIds = orderRepository.findStuckProcessingIds(before, PageRequest.of(0, PG_BATCH_SIZE));
+			for (Long orderId : orderIds) {
+				if (stats.timeLimitReached()) {
+					break;
+				}
+				process(stats, "결제 상태 보정", orderId, () -> reconcile(orderId));
 			}
-		}
+		});
 	}
 
 	/** PG 응답 누락으로 멈춘 취소와 과거 CANCELED/DONE 불일치를 복구한다. */
 	@Scheduled(fixedDelay = 300_000)
 	public void reconcileStuckCancellations() {
-		LocalDateTime before = LocalDateTime.now().minusMinutes(STUCK_AFTER_MINUTES);
-		for (Long orderId : orderRepository.findStuckCancellationIds(before, PageRequest.of(0, BATCH_SIZE))) {
-			try {
-				orderCancelService.reconcileCancellation(orderId);
-			} catch (RuntimeException e) {
-				log.error("주문 {} 취소 보정 실패. 주문과 재고 상태 확인이 필요합니다.", orderId, e);
+		runLocked("reconcileStuckCancellations", (stats, owner) -> {
+			LocalDateTime before = LocalDateTime.now().minusMinutes(STUCK_AFTER_MINUTES);
+			List<Long> orderIds = orderRepository.findStuckCancellationIds(before, PageRequest.of(0, PG_BATCH_SIZE));
+			for (Long orderId : orderIds) {
+				if (stats.timeLimitReached()) {
+					break;
+				}
+				process(stats, "취소 상태 보정", orderId, () -> orderCancelService.reconcileCancellation(orderId));
 			}
-		}
+		});
 	}
 
 	@Scheduled(cron = "0 0 4 * * *")
 	public void purgeExpiredRefreshTokens() {
-		refreshTokenService.purgeExpired();
+		runLocked("purgeExpiredRefreshTokens", (stats, owner) -> stats.processed = refreshTokenService.purgeExpired());
 	}
 
 	private void reconcile(Long orderId) {
@@ -118,23 +125,78 @@ public class OrderMaintenanceScheduler {
 		}
 	}
 
-	/** 웹훅을 놓쳐도 PG를 조회해 입금 완료를 반영하거나 입금 기한이 지난 재고를 해제한다. */
+	/** Each instance resumes from a shared cursor so a capped batch does not starve later deposits. */
 	@Scheduled(fixedDelay = 300_000)
 	public void reconcileWaitingDeposits() {
-		long afterId = 0;
-		while (true) {
-			List<Long> orderIds = orderRepository.findWaitingDepositIdsAfter(afterId, PageRequest.of(0, BATCH_SIZE));
-			if (orderIds.isEmpty()) {
-				return;
+		runLocked("reconcileWaitingDeposits", "reconcileWaitingDeposits", this::reconcileWaitingDepositBatch);
+	}
+
+	private void reconcileWaitingDepositBatch(JobStats stats, String owner) {
+		String jobName = "reconcileWaitingDeposits";
+		long cursor = schedulerLockService.getCursor(jobName, owner);
+		List<Long> orderIds = orderRepository.findWaitingDepositIdsAfter(cursor, PageRequest.of(0, PG_BATCH_SIZE));
+		if (orderIds.isEmpty()) {
+			if (cursor != 0) {
+				schedulerLockService.advanceCursor(jobName, owner, 0);
 			}
-			for (Long orderId : orderIds) {
-				afterId = Math.max(afterId, orderId);
-				try {
-					reconcileVirtualAccount(orderId);
-				} catch (RuntimeException e) {
-					log.error("주문 {} 가상계좌 상태 보정 실패", orderId, e);
-				}
+			return;
+		}
+
+		int processedBeforeBatch = stats.processed;
+		for (Long orderId : orderIds) {
+			if (stats.timeLimitReached()) {
+				break;
 			}
+			process(stats, "가상계좌 상태 보정", orderId, () -> reconcileVirtualAccount(orderId));
+			cursor = orderId;
+			if (!schedulerLockService.advanceCursor(jobName, owner, cursor)) {
+				throw new IllegalStateException("Scheduler lease lost while advancing " + jobName);
+			}
+		}
+		if (stats.processed - processedBeforeBatch == orderIds.size() && orderIds.size() < PG_BATCH_SIZE) {
+			schedulerLockService.advanceCursor(jobName, owner, 0);
+		}
+	}
+
+	private void runLocked(String jobName, BiConsumer<JobStats, String> action) {
+		runLocked(jobName, jobName, action);
+	}
+
+	private void runLocked(String jobName, String lockName, BiConsumer<JobStats, String> action) {
+		Optional<String> owner = schedulerLockService.tryAcquire(lockName, LOCK_DURATION);
+		if (owner.isEmpty()) {
+			log.debug("정기 작업 {} 생략: 다른 서버가 실행 중입니다.", jobName);
+			return;
+		}
+
+		JobStats stats = new JobStats();
+		long startedAt = System.nanoTime();
+		try {
+			action.accept(stats, owner.get());
+		} catch (RuntimeException e) {
+			stats.failed++;
+			log.error("정기 작업 {} 실행 실패", jobName, e);
+		} finally {
+			long elapsedMs = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+			boolean released = schedulerLockService.release(lockName, owner.get());
+			if (!released) {
+				log.error("정기 작업 {} 잠금이 만료되었거나 소유권을 잃었습니다.", jobName);
+			}
+			log.info("정기 작업 {} 완료: 처리 {}, 실패 {}, 소요 {}ms", jobName, stats.processed, stats.failed,
+					elapsedMs);
+		}
+	}
+
+	private void process(JobStats stats, String operation, Long orderId, Runnable action) {
+		try {
+			action.run();
+			stats.processed++;
+		} catch (PgUnavailableException e) {
+			stats.failed++;
+			log.warn("주문 {} {} 실패. 다음 주기에 다시 시도합니다: {}", orderId, operation, e.getMessage());
+		} catch (RuntimeException e) {
+			stats.failed++;
+			log.error("주문 {} {} 실패", orderId, operation, e);
 		}
 	}
 
@@ -147,13 +209,7 @@ public class OrderMaintenanceScheduler {
 			return;
 		}
 
-		Optional<PgPayment> actual;
-		try {
-			actual = paymentGateway.findByOrderNo(order.getOrderNo());
-		} catch (PgUnavailableException e) {
-			log.warn("주문 {} PG 입금 상태 조회 실패. 다음 주기에 재시도합니다: {}", order.getOrderNo(), e.getMessage());
-			return;
-		}
+		Optional<PgPayment> actual = paymentGateway.findByOrderNo(order.getOrderNo());
 		if (actual.isEmpty() || !matchesVirtualAccount(order, payment, actual.get())) {
 			log.error("주문 {} 가상계좌 PG 정보 불일치. 수동 확인이 필요합니다.", order.getOrderNo());
 			return;
@@ -178,5 +234,15 @@ public class OrderMaintenanceScheduler {
 				&& payment.getPaymentKey().equals(pg.paymentKey())
 				&& pg.totalAmount() == order.getTotalAmount()
 				&& payment.matchesWebhookSecret(pg.secret());
+	}
+
+	private static final class JobStats {
+		private final long startedAtNanos = System.nanoTime();
+		private int processed;
+		private int failed;
+
+		private boolean timeLimitReached() {
+			return System.nanoTime() - startedAtNanos >= JOB_TIME_LIMIT.toNanos();
+		}
 	}
 }
