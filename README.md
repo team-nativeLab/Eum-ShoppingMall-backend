@@ -19,3 +19,7 @@ Supported content codes are `company`, `terms`, and `privacy-policy`. Customers 
 ## Admin member role API
 
 `PATCH /api/v1/admin/users/{userId}/role` accepts `{"role":"USER"}` or `{"role":"ADMIN"}` and can only be called by a `SUPER_ADMIN`. A user cannot change their own role, another `SUPER_ADMIN` role, or a withdrawn account. Suspended accounts cannot be granted `ADMIN`. Changing a role deletes all that member's refresh tokens. Already issued access tokens remain usable until they expire; immediate access-token invalidation is outside this endpoint's scope. The configured bootstrap admin is created or promoted as `SUPER_ADMIN`; an existing regular member with the configured email is not promoted.
+
+## Member withdrawal and suspension
+
+`DELETE /api/v1/me` requires `{"password":"..."}`. Withdrawal is rejected while the member has a pending, processing, waiting-for-deposit, paid, preparing, or shipped order. On success, the account is marked `WITHDRAWN`, its login credentials and profile identifiers are anonymized, and refresh tokens, cart items, and the saved checkout address are removed. Historical orders remain. Administrators can suspend or reactivate another account with `PATCH /api/v1/admin/users/{userId}/status`; suspending requires a reason and revokes refresh tokens.

@@ -15,6 +15,7 @@ import com.example.shopping.domain.member.dto.AdminMemberSummaryResponse;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberRole;
 import com.example.shopping.domain.member.entity.MemberStatus;
+import com.example.shopping.domain.member.dto.AdminMemberStatusUpdateRequest;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.repository.OrderRepository;
@@ -76,6 +77,36 @@ public class AdminMemberService {
 		if (target.getRole() != role) {
 			target.changeRole(role);
 			refreshTokenService.revokeAll(targetId);
+		}
+		List<Order> recentOrders = orderRepository.findByMemberId(targetId,
+				PageRequest.of(0, RECENT_ORDER_COUNT, Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
+		return AdminMemberDetailResponse.of(target, recentOrders);
+	}
+
+	@Transactional
+	public AdminMemberDetailResponse changeStatus(Long actorId, Long targetId, AdminMemberStatusUpdateRequest request) {
+		Member actor = memberRepository.findById(actorId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+		if (actor.getRole() != MemberRole.ADMIN && actor.getRole() != MemberRole.SUPER_ADMIN) {
+			throw new BusinessException(ErrorCode.FORBIDDEN);
+		}
+		if (actorId.equals(targetId)) {
+			throw new BusinessException(ErrorCode.FORBIDDEN);
+		}
+		Member target = memberRepository.findById(targetId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+		if (target.getRole() == MemberRole.SUPER_ADMIN || target.getStatus() == MemberStatus.WITHDRAWN) {
+			throw new BusinessException(ErrorCode.FORBIDDEN);
+		}
+		MemberStatus status = MemberStatus.valueOf(request.status());
+		if (status == MemberStatus.SUSPENDED && !StringUtils.hasText(request.reason())) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
+		}
+		if (target.getStatus() != status) {
+			target.changeStatus(status, request.reason() == null ? null : request.reason().trim());
+			if (status == MemberStatus.SUSPENDED) {
+				refreshTokenService.revokeAll(targetId);
+			}
 		}
 		List<Order> recentOrders = orderRepository.findByMemberId(targetId,
 				PageRequest.of(0, RECENT_ORDER_COUNT, Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
