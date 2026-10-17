@@ -1,5 +1,7 @@
 package com.example.shopping.domain.home.entity;
 
+import java.util.Set;
+
 import com.example.shopping.global.entity.BaseTimeEntity;
 
 import jakarta.persistence.Column;
@@ -18,6 +20,7 @@ import lombok.NoArgsConstructor;
 public class SiteContent extends BaseTimeEntity {
 
 	public static final String COMPANY = "company";
+	public static final Set<String> ALLOWED_CODES = Set.of(COMPANY, "terms", "privacy-policy");
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,4 +34,16 @@ public class SiteContent extends BaseTimeEntity {
 
 	@Column(nullable = false, columnDefinition = "TEXT")
 	private String body;
+
+	public static SiteContent create(String code, String title, String body) {
+		SiteContent content = new SiteContent();
+		content.code = code;
+		content.update(title, body);
+		return content;
+	}
+
+	public void update(String title, String body) {
+		this.title = title;
+		this.body = body;
+	}
 }

@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -669,7 +670,47 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
 	}
 
-	// ───────── 고객지원 ─────────
+	// ───────── 고정 콘텐츠·고객지원 ─────────
+
+	@Test
+	void 고정_콘텐츠를_등록하고_수정해_관리자와_고객에게_제공한다() throws Exception {
+		mockMvc.perform(get("/api/v1/admin/contents/terms"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("CONTENT_NOT_FOUND"));
+
+		mockMvc.perform(put("/api/v1/admin/contents/terms").contentType(MediaType.APPLICATION_JSON).content("""
+				{"title":"이용약관","body":"제1조. 서비스 이용 조건"}
+				"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.code").value("terms"))
+				.andExpect(jsonPath("$.data.body").value("제1조. 서비스 이용 조건"));
+		mockMvc.perform(get("/api/v1/contents/terms"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.title").value("이용약관"));
+
+		mockMvc.perform(put("/api/v1/admin/contents/terms").contentType(MediaType.APPLICATION_JSON).content("""
+				{"title":"이용약관 개정","body":"2026년 개정 내용"}
+				"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.title").value("이용약관 개정"));
+		mockMvc.perform(get("/api/v1/admin/contents"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()").value(1));
+		mockMvc.perform(get("/api/v1/contents/terms"))
+				.andExpect(jsonPath("$.data.body").value("2026년 개정 내용"));
+
+		mockMvc.perform(put("/api/v1/admin/contents/terms").contentType(MediaType.APPLICATION_JSON).content("""
+				{"title":"잘못된 문서","body":"<script>alert(1)</script>"}
+				"""))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(put("/api/v1/admin/contents/unknown").contentType(MediaType.APPLICATION_JSON).content("""
+				{"title":"알 수 없는 코드","body":"내용"}
+				"""))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(get("/api/v1/contents/company"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("CONTENT_NOT_FOUND"));
+	}
 
 	@Test
 	void 공지를_비공개로_등록했다가_공개로_바꾸고_삭제한다() throws Exception {
