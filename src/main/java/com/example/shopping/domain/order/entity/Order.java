@@ -68,6 +68,11 @@ public class Order extends BaseTimeEntity {
 	@Column(nullable = false, length = 30)
 	private OrderStatus status = OrderStatus.PENDING;
 
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(name = "cancel_previous_status", length = 30)
+	private OrderStatus cancelPreviousStatus;
+
 	// 최종 결제 금액 = itemAmount - discountAmount + shippingFee (서버 계산값만 신뢰)
 	@Column(nullable = false)
 	private long totalAmount;
