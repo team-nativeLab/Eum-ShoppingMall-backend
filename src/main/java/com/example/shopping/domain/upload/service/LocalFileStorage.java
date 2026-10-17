@@ -7,15 +7,17 @@ import java.nio.file.Path;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * 서버의 로컬 디스크(upload.dir)에 저장하고 /files/** 경로로 내려준다.
- * 서버가 여러 대이거나 재배포 때 디스크가 초기화되는 환경에서는 쓸 수 없으므로, 운영에서는 S3 같은 외부 저장소 구현으로 바꿔야 한다.
+ * 서버의 로컬 디스크(upload.dir)에 저장하고 /files/** 경로로 내려준다 (upload.storage=local).
+ * 서버가 여러 대이거나 재배포 때 디스크가 초기화되는 환경에서는 쓸 수 없으므로 로컬 개발·테스트에만 쓰고, 운영은 S3FileStorage를 쓴다.
  */
 @Component
+@ConditionalOnProperty(name = "upload.storage", havingValue = "local")
 public class LocalFileStorage implements FileStorage, WebMvcConfigurer {
 
 	private static final String PUBLIC_PATH = "/files";

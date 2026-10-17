@@ -34,3 +34,7 @@ admin:
   bootstrap:
     email: admin@example.com
     password: local-admin-1234
+
+upload:
+  # 로컬은 S3 없이 서버 디스크(uploads 폴더)에 저장한다.
+  storage: local

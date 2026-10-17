@@ -10,7 +10,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.shopping.domain.cart.entity.CartItem;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public interface CartItemRepository extends JpaRepository<CartItem, Long> {
 
 	/** 옵션·상품까지 한 번에 가져온다 (품목마다 추가 조회가 나가지 않도록). */

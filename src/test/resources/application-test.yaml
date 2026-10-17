@@ -19,6 +19,7 @@ security:
     requests-per-minute: 100000
 
 upload:
+  storage: local
   dir: build/test-uploads
 
 app:

@@ -20,12 +20,12 @@ spring:
         default_batch_fetch_size: 100
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
     web:
       pageable:
         # ?size=에 큰 값을 넣어 한 번에 대량 조회하는 것을 막는다.
-        max-page-size: 100
+        max-page-size: ${MAX_PAGE_SIZE}
   servlet:
     multipart:
       max-file-size: 5MB
@@ -35,8 +35,8 @@ spring:
     log-resolved-exception: false
 
 server:
-  shutdown: graceful
-  forward-headers-strategy: native
+  shutdown: ${SHUTDOWN}
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY}
 
 management:
   health:
@@ -58,15 +58,15 @@ security:
   jwt:
     secret: ${JWT_SECRET}
     # Access 토큰 15분, Refresh 토큰 14일
-    access-token-expiry: 900
-    refresh-token-expiry: 1209600
-    refresh-cookie-secure: true
+    access-token-expiry: 900 ${ACCESS_TOKEN_EXPIRY}
+    refresh-token-expiry: 1209600 ${REFRESH_TOKEN_EXPIRY}
+    refresh-cookie-secure: ${REFRESH_COOKIE_SECURE}
   rate-limit:
     # 로그인·회원가입·문의 접수·주문·결제 등에 적용하는 IP별 분당 요청 한도
-    requests-per-minute: ${RATE_LIMIT_PER_MINUTE:10}
+    requests-per-minute: ${RATE_LIMIT_PER_MINUTE}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
-    max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}
+    max-body-bytes: ${MAX_REQUEST_BODY_BYTES}
 
 admin:
   bootstrap:
@@ -80,12 +80,19 @@ payment:
     secret-key: ${TOSS_SECRET_KEY:}
 
 upload:
-  # 업로드한 이미지를 저장할 서버 디렉터리
-  dir: ${UPLOAD_DIR:uploads}
+  # 업로드한 이미지를 저장할 곳: s3(운영) 또는 local(서버 디스크, 로컬 개발·테스트용)
+  storage: ${UPLOAD_STORAGE}
+  dir: ${UPLOAD_DIR}
+  s3:
+    bucket: ${S3_BUCKET}
+    region: ${S3_REGION}
+    public-url: ${S3_PUBLIC_URL}
+    key-prefix: ${S3_KEY_PREFIX}
+    presigned-url-expiration-minutes: ${PRESIGNED_URL_EXPIRATION_MINUTES}
 
 app:
   seed:
-    # 카테고리가 하나도 없으면 기본 카테고리(안전모, 보안경, 안전장갑, 방진마스크, 안전화, 귀마개)를 만든다.
+    # 카테고리가 하나도 없으면 기본 카테고리(안전모, 보안경, 안전장갑, 발진마스크, 안전화, 귀마개)를 만든다.
     default-categories: ${SEED_DEFAULT_CATEGORIES:true}
   client:
     # 앱이 구동할 때 받아 가는 설정 (GET /api/v1/app/config)
