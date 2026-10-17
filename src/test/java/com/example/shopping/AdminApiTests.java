@@ -293,10 +293,22 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.data.status").value("HIDDEN"))
 				.andExpect(jsonPath("$.data.description").doesNotExist())
 				.andExpect(jsonPath("$.data.basePrice").value(35000))
-				.andExpect(jsonPath("$.data.skus.length()").value(2))
-				.andExpect(jsonPath("$.data.skus[0].price").value(40000))
+				.andExpect(jsonPath("$.data.skus.length()").value(1))
+				.andExpect(jsonPath("$.data.skus[0].price").value(35000))
 				.andExpect(jsonPath("$.data.skus[0].stock").value(7))
-				.andExpect(jsonPath("$.data.skus[1].id").isNumber())
+				.andExpect(jsonPath("$.data.skus[0].active").value(true));
+
+		patchJson("/api/v1/admin/products/" + productId + "/skus/" + skuId, """
+				{"optionName":"흰색","price":40000}
+				""")
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.skus[0].price").value(40000))
+				.andExpect(jsonPath("$.data.skus[0].stock").value(7));
+		postJson("/api/v1/admin/products/" + productId + "/skus", """
+				{"optionName":"파랑","price":41000,"stock":3}
+				""")
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.skus.length()").value(2))
 				.andExpect(jsonPath("$.data.skus[1].optionName").value("파랑"));
 
 		mockMvc.perform(get("/api/v1/products/{id}", productId)).andExpect(status().isNotFound());
@@ -437,8 +449,8 @@ class AdminApiTests {
 		long productId = idOf(postJson("/api/v1/admin/products", """
 				{"name":"안전모","basePrice":1000,"status":"HIDDEN"}
 				"""));
-		patchJson("/api/v1/admin/products/" + productId, """
-				{"skus":[{"id":999999,"optionName":"흰색","price":1000,"stock":1}]}
+		patchJson("/api/v1/admin/products/" + productId + "/skus/999999", """
+				{"optionName":"흰색","price":1000}
 				""")
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("SKU_NOT_FOUND"));

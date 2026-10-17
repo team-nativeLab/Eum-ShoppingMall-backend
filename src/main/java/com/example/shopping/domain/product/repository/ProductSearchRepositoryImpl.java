@@ -158,9 +158,10 @@ public class ProductSearchRepositoryImpl implements ProductSearchRepository {
 		Subquery<Long> subquery = query.subquery(Long.class);
 		Root<ProductSku> sku = subquery.from(ProductSku.class);
 		Predicate sameProduct = cb.equal(sku.get("product").get("id"), product.get("id"));
+		Predicate active = cb.isTrue(sku.get("active"));
 		subquery.select(sku.get("id")).where(inStockOnly
-				? cb.and(sameProduct, cb.greaterThan(sku.get("stock"), 0))
-				: sameProduct);
+				? cb.and(sameProduct, active, cb.greaterThan(sku.get("stock"), 0))
+				: cb.and(sameProduct, active));
 		return subquery;
 	}
 

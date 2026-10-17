@@ -25,7 +25,7 @@ public record ProductDetailResponse(Long id, Long categoryId, String name, Strin
 	}
 
 	public static ProductDetailResponse from(Product product) {
-		List<SkuResponse> skus = product.getSkus().stream()
+		List<SkuResponse> skus = product.getActiveSkus().stream()
 				.map(sku -> SkuResponse.of(sku, product.isPriceVisible()))
 				.toList();
 		Long categoryId = product.getCategory() == null ? null : product.getCategory().getId();

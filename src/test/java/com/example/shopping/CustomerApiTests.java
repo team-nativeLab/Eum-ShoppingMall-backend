@@ -19,10 +19,13 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.jayway.jsonpath.JsonPath;
 
 /** 로그인한 회원이 쓰는 API (내 정보, 장바구니, 문의, 견적)와 공개 콘텐츠 API */
 @SpringBootTest
@@ -123,6 +126,50 @@ class CustomerApiTests {
 				.andExpect(jsonPath("$.data.totalAmount").value(0));
 		mockMvc.perform(get("/api/v1/cart").with(me))
 				.andExpect(jsonPath("$.data.items[0].productName").value("안전 조끼"));
+	}
+
+	@Test
+	void 판매_중지한_옵션은_고객에게_숨기고_기존_장바구니에서는_주문할_수_없다() throws Exception {
+		long memberId = insertMember("sku-retire@example.com", "ACTIVE");
+		RequestPostProcessor admin = jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+		String created = mockMvc.perform(post("/api/v1/admin/products").with(admin)
+					.contentType(MediaType.APPLICATION_JSON).content("""
+							{"name":"옵션 중지 테스트","basePrice":1000,
+							 "skus":[{"optionName":"기본","price":1000,"stock":5},
+							         {"optionName":"대형","price":1200,"stock":5}]}
+							"""))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		long productId = ((Number) JsonPath.read(created, "$.data.id")).longValue();
+		long retiredSkuId = ((Number) JsonPath.read(created, "$.data.skus[0].id")).longValue();
+		long remainingSkuId = ((Number) JsonPath.read(created, "$.data.skus[1].id")).longValue();
+
+		addToCart(member(memberId), retiredSkuId, 1);
+		mockMvc.perform(delete("/api/v1/admin/products/{productId}/skus/{skuId}", productId, retiredSkuId)
+					.with(admin))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.skus[0].active").value(false));
+
+		mockMvc.perform(get("/api/v1/products/{productId}", productId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.skus.length()").value(1))
+				.andExpect(jsonPath("$.data.skus[0].id").value(remainingSkuId));
+		mockMvc.perform(get("/api/v1/products").param("query", "옵션 중지 테스트"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content[0].optionRequired").value(false))
+				.andExpect(jsonPath("$.data.content[0].defaultSkuId").value(remainingSkuId));
+		mockMvc.perform(get("/api/v1/cart").with(member(memberId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[0].status").value("NOT_ON_SALE"))
+				.andExpect(jsonPath("$.data.orderableCount").value(0));
+		mockMvc.perform(post("/api/v1/cart/items").with(member(memberId)).contentType(MediaType.APPLICATION_JSON)
+					.content(cartItem(retiredSkuId, 1)))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+		mockMvc.perform(delete("/api/v1/admin/products/{productId}/skus/{skuId}", productId, remainingSkuId)
+					.with(admin))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 	}
 
 	@Test

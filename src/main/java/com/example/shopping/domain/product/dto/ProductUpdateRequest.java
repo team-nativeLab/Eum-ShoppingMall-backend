@@ -19,7 +19,7 @@ import jakarta.validation.constraints.Size;
  * 가격 공개 여부는 금액 미표시 전환 API로 바꾼다.
  *
  * @param certifications 보낸 목록으로 통째로 바꾼다. 빈 목록을 보내면 인증을 모두 지운다.
- * @param skus id가 있는 옵션은 수정, 없는 옵션은 추가. 목록에 없는 기존 옵션은 그대로 둔다.
+ * @param skus 기존 클라이언트와의 요청 호환 입력으로 받지만 무시한다. 옵션 변경은 전용 SKU API를 사용한다.
  */
 public record ProductUpdateRequest(
 		Long categoryId,
