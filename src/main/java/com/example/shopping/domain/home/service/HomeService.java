@@ -38,7 +38,14 @@ public class HomeService {
 	}
 
 	public ContentResponse getCompany() {
-		return siteContentRepository.findByCode(SiteContent.COMPANY)
+		return getContent(SiteContent.COMPANY);
+	}
+
+	public ContentResponse getContent(String code) {
+		if (!SiteContent.ALLOWED_CODES.contains(code)) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
+		}
+		return siteContentRepository.findByCode(code)
 				.map(ContentResponse::from)
 				.orElseThrow(() -> new BusinessException(ErrorCode.CONTENT_NOT_FOUND));
 	}

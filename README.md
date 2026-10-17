@@ -12,3 +12,7 @@ The `local` profile also uses Flyway and Hibernate validation. It baselines a pr
 ## Admin order cancellation API
 
 `POST /api/v1/admin/orders/{orderId}/cancel` is available to administrators. Send a JSON body with a required `reason` of up to 200 characters. Paid and preparing orders are fully refunded through the payment gateway; pending orders expire and release reserved stock. Waiting virtual-account orders are canceled at the gateway before they expire and release stock. Shipped or delivered orders and partial refunds are not supported by this endpoint. The admin order detail response includes `cancelReason`, `cancelledByMemberId`, and `cancelledAt` after a successful cancellation.
+
+## Static content API
+
+Supported content codes are `company`, `terms`, and `privacy-policy`. Customers can read `GET /api/v1/contents/{code}`; `GET /api/v1/contents/company` remains an alias. Administrators can list and read saved content with `GET /api/v1/admin/contents` and `GET /api/v1/admin/contents/{code}`, and create or update it with `PUT /api/v1/admin/contents/{code}` using `{ "title": "...", "body": "..." }`. Bodies are plain text; HTML tag markup is rejected. No legal text is seeded by the server.

@@ -2,6 +2,7 @@ package com.example.shopping.domain.home.controller;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,6 +33,12 @@ public class HomeController {
 	@GetMapping("/contents/company")
 	public ApiResponse<ContentResponse> company() {
 		return ApiResponse.ok(homeService.getCompany());
+	}
+
+	/** 회사소개·약관 등 서버가 허용한 고정 콘텐츠. */
+	@GetMapping("/contents/{code}")
+	public ApiResponse<ContentResponse> content(@PathVariable String code) {
+		return ApiResponse.ok(homeService.getContent(code));
 	}
 
 	/** APP-001 앱 구동 설정 (버전, 점검 여부) */
