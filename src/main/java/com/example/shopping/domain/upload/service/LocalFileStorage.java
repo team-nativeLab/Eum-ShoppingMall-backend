@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.CacheControl;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -18,6 +19,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * 서버가 여러 대이거나 재배포 때 디스크가 초기화되는 환경에서는 쓸 수 없으므로, 운영에서는 S3 같은 외부 저장소 구현으로 바꿔야 한다.
  */
 @Component
+@ConditionalOnProperty(name = "upload.storage", havingValue = "local", matchIfMissing = true)
 public class LocalFileStorage implements FileStorage, WebMvcConfigurer {
 
 	private static final String PUBLIC_PATH = "/files";
