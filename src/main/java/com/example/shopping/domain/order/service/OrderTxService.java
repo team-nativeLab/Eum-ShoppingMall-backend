@@ -145,8 +145,24 @@ public class OrderTxService {
 
 	/** 취소를 시작한다. 그사이 상태가 바뀌었으면(배송 시작 등) false */
 	@Transactional
-	public boolean claimCancel(Long orderId, OrderStatus from, String idempotencyKey) {
-		return orderRepository.claimCancel(orderId, from, idempotencyKey, LocalDateTime.now()) == 1;
+	public boolean claimCancel(Long orderId, OrderStatus from, String idempotencyKey, String reason, Long actorId) {
+		return orderRepository.claimCancel(orderId, from, idempotencyKey, reason, actorId, LocalDateTime.now()) == 1;
+	}
+
+	/** 관리자 요청으로 미결제 주문을 만료한다. 가상계좌 결제는 PG 취소 확인 후 호출한다. */
+	@Transactional
+	public void completeUnpaidAdminCancellation(Long orderId, Long paymentId) {
+		if (orderRepository.finishUnpaidCancellation(orderId, LocalDateTime.now()) != 1) {
+			return;
+		}
+		if (paymentId != null) {
+			Payment payment = paymentRepository.findById(paymentId).orElseThrow();
+			if (payment.getStatus() == PaymentStatus.WAITING_DEPOSIT) {
+				payment.expireVirtualAccount();
+			}
+		}
+		orderRepository.cancelItems(orderId);
+		restoreStock(orderId);
 	}
 
 	/** PG 취소가 확실히 거절됐을 때 주문을 취소 전 상태로 되돌린다. */

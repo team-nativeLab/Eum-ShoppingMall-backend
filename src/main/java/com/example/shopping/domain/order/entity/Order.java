@@ -79,6 +79,15 @@ public class Order extends BaseTimeEntity {
 	@Column(name = "cancel_idempotency_key", length = 300)
 	private String cancelIdempotencyKey;
 
+	@Column(name = "cancel_reason", length = 200)
+	private String cancelReason;
+
+	@Column(name = "cancelled_by_member_id")
+	private Long cancelledByMemberId;
+
+	@Column(name = "cancelled_at")
+	private LocalDateTime cancelledAt;
+
 	// 최종 결제 금액 = itemAmount - discountAmount + shippingFee (서버 계산값만 신뢰)
 	@Column(nullable = false)
 	private long totalAmount;
@@ -183,5 +192,12 @@ public class Order extends BaseTimeEntity {
 		if (trackingNumber != null) {
 			this.trackingNumber = trackingNumber;
 		}
+	}
+
+	/** 결제 전 주문을 관리자가 만료시킬 때 취소 이력을 저장한다. */
+	public void recordAdminCancellation(String reason, Long adminId) {
+		this.cancelReason = reason;
+		this.cancelledByMemberId = adminId;
+		this.cancelledAt = LocalDateTime.now();
 	}
 }

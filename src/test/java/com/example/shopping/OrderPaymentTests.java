@@ -563,6 +563,93 @@ class OrderPaymentTests {
 	// ───────── 취소 ─────────
 
 	@Test
+	void 일반_회원은_관리자_주문_취소를_호출할_수_없다() throws Exception {
+		String orderNo = createOrder(buyer, insertProductWithSku("권한 검증 상품", 30000, true, 5), 1);
+		mockMvc.perform(post("/api/v1/admin/orders/{orderId}/cancel", orderId(orderNo)).with(member(buyer))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"reason":"고객 요청"}
+						"""))
+				.andExpect(status().isForbidden());
+		assertThat(statusOf(orderNo)).isEqualTo("PENDING");
+	}
+
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	void 관리자는_결제완료_주문을_환불하고_취소_이력을_남긴다() throws Exception {
+		long skuId = insertProductWithSku("관리자 환불 상품", 30000, true, 5);
+		String orderNo = payOrder(buyer, skuId, 2);
+		long orderId = orderId(orderNo);
+		long amount = jdbcTemplate.queryForObject("select total_amount from orders where id = ?", Long.class, orderId);
+		when(paymentGateway.cancel(eq(PAYMENT_KEY), eq("관리자 재고 확인"), anyString()))
+				.thenReturn(pg(orderNo, PgStatus.CANCELED, amount));
+
+		mockMvc.perform(post("/api/v1/admin/orders/{orderId}/cancel", orderId).with(admin(buyer))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"reason":"관리자 재고 확인"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("CANCELED"))
+				.andExpect(jsonPath("$.data.cancelReason").value("관리자 재고 확인"))
+				.andExpect(jsonPath("$.data.cancelledByMemberId").value(buyer))
+				.andExpect(jsonPath("$.data.cancelledAt").isNotEmpty());
+
+		assertThat(statusOf(orderNo)).isEqualTo("CANCELED");
+		assertThat(stockOf(skuId)).isEqualTo(5);
+		assertThat(jdbcTemplate.queryForObject("select status from payment where order_id = ?", String.class, orderId))
+				.isEqualTo("CANCELED");
+		verify(paymentGateway).cancel(eq(PAYMENT_KEY), eq("관리자 재고 확인"), anyString());
+		cleanupAdminCancellation(orderId, skuId);
+	}
+
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	void 관리자는_결제대기_주문을_환불없이_만료하고_재고를_복구한다() throws Exception {
+		long skuId = insertProductWithSku("관리자 주문 만료 상품", 30000, true, 5);
+		String orderNo = createOrder(buyer, skuId, 2);
+		long orderId = orderId(orderNo);
+
+		mockMvc.perform(post("/api/v1/admin/orders/{orderId}/cancel", orderId).with(admin(buyer))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"reason":"고객 요청"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("EXPIRED"))
+				.andExpect(jsonPath("$.data.cancelReason").value("고객 요청"))
+				.andExpect(jsonPath("$.data.items[0].status").value("CANCELED"));
+
+		assertThat(stockOf(skuId)).isEqualTo(5);
+		verify(paymentGateway, never()).cancel(anyString(), anyString(), anyString());
+		cleanupAdminCancellation(orderId, skuId);
+	}
+
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	void 관리자는_가상계좌_입금대기_주문을_PG에서_취소한_뒤_만료한다() throws Exception {
+		long skuId = insertProductWithSku("가상계좌 관리자 취소 상품", 30000, true, 5);
+		String orderNo = createOrder(buyer, skuId, 1);
+		long amount = jdbcTemplate.queryForObject("select total_amount from orders where order_no = ?", Long.class,
+				orderNo);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, amount)).thenReturn(
+				virtualAccountPg(orderNo, PgStatus.WAITING_FOR_DEPOSIT, amount, LocalDateTime.now().plusDays(1)));
+		confirm(buyer, orderNo, amount).andExpect(status().isOk());
+		long orderId = orderId(orderNo);
+		when(paymentGateway.cancel(eq(PAYMENT_KEY), eq("가상계좌 취소"), anyString()))
+				.thenReturn(pg(orderNo, PgStatus.CANCELED, amount));
+
+		mockMvc.perform(post("/api/v1/admin/orders/{orderId}/cancel", orderId).with(admin(buyer))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"reason":"가상계좌 취소"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("EXPIRED"))
+				.andExpect(jsonPath("$.data.payment.status").value("FAILED"));
+
+		assertThat(stockOf(skuId)).isEqualTo(5);
+		verify(paymentGateway).cancel(eq(PAYMENT_KEY), eq("가상계좌 취소"), anyString());
+		cleanupAdminCancellation(orderId, skuId);
+	}
+
+	@Test
 	void 결제한_주문을_취소하면_PG에서_환불하고_재고를_되돌리며_두_번_취소되지_않는다() throws Exception {
 		long sku = insertProductWithSku("안전모", 30000, true, 5);
 		String orderNo = payOrder(buyer, sku, 2);
@@ -778,6 +865,26 @@ class OrderPaymentTests {
 	private RequestPostProcessor member(long memberId) {
 		return jwt().jwt(token -> token.subject(String.valueOf(memberId)))
 				.authorities(new SimpleGrantedAuthority("ROLE_USER"));
+	}
+
+	private RequestPostProcessor admin(long memberId) {
+		return jwt().jwt(token -> token.subject(String.valueOf(memberId)))
+				.authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+	}
+
+	private long orderId(String orderNo) {
+		return jdbcTemplate.queryForObject("select id from orders where order_no = ?", Long.class, orderNo);
+	}
+
+	private void cleanupAdminCancellation(long orderId, long skuId) {
+		Long productId = jdbcTemplate.queryForObject("select product_id from product_sku where id = ?", Long.class, skuId);
+		jdbcTemplate.update("delete from cart_item where member_id in (?, ?)", buyer, other);
+		jdbcTemplate.update("delete from payment where order_id = ?", orderId);
+		jdbcTemplate.update("delete from order_item where order_id = ?", orderId);
+		jdbcTemplate.update("delete from orders where id = ?", orderId);
+		jdbcTemplate.update("delete from product_sku where id = ?", skuId);
+		jdbcTemplate.update("delete from product where id = ?", productId);
+		jdbcTemplate.update("delete from member where id in (?, ?)", buyer, other);
 	}
 
 	private PgPayment pg(String orderNo, PgStatus status, long amount) {
