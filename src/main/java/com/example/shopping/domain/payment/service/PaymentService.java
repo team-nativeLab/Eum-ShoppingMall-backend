@@ -7,12 +7,17 @@ import org.springframework.stereotype.Service;
 
 import com.example.shopping.domain.order.dto.OrderDetailResponse;
 import com.example.shopping.domain.order.entity.Order;
+import com.example.shopping.domain.order.entity.OrderStatus;
+import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.domain.order.service.OrderService;
 import com.example.shopping.domain.order.service.OrderTxService;
 import com.example.shopping.domain.payment.dto.PaymentConfirmRequest;
+import com.example.shopping.domain.payment.dto.PaymentWebhookRequest;
 import com.example.shopping.domain.payment.entity.Payment;
+import com.example.shopping.domain.payment.entity.PaymentStatus;
 import com.example.shopping.domain.payment.gateway.PaymentGateway;
 import com.example.shopping.domain.payment.gateway.PgPayment;
+import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.gateway.PgRejectedException;
 import com.example.shopping.domain.payment.gateway.PgUnavailableException;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
@@ -32,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PaymentService {
 
 	private final OrderService orderService;
+	private final OrderRepository orderRepository;
 	private final OrderTxService orderTxService;
 	private final PaymentRepository paymentRepository;
 	private final PaymentGateway paymentGateway;
@@ -73,9 +79,86 @@ public class PaymentService {
 			throw new BusinessException(differentOrder ? ErrorCode.PAYMENT_FAILED : ErrorCode.PAYMENT_AMOUNT_MISMATCH);
 		}
 		if (!orderTxService.completePayment(order.getId(), pg)) {
+			if (pg.status() == PgStatus.WAITING_FOR_DEPOSIT) {
+				log.error("주문 {} 가상계좌 승인 응답에 계좌 또는 입금 기한 정보가 없어 보정 대기로 둡니다.", order.getOrderNo());
+				throw new BusinessException(ErrorCode.PAYMENT_PENDING_CONFIRMATION);
+			}
 			throw new BusinessException(ErrorCode.PAYMENT_FAILED);
 		}
 		return orderService.getMyOrder(memberId, order.getOrderNo());
+	}
+
+	/** Toss 웹훅은 신호로만 사용한다. 실제 결제 상태는 로컬 비밀값과 PG 조회 결과로 확인한다. */
+	public void handleWebhook(PaymentWebhookRequest request) {
+		if (!"DEPOSIT_CALLBACK".equals(request.eventType())
+				&& !"PAYMENT_STATUS_CHANGED".equals(request.eventType())) {
+			return;
+		}
+		boolean depositCallback = "DEPOSIT_CALLBACK".equals(request.eventType());
+		PaymentWebhookRequest.Data data = request.data();
+		if (data == null || !data.hasVerificationFields()) {
+			if (depositCallback) {
+				throw new BusinessException(ErrorCode.PAYMENT_WEBHOOK_UNAUTHORIZED);
+			}
+			return;
+		}
+		Optional<Order> orderResult = orderRepository.findByOrderNo(data.orderId());
+		if (orderResult.isEmpty()) {
+			if (depositCallback) {
+				throw new BusinessException(ErrorCode.PAYMENT_WEBHOOK_UNAUTHORIZED);
+			}
+			return;
+		}
+		Order order = orderResult.get();
+		Optional<Payment> paymentResult = paymentRepository.findFirstByOrderIdOrderByIdDesc(order.getId());
+		if (paymentResult.isEmpty() || !"가상계좌".equals(paymentResult.get().getMethod())) {
+			if (depositCallback) {
+				throw new BusinessException(ErrorCode.PAYMENT_WEBHOOK_UNAUTHORIZED);
+			}
+			return;
+		}
+		Payment payment = paymentResult.get();
+		if (!payment.matchesWebhookSecret(data.secret())
+				|| (data.paymentKey() != null && !payment.getPaymentKey().equals(data.paymentKey()))) {
+			if (depositCallback) {
+				throw new BusinessException(ErrorCode.PAYMENT_WEBHOOK_UNAUTHORIZED);
+			}
+			return;
+		}
+
+		Optional<PgPayment> actual = paymentGateway.findByOrderNo(order.getOrderNo());
+		if (actual.isEmpty() || !matchesVirtualAccount(order, payment, actual.get())) {
+			log.error("주문 {} 가상계좌 웹훅과 PG 조회 결과가 일치하지 않습니다. 수동 확인이 필요합니다.", order.getOrderNo());
+			return;
+		}
+		PgPayment pg = actual.get();
+		if (pg.status() == PgStatus.DONE && payment.getStatus() == PaymentStatus.WAITING_DEPOSIT
+				&& order.getStatus() == OrderStatus.WAITING_DEPOSIT) {
+			orderTxService.completeVirtualAccountDeposit(order.getId(), payment.getId(), pg);
+			return;
+		}
+		if (pg.status() == PgStatus.DONE && payment.getStatus() == PaymentStatus.DONE
+				&& (order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.PREPARING
+						|| order.getStatus() == OrderStatus.SHIPPED || order.getStatus() == OrderStatus.DELIVERED)) {
+			return;
+		}
+		if (pg.status() == PgStatus.WAITING_FOR_DEPOSIT && payment.getStatus() == PaymentStatus.DONE) {
+			if (!orderTxService.revertVirtualAccountDeposit(order.getId(), payment.getId(), pg)) {
+				log.error("주문 {} 입금 상태가 다시 대기로 바뀌었으나 이미 배송 단계여서 자동 복구하지 못했습니다.",
+						order.getOrderNo());
+			}
+			return;
+		}
+		if (pg.status() == PgStatus.CANCELED && payment.getStatus() == PaymentStatus.WAITING_DEPOSIT
+				&& order.getStatus() == OrderStatus.WAITING_DEPOSIT
+				&& payment.getVirtualAccountDueAt() != null
+				&& !payment.getVirtualAccountDueAt().isAfter(LocalDateTime.now())) {
+			orderTxService.expireVirtualAccount(order.getId(), payment.getId());
+			return;
+		}
+		if (pg.status() == PgStatus.DONE) {
+			log.error("주문 {} 입금 완료가 주문 만료 또는 다른 상태와 충돌합니다. 운영자 확인이 필요합니다.", order.getOrderNo());
+		}
 	}
 
 	private PgPayment approve(Order order, String paymentKey) {
@@ -113,5 +196,13 @@ public class PaymentService {
 		} catch (PgRejectedException | PgUnavailableException e) {
 			log.error("금액 불일치 결제 {}의 자동 환불 실패. 수동 환불이 필요합니다.", pg.paymentKey(), e);
 		}
+	}
+
+	private boolean matchesVirtualAccount(Order order, Payment payment, PgPayment pg) {
+		return "가상계좌".equals(pg.method())
+				&& order.getOrderNo().equals(pg.orderNo())
+				&& payment.getPaymentKey().equals(pg.paymentKey())
+				&& pg.totalAmount() == order.getTotalAmount()
+				&& payment.matchesWebhookSecret(pg.secret());
 	}
 }

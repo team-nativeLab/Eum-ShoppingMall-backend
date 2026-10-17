@@ -152,6 +152,51 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 			""")
 	int markPaid(@Param("id") Long id, @Param("now") LocalDateTime now);
 
+	/** 가상계좌 발급 결과와 실제 입금 기한을 함께 저장한다. */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Order o
+			set o.status = com.example.shopping.domain.order.entity.OrderStatus.WAITING_DEPOSIT,
+			    o.expiresAt = :dueDate, o.updatedAt = :now, o.version = o.version + 1
+			where o.id = :id
+			  and o.status = com.example.shopping.domain.order.entity.OrderStatus.PAYMENT_PROCESSING
+			""")
+	int markWaitingDeposit(@Param("id") Long id, @Param("dueDate") LocalDateTime dueDate,
+			@Param("now") LocalDateTime now);
+
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Order o
+			set o.status = com.example.shopping.domain.order.entity.OrderStatus.PAID,
+			    o.paidAt = :now, o.updatedAt = :now, o.version = o.version + 1
+			where o.id = :id
+			  and o.status = com.example.shopping.domain.order.entity.OrderStatus.WAITING_DEPOSIT
+			""")
+	int markDepositPaid(@Param("id") Long id, @Param("now") LocalDateTime now);
+
+	/** 드문 PG 입금 취소/복귀 통보가 오면 아직 배송 전인 주문을 다시 입금 대기로 잠근다. */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Order o
+			set o.status = com.example.shopping.domain.order.entity.OrderStatus.WAITING_DEPOSIT,
+			    o.updatedAt = :now, o.version = o.version + 1
+			where o.id = :id
+			  and o.status in (com.example.shopping.domain.order.entity.OrderStatus.PAID,
+			                   com.example.shopping.domain.order.entity.OrderStatus.PREPARING)
+			""")
+	int revertDepositCompletion(@Param("id") Long id, @Param("now") LocalDateTime now);
+
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Order o
+			set o.status = com.example.shopping.domain.order.entity.OrderStatus.EXPIRED,
+			    o.updatedAt = :now, o.version = o.version + 1
+			where o.id = :id
+			  and o.status = com.example.shopping.domain.order.entity.OrderStatus.WAITING_DEPOSIT
+			  and o.expiresAt <= :now
+			""")
+	int expireWaitingDeposit(@Param("id") Long id, @Param("now") LocalDateTime now);
+
 	/** 결제 기한이 지난 결제 대기 주문을 만료시킨다. */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
@@ -176,6 +221,22 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 			where o.status = com.example.shopping.domain.order.entity.OrderStatus.PENDING and o.expiresAt < :now
 			""")
 	List<Long> findExpiredPendingIds(@Param("now") LocalDateTime now, Pageable pageable);
+
+	@Query("""
+			select o.id from Order o
+			where o.status = com.example.shopping.domain.order.entity.OrderStatus.WAITING_DEPOSIT
+			  and o.expiresAt <= :now
+			order by o.expiresAt asc
+			""")
+	List<Long> findExpiredWaitingDepositIds(@Param("now") LocalDateTime now, Pageable pageable);
+
+	@Query("""
+			select o.id from Order o
+			where o.status = com.example.shopping.domain.order.entity.OrderStatus.WAITING_DEPOSIT
+			  and o.id > :afterId
+			order by o.id asc
+			""")
+	List<Long> findWaitingDepositIdsAfter(@Param("afterId") Long afterId, Pageable pageable);
 
 	/** 회원이 결제하지 않고 남겨 둔 주문 */
 	@Query("""

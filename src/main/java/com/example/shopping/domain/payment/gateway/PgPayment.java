@@ -10,7 +10,12 @@ import java.time.LocalDateTime;
  * @param raw           PG 응답 원문
  */
 public record PgPayment(String paymentKey, String orderNo, PgStatus status, long totalAmount, long balanceAmount,
-		String method, LocalDateTime approvedAt, String raw) {
+		String method, LocalDateTime approvedAt, String raw, PgVirtualAccount virtualAccount, String secret) {
+
+	public PgPayment(String paymentKey, String orderNo, PgStatus status, long totalAmount, long balanceAmount,
+			String method, LocalDateTime approvedAt, String raw) {
+		this(paymentKey, orderNo, status, totalAmount, balanceAmount, method, approvedAt, raw, null, null);
+	}
 
 	public enum PgStatus {
 		/** 결제 완료 */

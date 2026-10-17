@@ -66,15 +66,55 @@ public class OrderTxService {
 			return true;
 		}
 		if (pg.status() == PgStatus.WAITING_FOR_DEPOSIT) {
-			if (orderRepository.changeStatus(orderId, OrderStatus.PAYMENT_PROCESSING, OrderStatus.WAITING_DEPOSIT,
-					now) == 1) {
+			if (!hasVirtualAccountDetails(pg)) {
+				return false;
+			}
+			if (orderRepository.markWaitingDeposit(orderId, pg.virtualAccount().dueDate(), now) == 1) {
 				paymentRepository.save(Payment.of(orderId, pg, PaymentStatus.WAITING_DEPOSIT));
 				removeOrderedItemsFromCart(orderId);
+				return true;
 			}
-			return true;
+			return false;
 		}
 		orderRepository.changeStatus(orderId, OrderStatus.PAYMENT_PROCESSING, OrderStatus.PENDING, now);
 		return false;
+	}
+
+	/** PG 조회에서 입금 완료가 확인된 가상계좌 주문을 결제로 확정한다. 중복 웹훅은 상태 조건으로 막는다. */
+	@Transactional
+	public boolean completeVirtualAccountDeposit(Long orderId, Long paymentId, PgPayment pg) {
+		if (orderRepository.markDepositPaid(orderId, LocalDateTime.now()) != 1) {
+			return false;
+		}
+		Payment payment = paymentRepository.findById(paymentId).orElseThrow();
+		payment.recordDeposit(pg);
+		addSalesCount(orderId, 1);
+		return true;
+	}
+
+	/** PG 확인 결과 입금 기한이 지나 입금되지 않은 가상계좌 주문의 재고를 해제한다. */
+	@Transactional
+	public boolean expireVirtualAccount(Long orderId, Long paymentId) {
+		LocalDateTime now = LocalDateTime.now();
+		if (orderRepository.expireWaitingDeposit(orderId, now) != 1) {
+			return false;
+		}
+		Payment payment = paymentRepository.findById(paymentId).orElseThrow();
+		payment.expireVirtualAccount();
+		restoreStock(orderId);
+		return true;
+	}
+
+	/** PG가 DONE 결제를 다시 입금 대기로 바꾼 경우 미배송 주문을 보류하고 판매 수량을 되돌린다. */
+	@Transactional
+	public boolean revertVirtualAccountDeposit(Long orderId, Long paymentId, PgPayment pg) {
+		if (orderRepository.revertDepositCompletion(orderId, LocalDateTime.now()) != 1) {
+			return false;
+		}
+		Payment payment = paymentRepository.findById(paymentId).orElseThrow();
+		payment.revertDeposit(pg);
+		addSalesCount(orderId, -1);
+		return true;
 	}
 
 	/** 결제 기한이 지난 주문을 만료시키고 잡아 둔 재고를 되돌린다. 실제로 만료시켰으면 true */
@@ -153,6 +193,15 @@ public class OrderTxService {
 		Order order = findOrder(orderId);
 		List<Long> skuIds = order.getItems().stream().map(item -> item.getSkuId()).toList();
 		cartItemRepository.deleteByMemberIdAndSkuIds(order.getMemberId(), skuIds);
+	}
+
+	private boolean hasVirtualAccountDetails(PgPayment pg) {
+		return pg.virtualAccount() != null
+				&& pg.virtualAccount().bankCode() != null
+				&& pg.virtualAccount().accountNumber() != null
+				&& pg.virtualAccount().customerName() != null
+				&& pg.virtualAccount().dueDate() != null
+				&& pg.secret() != null;
 	}
 
 	private Order findOrder(Long orderId) {

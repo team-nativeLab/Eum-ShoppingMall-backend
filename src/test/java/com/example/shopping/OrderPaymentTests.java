@@ -22,6 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -55,6 +56,7 @@ import com.example.shopping.domain.payment.gateway.PgPayment;
 import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.gateway.PgRejectedException;
 import com.example.shopping.domain.payment.gateway.PgUnavailableException;
+import com.example.shopping.domain.payment.gateway.PgVirtualAccount;
 import com.example.shopping.domain.product.entity.ProductSku;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
 import com.jayway.jsonpath.JsonPath;
@@ -452,6 +454,82 @@ class OrderPaymentTests {
 	}
 
 	@Test
+	void 가상계좌_입금_웹훅은_PG를_재조회하고_한번만_입금완료를_반영한다() throws Exception {
+		long sku = insertProductWithSku("안전모", 30000, true, 5);
+		String orderNo = createOrder(buyer, sku, 1);
+		LocalDateTime dueDate = LocalDateTime.now().plusDays(1);
+		PgPayment waiting = virtualAccountPg(orderNo, PgStatus.WAITING_FOR_DEPOSIT, 34700, dueDate);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenReturn(waiting);
+
+		confirm(buyer, orderNo, 34700)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("WAITING_DEPOSIT"))
+				.andExpect(jsonPath("$.data.payment.virtualAccount.bankCode").value("004"))
+				.andExpect(jsonPath("$.data.payment.virtualAccount.accountNumber").value("12345678"))
+				.andExpect(jsonPath("$.data.payment.virtualAccount.customerName").value("홍길동"))
+				.andExpect(jsonPath("$.data.payment.virtualAccount.dueDate").isNotEmpty())
+				.andExpect(content().string(not(containsString("webhook-secret"))));
+		assertThat(statusOf(orderNo)).isEqualTo("WAITING_DEPOSIT");
+		assertThat(stockOf(sku)).isEqualTo(4);
+		assertThat(salesCountOf(sku)).isZero();
+		LocalDateTime storedDueDate = jdbcTemplate.queryForObject(
+				"select expires_at from orders where order_no = ?", LocalDateTime.class, orderNo);
+		assertThat(Duration.between(storedDueDate, dueDate).abs()).isLessThan(Duration.ofMinutes(1));
+
+		PgPayment deposited = virtualAccountPg(orderNo, PgStatus.DONE, 34700, dueDate);
+		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(deposited));
+		String webhook = """
+				{"eventType":"DEPOSIT_CALLBACK","createdAt":"2026-10-18T12:00:00.000000",
+				 "data":{"secret":"webhook-secret","status":"DONE","transactionKey":"txn-1","orderId":"%s"}}
+				""".formatted(orderNo);
+
+		for (int i = 0; i < 2; i++) {
+			mockMvc.perform(post("/api/v1/payments/webhook").contentType(MediaType.APPLICATION_JSON).content(webhook))
+					.andExpect(status().isOk());
+		}
+
+		assertThat(statusOf(orderNo)).isEqualTo("PAID");
+		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("DONE");
+		assertThat(stockOf(sku)).isEqualTo(4);
+		assertThat(salesCountOf(sku)).isEqualTo(1);
+		verify(paymentGateway, times(2)).findByOrderNo(orderNo);
+	}
+
+	@Test
+	void 가상계좌_웹훅의_secret이_다르면_입금_상태를_바꾸지_않는다() throws Exception {
+		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
+		LocalDateTime dueDate = LocalDateTime.now().plusDays(1);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700))
+				.thenReturn(virtualAccountPg(orderNo, PgStatus.WAITING_FOR_DEPOSIT, 34700, dueDate));
+		confirm(buyer, orderNo, 34700).andExpect(status().isOk());
+
+		mockMvc.perform(post("/api/v1/payments/webhook").contentType(MediaType.APPLICATION_JSON).content("""
+				{"eventType":"DEPOSIT_CALLBACK","data":{"secret":"wrong-secret","status":"DONE","orderId":"%s"}}
+				""".formatted(orderNo)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("PAYMENT_WEBHOOK_UNAUTHORIZED"));
+		assertThat(statusOf(orderNo)).isEqualTo("WAITING_DEPOSIT");
+		verify(paymentGateway, never()).findByOrderNo(anyString());
+	}
+
+	@Test
+	void 기한이_지난_가상계좌를_PG에서_미입금으로_확인하면_주문을_만료하고_재고를_돌려준다() throws Exception {
+		long sku = insertProductWithSku("안전모", 30000, true, 5);
+		String orderNo = createOrder(buyer, sku, 1);
+		LocalDateTime dueDate = LocalDateTime.now().minusMinutes(1);
+		PgPayment waiting = virtualAccountPg(orderNo, PgStatus.WAITING_FOR_DEPOSIT, 34700, dueDate);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenReturn(waiting);
+		confirm(buyer, orderNo, 34700).andExpect(status().isOk());
+		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(waiting));
+
+		scheduler.expireUnpaidOrders();
+
+		assertThat(statusOf(orderNo)).isEqualTo("EXPIRED");
+		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("FAILED");
+		assertThat(stockOf(sku)).isEqualTo(5);
+	}
+
+	@Test
 	void 만료_작업이_돌기_전이라도_기한이_지난_주문은_결제할_수_없다() throws Exception {
 		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
 		jdbcTemplate.update("update orders set expires_at = ?", LocalDateTime.now().minusSeconds(1));
@@ -684,6 +762,12 @@ class OrderPaymentTests {
 	private PgPayment pg(String orderNo, PgStatus status, long amount) {
 		long balance = status == PgStatus.CANCELED ? 0 : amount;
 		return new PgPayment(PAYMENT_KEY, orderNo, status, amount, balance, "CARD", LocalDateTime.now(), "{}");
+	}
+
+	private PgPayment virtualAccountPg(String orderNo, PgStatus status, long amount, LocalDateTime dueDate) {
+		long balance = status == PgStatus.CANCELED ? 0 : amount;
+		return new PgPayment(PAYMENT_KEY, orderNo, status, amount, balance, "가상계좌", LocalDateTime.now(), "{}",
+				new PgVirtualAccount("004", "12345678", "홍길동", dueDate), "webhook-secret");
 	}
 
 	private void addToCart(long memberId, long skuId, int quantity) throws Exception {

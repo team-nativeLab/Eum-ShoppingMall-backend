@@ -97,7 +97,8 @@ public class SecurityConfig {
 						.requestMatchers("/error").permitAll()
 						.requestMatchers(HttpMethod.GET, PUBLIC_GET).permitAll()
 						// 견적 문의·1:1 문의 접수는 비회원도 가능하다. 같은 경로의 GET(내 내역 조회)은 로그인이 필요하다.
-						.requestMatchers(HttpMethod.POST, "/api/v1/quotes", "/api/v1/support/inquiries").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/quotes", "/api/v1/support/inquiries",
+								"/api/v1/payments/webhook").permitAll()
 						.requestMatchers(API_DOCS).permitAll()
 						.requestMatchers("/actuator/health/**").permitAll()
 						// 헬스 체크 외의 운영 엔드포인트는 켜더라도 관리자만 볼 수 있다.

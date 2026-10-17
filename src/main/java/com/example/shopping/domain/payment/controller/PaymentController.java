@@ -1,5 +1,6 @@
 package com.example.shopping.domain.payment.controller;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.shopping.domain.order.dto.OrderDetailResponse;
 import com.example.shopping.domain.payment.dto.PaymentConfirmRequest;
+import com.example.shopping.domain.payment.dto.PaymentWebhookRequest;
 import com.example.shopping.domain.payment.service.PaymentService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.security.CurrentMember;
@@ -31,5 +33,12 @@ public class PaymentController {
 	public ApiResponse<OrderDetailResponse> confirm(@AuthenticationPrincipal Jwt jwt,
 			@Valid @RequestBody PaymentConfirmRequest request) {
 		return ApiResponse.ok(paymentService.confirm(CurrentMember.id(jwt), request));
+	}
+
+	/** Toss 가상계좌 웹훅. 본문은 신호로만 사용하고 PG 조회 결과를 검증해 반영한다. */
+	@PostMapping("/webhook")
+	public ResponseEntity<Void> webhook(@Valid @RequestBody PaymentWebhookRequest request) {
+		paymentService.handleWebhook(request);
+		return ResponseEntity.ok().build();
 	}
 }
