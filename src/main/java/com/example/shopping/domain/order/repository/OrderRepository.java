@@ -67,12 +67,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 			update Order o
 			set o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED,
 			    o.cancelPreviousStatus = :from, o.cancelRequestedAt = :now,
-			    o.cancelIdempotencyKey = :idempotencyKey,
+			    o.cancelIdempotencyKey = :idempotencyKey, o.cancelReason = :reason,
+			    o.cancelledByMemberId = :actorId,
 			    o.updatedAt = :now, o.version = o.version + 1
 			where o.id = :id and o.status = :from
 			""")
 	int claimCancel(@Param("id") Long id, @Param("from") OrderStatus from,
-			@Param("idempotencyKey") String idempotencyKey, @Param("now") LocalDateTime now);
+			@Param("idempotencyKey") String idempotencyKey, @Param("reason") String reason,
+			@Param("actorId") Long actorId, @Param("now") LocalDateTime now);
 
 	/** PG가 취소를 확실히 거절했을 때만 취소 전 상태로 되돌린다. */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -80,6 +82,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 			update Order o
 			set o.status = o.cancelPreviousStatus, o.cancelPreviousStatus = null,
 			    o.cancelRequestedAt = null, o.cancelIdempotencyKey = null,
+			    o.cancelReason = null, o.cancelledByMemberId = null,
 			    o.updatedAt = :now, o.version = o.version + 1
 			where o.id = :id
 			  and o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED
@@ -93,11 +96,27 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 			update Order o
 			set o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCELED,
 			    o.cancelPreviousStatus = null, o.cancelRequestedAt = null, o.cancelIdempotencyKey = null,
+			    o.cancelledAt = :now,
 			    o.updatedAt = :now, o.version = o.version + 1
 			where o.id = :id
 			  and o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED
 			""")
 	int finishCancel(@Param("id") Long id, @Param("now") LocalDateTime now);
+
+	/** 관리자 요청으로 결제 전 주문을 만료한다. */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Order o
+			set o.status = com.example.shopping.domain.order.entity.OrderStatus.EXPIRED,
+			    o.cancelRequestedAt = null, o.cancelPreviousStatus = null, o.cancelIdempotencyKey = null,
+			    o.cancelledAt = :now, o.updatedAt = :now, o.version = o.version + 1
+			where o.id = :id
+			  and o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED
+			  and o.cancelPreviousStatus in (
+			      com.example.shopping.domain.order.entity.OrderStatus.PENDING,
+			      com.example.shopping.domain.order.entity.OrderStatus.WAITING_DEPOSIT)
+			""")
+	int finishUnpaidCancellation(@Param("id") Long id, @Param("now") LocalDateTime now);
 
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
@@ -123,7 +142,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 			    o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED
 			    or (o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCELED and exists (
 			        select p.id from Payment p where p.orderId = o.id
-			          and p.status = com.example.shopping.domain.payment.entity.PaymentStatus.DONE
+			          and p.status in (com.example.shopping.domain.payment.entity.PaymentStatus.DONE,
+			                          com.example.shopping.domain.payment.entity.PaymentStatus.WAITING_DEPOSIT)
 			    ))
 			)
 			""")

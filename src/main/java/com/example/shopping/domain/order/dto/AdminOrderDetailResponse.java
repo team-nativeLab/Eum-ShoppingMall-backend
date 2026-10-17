@@ -15,7 +15,8 @@ import com.example.shopping.domain.payment.entity.PaymentStatus;
 public record AdminOrderDetailResponse(Long id, String orderNo, Long memberId, OrderStatus status, String orderName,
 		long itemAmount, long discountAmount, long shippingFee, long totalAmount, AddressResponse shippingAddress,
 		String courier, String trackingNumber, List<ItemResponse> items, PaymentResponse payment,
-		LocalDateTime createdAt, LocalDateTime paidAt) {
+		LocalDateTime createdAt, LocalDateTime paidAt, String cancelReason, Long cancelledByMemberId,
+		LocalDateTime cancelledAt) {
 
 	public record AddressResponse(String recipient, String recipientPhone, String zipCode, String address,
 			String addressDetail, String deliveryRequest) {
@@ -66,6 +67,7 @@ public record AdminOrderDetailResponse(Long id, String orderNo, Long memberId, O
 				order.getOrderName(), order.getItemAmount(), order.getDiscountAmount(), order.getShippingFee(),
 				order.getTotalAmount(), AddressResponse.from(order.getShippingAddress()), order.getCourier(),
 				order.getTrackingNumber(), order.getItems().stream().map(ItemResponse::from).toList(),
-				PaymentResponse.from(payment), order.getCreatedAt(), order.getPaidAt());
+				PaymentResponse.from(payment), order.getCreatedAt(), order.getPaidAt(), order.getCancelReason(),
+				order.getCancelledByMemberId(), order.getCancelledAt());
 	}
 }
