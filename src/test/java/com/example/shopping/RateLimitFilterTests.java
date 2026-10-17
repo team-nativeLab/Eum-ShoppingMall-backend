@@ -114,10 +114,21 @@ class RateLimitFilterTests {
 	}
 
 	@Test
-	void 제한_대상이_아닌_API는_세지_않는다() throws Exception {
+	void 공개_공지_조회는_요청_제한을_세지_않는다() throws Exception {
 		for (int i = 0; i < LIMIT * 5; i++) {
-			assertThat(call("GET", "/api/v1/products", "10.0.0.1")).isEqualTo(200);
+			assertThat(call("GET", "/api/v1/notices", "10.0.0.1")).isEqualTo(200);
 		}
+	}
+
+	@Test
+	void 공개_상품_조회는_별도_설정한_IP별_한도를_공유한다() throws Exception {
+		RateLimitFilter searchFilter = new RateLimitFilter(10, 5, resolver, clock, redisTemplate);
+		for (int i = 0; i < 5; i++) {
+			assertThat(call(searchFilter, "GET", "/api/v1/products/suggestions", "10.0.0.12"))
+					.isEqualTo(200);
+		}
+		assertThat(call(searchFilter, "GET", "/api/v1/products/facets", "10.0.0.12")).isEqualTo(429);
+		assertThat(call(searchFilter, "GET", "/api/v1/products", "10.0.0.13")).isEqualTo(200);
 	}
 
 	@Test

@@ -17,6 +17,7 @@ import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
+import com.example.shopping.domain.product.service.ProductReadCache;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 
@@ -35,6 +36,7 @@ public class OrderTxService {
 	private final ProductSkuRepository productSkuRepository;
 	private final ProductRepository productRepository;
 	private final CartItemRepository cartItemRepository;
+	private final ProductReadCache productReadCache;
 
 	/** 결제 승인을 시작한다. 이미 진행 중이거나 끝났거나 기한이 지났으면 false */
 	@Transactional
@@ -174,12 +176,20 @@ public class OrderTxService {
 	}
 
 	private void restoreStock(Long orderId) {
-		orderedQuantities(orderId).forEach(q -> productSkuRepository.increaseStock(q[0], (int) q[1]));
+		List<long[]> quantities = orderedQuantities(orderId);
+		quantities.forEach(q -> productSkuRepository.increaseStock(q[0], (int) q[1]));
+		if (!quantities.isEmpty()) {
+			productReadCache.invalidateAfterCommit();
+		}
 	}
 
 	/** 주문한 수량만큼 상품의 누적 판매 수량(인기순 정렬 기준)을 더하거나(sign = 1, 결제 완료) 뺀다(sign = -1, 취소). */
 	private void addSalesCount(Long orderId, int sign) {
-		orderedQuantities(orderId).forEach(q -> productRepository.addSalesCount(q[0], sign * q[1]));
+		List<long[]> quantities = orderedQuantities(orderId);
+		quantities.forEach(q -> productRepository.addSalesCount(q[0], sign * q[1]));
+		if (!quantities.isEmpty()) {
+			productReadCache.invalidateAfterCommit();
+		}
 	}
 
 	/** 주문 품목의 {옵션 ID, 수량} 목록. 재고·판매 수량 쿼리가 영속성 컨텍스트를 비우므로 값을 먼저 꺼내 둔다. */

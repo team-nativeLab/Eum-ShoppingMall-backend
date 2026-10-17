@@ -34,6 +34,7 @@ public class AdminProductService {
 	private final ProductRepository productRepository;
 	private final ProductSkuRepository productSkuRepository;
 	private final CategoryRepository categoryRepository;
+	private final ProductReadCache readCache;
 
 	/** 상태를 지정하지 않으면 삭제된 상품을 뺀 전체(판매중·품절·비공개)를 조회한다. */
 	public PageResponse<AdminProductSummaryResponse> search(ProductStatus status, Long categoryId, String keyword,
@@ -60,7 +61,9 @@ public class AdminProductService {
 		if (request.skus() != null) {
 			request.skus().forEach(sku -> product.addSku(sku.optionName().trim(), sku.price(), sku.stock()));
 		}
-		return AdminProductDetailResponse.from(productRepository.save(product));
+		AdminProductDetailResponse response = AdminProductDetailResponse.from(productRepository.save(product));
+		readCache.invalidateAfterCommit();
+		return response;
 	}
 
 	@Transactional
@@ -82,7 +85,9 @@ public class AdminProductService {
 			}
 		}
 		// 새로 추가된 옵션의 ID와 갱신된 수정 시각을 응답에 싣기 위해 먼저 DB에 반영한다.
-		return AdminProductDetailResponse.from(productRepository.saveAndFlush(product));
+		AdminProductDetailResponse response = AdminProductDetailResponse.from(productRepository.saveAndFlush(product));
+		readCache.invalidateAfterCommit();
+		return response;
 	}
 
 	/**
@@ -95,6 +100,7 @@ public class AdminProductService {
 		if (productSkuRepository.receiveStock(skuId, quantity, ProductSku.MAX_STOCK - quantity) == 0) {
 			throw new BusinessException(ErrorCode.STOCK_LIMIT_EXCEEDED);
 		}
+		readCache.invalidateAfterCommit();
 		// 위 쿼리가 영속성 컨텍스트를 비우므로 더해진 재고가 반영된 상태로 다시 읽는다.
 		return AdminProductDetailResponse.from(find(productId));
 	}
@@ -103,12 +109,14 @@ public class AdminProductService {
 	public AdminProductDetailResponse changePriceVisibility(Long productId, boolean priceVisible) {
 		Product product = find(productId);
 		product.changePriceVisibility(priceVisible);
+		readCache.invalidateAfterCommit();
 		return AdminProductDetailResponse.from(product);
 	}
 
 	@Transactional
 	public void delete(Long productId) {
 		find(productId).delete();
+		readCache.invalidateAfterCommit();
 	}
 
 	/** 이미 삭제된 상품은 없는 상품으로 취급한다. */
