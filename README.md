@@ -30,3 +30,7 @@ Every response includes `X-Request-Id`. A safe incoming value (1–64 letters, n
 ## Member withdrawal and suspension
 
 `DELETE /api/v1/me` requires `{"password":"..."}`. Withdrawal is rejected while the member has a pending, processing, waiting-for-deposit, paid, preparing, or shipped order. On success, the account is marked `WITHDRAWN`, its login credentials and profile identifiers are anonymized, and refresh tokens, cart items, and the saved checkout address are removed. Historical orders remain. Administrators can suspend or reactivate another account with `PATCH /api/v1/admin/users/{userId}/status`; suspending requires a reason and revokes refresh tokens.
+
+## Admin audit log
+
+Successful administrator `POST`, `PUT`, `PATCH`, and `DELETE` requests (including image uploads) are recorded with the acting member, server-observed client IP, action, target type/identifier, route summary, and response status. Request bodies are not stored. `GET /api/v1/admin/audit-logs` supports actor, target type, and time filters and is restricted to `SUPER_ADMIN`; the log API has no update or delete operations. The optional administrator 2FA and member PII-read audit remain separate follow-up work.
