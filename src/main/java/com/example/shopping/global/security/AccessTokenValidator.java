@@ -7,12 +7,13 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 import com.example.shopping.domain.member.entity.Member;
+import com.example.shopping.domain.member.entity.MemberRole;
 import com.example.shopping.domain.member.entity.MemberStatus;
 import com.example.shopping.domain.member.repository.MemberRepository;
 
 import lombok.RequiredArgsConstructor;
 
-/** Rejects access tokens after logout, password changes, account deactivation, or role changes. */
+/** Rejects access tokens after logout, password changes, or account deactivation. */
 @Component
 @RequiredArgsConstructor
 public class AccessTokenValidator implements OAuth2TokenValidator<Jwt> {
@@ -26,9 +27,13 @@ public class AccessTokenValidator implements OAuth2TokenValidator<Jwt> {
 	public OAuth2TokenValidatorResult validate(Jwt jwt) {
 		try {
 			Long memberId = Long.valueOf(jwt.getSubject());
+			String roleClaim = jwt.getClaimAsString(JwtTokenProvider.ROLE_CLAIM);
+			if (roleClaim == null) {
+				return OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
+			}
+			MemberRole.valueOf(roleClaim);
 			Member member = memberRepository.findById(memberId).orElse(null);
-			if (member == null || member.getStatus() != MemberStatus.ACTIVE
-					|| !member.getRole().name().equals(jwt.getClaimAsString(JwtTokenProvider.ROLE_CLAIM))) {
+			if (member == null || member.getStatus() != MemberStatus.ACTIVE) {
 				return OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
 			}
 

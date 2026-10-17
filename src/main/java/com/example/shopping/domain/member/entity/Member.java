@@ -81,6 +81,16 @@ public class Member extends BaseTimeEntity {
 		return member;
 	}
 
+	public static Member createSuperAdmin(String email, String passwordHash, String name) {
+		Member member = create(email, passwordHash, name, null);
+		member.role = MemberRole.SUPER_ADMIN;
+		return member;
+	}
+
+	public void changeRole(MemberRole role) {
+		this.role = role;
+	}
+
 	/** null인 항목은 바꾸지 않는다. 연락처는 빈 문자열을 주면 지운다. */
 	public void updateProfile(String name, String phone) {
 		if (name != null) {
