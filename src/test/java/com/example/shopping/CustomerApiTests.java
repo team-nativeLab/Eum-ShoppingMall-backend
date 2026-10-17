@@ -126,6 +126,28 @@ class CustomerApiTests {
 	}
 
 	@Test
+	void 장바구니_결제예정금액은_무료배송_경계와_주문_계산을_따른다() throws Exception {
+		long[] itemAmounts = { 99_999, 100_000, 100_001 };
+		long[] discounts = { 999, 1_000, 1_000 };
+		long[] shippingFees = { 5_000, 0, 0 };
+		long[] paymentAmounts = { 104_000, 99_000, 99_001 };
+		RequestPostProcessor me = member(1);
+
+		for (int i = 0; i < itemAmounts.length; i++) {
+			jdbcTemplate.update("delete from cart_item where member_id = ?", 1L);
+			long sku = insertProductWithSku("배송 정책 테스트 " + i, itemAmounts[i], true, "ON_SALE", 1);
+			mockMvc.perform(post("/api/v1/cart/items").with(me).contentType(MediaType.APPLICATION_JSON)
+						.content(cartItem(sku, 1)))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.itemAmount").value(itemAmounts[i]))
+					.andExpect(jsonPath("$.data.totalAmount").value(itemAmounts[i]))
+					.andExpect(jsonPath("$.data.discountAmount").value(discounts[i]))
+					.andExpect(jsonPath("$.data.shippingFee").value(shippingFees[i]))
+					.andExpect(jsonPath("$.data.paymentAmount").value(paymentAmounts[i]));
+		}
+	}
+
+	@Test
 	void 금액_미표시와_품절_상품은_장바구니에서_주문_불가로_표시되고_가격이_새지_않는다() throws Exception {
 		long hiddenSku = insertProductWithSku("견적 전용 장비", 987654, false, "ON_SALE", 10);
 		long shortSku = insertProductWithSku("안전화", 50000, true, "ON_SALE", 1);
@@ -144,6 +166,9 @@ class CustomerApiTests {
 				.andExpect(jsonPath("$.data.items[2].status").value("OUT_OF_STOCK"))
 				.andExpect(jsonPath("$.data.orderableCount").value(0))
 				.andExpect(jsonPath("$.data.totalAmount").value(0))
+				.andExpect(jsonPath("$.data.discountAmount").value(0))
+				.andExpect(jsonPath("$.data.shippingFee").value(0))
+				.andExpect(jsonPath("$.data.paymentAmount").value(0))
 				.andExpect(content().string(not(containsString("987654"))));
 	}
 
