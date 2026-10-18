@@ -32,9 +32,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.member.dto.LoginRequest;
-import com.example.shopping.domain.member.dto.PasswordChangeRequest;
-import com.example.shopping.domain.member.dto.SignupRequest;
+import com.example.shopping.domain.member.dto.request.LoginRequest;
+import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
+import com.example.shopping.domain.member.dto.request.SignupRequest;
 import com.example.shopping.domain.member.service.RefreshTokenService;
 import com.jayway.jsonpath.JsonPath;
 

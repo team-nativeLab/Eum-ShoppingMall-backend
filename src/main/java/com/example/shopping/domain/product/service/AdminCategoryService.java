@@ -6,9 +6,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.product.dto.AdminCategoryResponse;
-import com.example.shopping.domain.product.dto.CategoryCreateRequest;
-import com.example.shopping.domain.product.dto.CategoryUpdateRequest;
+import com.example.shopping.domain.product.dto.response.AdminCategoryResponse;
+import com.example.shopping.domain.product.dto.request.CategoryCreateRequest;
+import com.example.shopping.domain.product.dto.request.CategoryUpdateRequest;
 import com.example.shopping.domain.product.entity.Category;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.CategoryRepository;

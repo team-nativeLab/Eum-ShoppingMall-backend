@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.audit.dto.AdminAuditLogResponse;
+import com.example.shopping.domain.audit.dto.response.AdminAuditLogResponse;
 import com.example.shopping.domain.audit.service.AdminAuditLogService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;

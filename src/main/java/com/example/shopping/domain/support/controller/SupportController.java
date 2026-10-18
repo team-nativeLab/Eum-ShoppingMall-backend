@@ -16,10 +16,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.support.dto.FaqResponse;
-import com.example.shopping.domain.support.dto.InquiryCreateRequest;
-import com.example.shopping.domain.support.dto.InquiryResponse;
-import com.example.shopping.domain.support.dto.NoticeResponse;
+import com.example.shopping.domain.support.dto.response.FaqResponse;
+import com.example.shopping.domain.support.dto.request.InquiryCreateRequest;
+import com.example.shopping.domain.support.dto.response.InquiryResponse;
+import com.example.shopping.domain.support.dto.response.NoticeResponse;
 import com.example.shopping.domain.support.service.SupportService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;

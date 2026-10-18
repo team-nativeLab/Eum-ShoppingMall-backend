@@ -8,9 +8,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.util.StringUtils;
 
-import com.example.shopping.domain.order.dto.AdminOrderDetailResponse;
-import com.example.shopping.domain.order.dto.AdminOrderSummaryResponse;
-import com.example.shopping.domain.order.dto.AdminOrderUpdateRequest;
+import com.example.shopping.domain.order.dto.response.AdminOrderDetailResponse;
+import com.example.shopping.domain.order.dto.response.AdminOrderSummaryResponse;
+import com.example.shopping.domain.order.dto.request.AdminOrderUpdateRequest;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.entity.OrderStatus;
 import com.example.shopping.domain.order.repository.OrderRepository;

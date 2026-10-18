@@ -10,12 +10,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import com.example.shopping.domain.member.dto.AdminMemberDetailResponse;
-import com.example.shopping.domain.member.dto.AdminMemberSummaryResponse;
+import com.example.shopping.domain.member.dto.response.AdminMemberDetailResponse;
+import com.example.shopping.domain.member.dto.response.AdminMemberSummaryResponse;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberRole;
 import com.example.shopping.domain.member.entity.MemberStatus;
-import com.example.shopping.domain.member.dto.AdminMemberStatusUpdateRequest;
+import com.example.shopping.domain.member.dto.request.AdminMemberStatusUpdateRequest;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.repository.OrderRepository;

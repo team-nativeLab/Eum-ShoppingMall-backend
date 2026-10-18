@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.shopping.domain.dashboard.dto.DashboardPeriod;
-import com.example.shopping.domain.dashboard.dto.DashboardResponse;
+import com.example.shopping.domain.dashboard.dto.response.DashboardResponse;
 import com.example.shopping.domain.member.entity.MemberRole;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.domain.order.repository.OrderRepository;

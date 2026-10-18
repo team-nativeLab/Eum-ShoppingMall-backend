@@ -5,9 +5,9 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.home.dto.BannerCreateRequest;
-import com.example.shopping.domain.home.dto.BannerResponse;
-import com.example.shopping.domain.home.dto.BannerUpdateRequest;
+import com.example.shopping.domain.home.dto.request.BannerCreateRequest;
+import com.example.shopping.domain.home.dto.response.BannerResponse;
+import com.example.shopping.domain.home.dto.request.BannerUpdateRequest;
 import com.example.shopping.domain.home.entity.Banner;
 import com.example.shopping.domain.home.repository.BannerRepository;
 import com.example.shopping.domain.product.service.ProductReadCache;

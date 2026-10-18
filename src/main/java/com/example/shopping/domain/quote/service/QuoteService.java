@@ -9,8 +9,8 @@ import org.springframework.util.StringUtils;
 
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.ProductRepository;
-import com.example.shopping.domain.quote.dto.QuoteCreateRequest;
-import com.example.shopping.domain.quote.dto.QuoteResponse;
+import com.example.shopping.domain.quote.dto.request.QuoteCreateRequest;
+import com.example.shopping.domain.quote.dto.response.QuoteResponse;
 import com.example.shopping.domain.quote.entity.QuoteInquiry;
 import com.example.shopping.domain.quote.repository.QuoteInquiryRepository;
 import com.example.shopping.global.exception.BusinessException;

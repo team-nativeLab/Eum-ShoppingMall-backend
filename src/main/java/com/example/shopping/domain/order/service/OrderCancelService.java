@@ -7,7 +7,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
-import com.example.shopping.domain.order.dto.OrderDetailResponse;
+import com.example.shopping.domain.order.dto.response.OrderDetailResponse;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.entity.OrderStatus;
 import com.example.shopping.domain.order.repository.OrderRepository;

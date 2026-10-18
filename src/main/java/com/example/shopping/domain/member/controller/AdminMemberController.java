@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
-import com.example.shopping.domain.member.dto.AdminMemberDetailResponse;
-import com.example.shopping.domain.member.dto.AdminMemberRoleUpdateRequest;
-import com.example.shopping.domain.member.dto.AdminMemberStatusUpdateRequest;
-import com.example.shopping.domain.member.dto.AdminMemberSummaryResponse;
+import com.example.shopping.domain.member.dto.response.AdminMemberDetailResponse;
+import com.example.shopping.domain.member.dto.request.AdminMemberRoleUpdateRequest;
+import com.example.shopping.domain.member.dto.request.AdminMemberStatusUpdateRequest;
+import com.example.shopping.domain.member.dto.response.AdminMemberSummaryResponse;
 import com.example.shopping.domain.member.service.AdminMemberService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;

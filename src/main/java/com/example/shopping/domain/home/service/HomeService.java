@@ -3,12 +3,12 @@ package com.example.shopping.domain.home.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.home.dto.ContentResponse;
-import com.example.shopping.domain.home.dto.HomeResponse;
+import com.example.shopping.domain.home.dto.response.ContentResponse;
+import com.example.shopping.domain.home.dto.response.HomeResponse;
 import com.example.shopping.domain.home.entity.SiteContent;
 import com.example.shopping.domain.home.repository.BannerRepository;
 import com.example.shopping.domain.home.repository.SiteContentRepository;
-import com.example.shopping.domain.product.dto.ProductSummaryResponse;
+import com.example.shopping.domain.product.dto.response.ProductSummaryResponse;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.product.service.ProductReadCache;

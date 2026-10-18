@@ -17,7 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.example.shopping.domain.cart.dto.CartItemAddRequest;
+import com.example.shopping.domain.cart.dto.request.CartItemAddRequest;
 import com.example.shopping.domain.cart.service.CartService;
 
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:cart-concurrency;MODE=MySQL;DB_CLOSE_DELAY=-1")

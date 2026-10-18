@@ -8,9 +8,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.order.dto.OrderDetailResponse;
-import com.example.shopping.domain.payment.dto.PaymentConfirmRequest;
-import com.example.shopping.domain.payment.dto.PaymentWebhookRequest;
+import com.example.shopping.domain.order.dto.response.OrderDetailResponse;
+import com.example.shopping.domain.payment.dto.request.PaymentConfirmRequest;
+import com.example.shopping.domain.payment.dto.request.PaymentWebhookRequest;
 import com.example.shopping.domain.payment.service.PaymentService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.security.CurrentMember;

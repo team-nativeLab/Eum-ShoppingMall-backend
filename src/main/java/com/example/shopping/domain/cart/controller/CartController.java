@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.cart.dto.CartItemAddRequest;
-import com.example.shopping.domain.cart.dto.CartItemUpdateRequest;
-import com.example.shopping.domain.cart.dto.CartResponse;
+import com.example.shopping.domain.cart.dto.request.CartItemAddRequest;
+import com.example.shopping.domain.cart.dto.request.CartItemUpdateRequest;
+import com.example.shopping.domain.cart.dto.response.CartResponse;
 import com.example.shopping.domain.cart.service.CartService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.security.CurrentMember;

@@ -7,12 +7,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import com.example.shopping.domain.product.dto.AdminProductDetailResponse;
-import com.example.shopping.domain.product.dto.AdminProductSummaryResponse;
-import com.example.shopping.domain.product.dto.ProductCreateRequest;
-import com.example.shopping.domain.product.dto.ProductUpdateRequest;
-import com.example.shopping.domain.product.dto.SkuCreateRequest;
-import com.example.shopping.domain.product.dto.SkuUpdateRequest;
+import com.example.shopping.domain.product.dto.response.AdminProductDetailResponse;
+import com.example.shopping.domain.product.dto.response.AdminProductSummaryResponse;
+import com.example.shopping.domain.product.dto.request.ProductCreateRequest;
+import com.example.shopping.domain.product.dto.request.ProductUpdateRequest;
+import com.example.shopping.domain.product.dto.request.SkuCreateRequest;
+import com.example.shopping.domain.product.dto.request.SkuUpdateRequest;
 import com.example.shopping.domain.product.entity.Category;
 import com.example.shopping.domain.product.entity.Product;
 import com.example.shopping.domain.product.entity.ProductSku;

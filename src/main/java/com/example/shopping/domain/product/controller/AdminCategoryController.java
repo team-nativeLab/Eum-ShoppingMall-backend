@@ -13,9 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.product.dto.AdminCategoryResponse;
-import com.example.shopping.domain.product.dto.CategoryCreateRequest;
-import com.example.shopping.domain.product.dto.CategoryUpdateRequest;
+import com.example.shopping.domain.product.dto.response.AdminCategoryResponse;
+import com.example.shopping.domain.product.dto.request.CategoryCreateRequest;
+import com.example.shopping.domain.product.dto.request.CategoryUpdateRequest;
 import com.example.shopping.domain.product.service.AdminCategoryService;
 import com.example.shopping.global.response.ApiResponse;
 

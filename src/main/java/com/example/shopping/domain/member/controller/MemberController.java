@@ -9,9 +9,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.member.dto.MeResponse;
-import com.example.shopping.domain.member.dto.PasswordChangeRequest;
-import com.example.shopping.domain.member.dto.ProfileUpdateRequest;
+import com.example.shopping.domain.member.dto.response.MeResponse;
+import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
+import com.example.shopping.domain.member.dto.request.ProfileUpdateRequest;
 import com.example.shopping.domain.member.service.MemberService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.security.CurrentMember;
@@ -49,7 +49,7 @@ public class MemberController {
 
 	@DeleteMapping
 	public ApiResponse<Void> withdraw(@AuthenticationPrincipal Jwt jwt,
-			@Valid @RequestBody com.example.shopping.domain.member.dto.AccountWithdrawalRequest request) {
+			@Valid @RequestBody com.example.shopping.domain.member.dto.request.AccountWithdrawalRequest request) {
 		memberService.withdraw(CurrentMember.id(jwt), request.password());
 		return ApiResponse.ok(null);
 	}
