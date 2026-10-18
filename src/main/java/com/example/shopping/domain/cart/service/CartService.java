@@ -3,9 +3,9 @@ package com.example.shopping.domain.cart.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.cart.dto.CartItemAddRequest;
-import com.example.shopping.domain.cart.dto.CartItemUpdateRequest;
-import com.example.shopping.domain.cart.dto.CartResponse;
+import com.example.shopping.domain.cart.dto.request.CartItemAddRequest;
+import com.example.shopping.domain.cart.dto.request.CartItemUpdateRequest;
+import com.example.shopping.domain.cart.dto.response.CartResponse;
 import com.example.shopping.domain.cart.entity.CartItem;
 import com.example.shopping.domain.cart.repository.CartItemRepository;
 import com.example.shopping.domain.product.entity.ProductSku;

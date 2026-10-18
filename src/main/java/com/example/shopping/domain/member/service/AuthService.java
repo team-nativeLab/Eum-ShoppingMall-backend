@@ -7,9 +7,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.shopping.domain.member.dto.AuthTokens;
-import com.example.shopping.domain.member.dto.LoginRequest;
-import com.example.shopping.domain.member.dto.SignupRequest;
-import com.example.shopping.domain.member.dto.SignupResponse;
+import com.example.shopping.domain.member.dto.request.LoginRequest;
+import com.example.shopping.domain.member.dto.request.SignupRequest;
+import com.example.shopping.domain.member.dto.response.SignupResponse;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberRole;
 import com.example.shopping.domain.member.entity.MemberStatus;

@@ -13,9 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.home.dto.BannerCreateRequest;
-import com.example.shopping.domain.home.dto.BannerResponse;
-import com.example.shopping.domain.home.dto.BannerUpdateRequest;
+import com.example.shopping.domain.home.dto.request.BannerCreateRequest;
+import com.example.shopping.domain.home.dto.response.BannerResponse;
+import com.example.shopping.domain.home.dto.request.BannerUpdateRequest;
 import com.example.shopping.domain.home.service.AdminBannerService;
 import com.example.shopping.global.response.ApiResponse;
 

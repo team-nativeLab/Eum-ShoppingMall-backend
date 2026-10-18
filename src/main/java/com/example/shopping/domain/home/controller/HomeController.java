@@ -6,9 +6,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.home.dto.AppConfigResponse;
-import com.example.shopping.domain.home.dto.ContentResponse;
-import com.example.shopping.domain.home.dto.HomeResponse;
+import com.example.shopping.domain.home.dto.response.AppConfigResponse;
+import com.example.shopping.domain.home.dto.response.ContentResponse;
+import com.example.shopping.domain.home.dto.response.HomeResponse;
 import com.example.shopping.domain.home.service.HomeService;
 import com.example.shopping.global.response.ApiResponse;
 

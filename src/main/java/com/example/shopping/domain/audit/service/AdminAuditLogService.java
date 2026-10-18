@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import com.example.shopping.domain.audit.dto.AdminAuditLogResponse;
+import com.example.shopping.domain.audit.dto.response.AdminAuditLogResponse;
 import com.example.shopping.domain.audit.entity.AdminAuditLog;
 import com.example.shopping.domain.audit.repository.AdminAuditLogRepository;
 import com.example.shopping.domain.member.entity.Member;

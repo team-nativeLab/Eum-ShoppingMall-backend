@@ -11,12 +11,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.product.dto.CategoryResponse;
-import com.example.shopping.domain.product.dto.ProductDetailResponse;
-import com.example.shopping.domain.product.dto.ProductFacetsResponse;
-import com.example.shopping.domain.product.dto.ProductSearchRequest;
-import com.example.shopping.domain.product.dto.ProductSuggestionResponse;
-import com.example.shopping.domain.product.dto.ProductSummaryResponse;
+import com.example.shopping.domain.product.dto.response.CategoryResponse;
+import com.example.shopping.domain.product.dto.response.ProductDetailResponse;
+import com.example.shopping.domain.product.dto.response.ProductFacetsResponse;
+import com.example.shopping.domain.product.dto.request.ProductSearchRequest;
+import com.example.shopping.domain.product.dto.response.ProductSuggestionResponse;
+import com.example.shopping.domain.product.dto.response.ProductSummaryResponse;
 import com.example.shopping.domain.product.service.ProductService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;

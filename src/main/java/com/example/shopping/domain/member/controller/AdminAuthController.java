@@ -6,8 +6,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.member.dto.LoginRequest;
-import com.example.shopping.domain.member.dto.LoginResponse;
+import com.example.shopping.domain.member.dto.request.LoginRequest;
+import com.example.shopping.domain.member.dto.response.LoginResponse;
 import com.example.shopping.domain.member.service.AuthService;
 import com.example.shopping.global.response.ApiResponse;
 

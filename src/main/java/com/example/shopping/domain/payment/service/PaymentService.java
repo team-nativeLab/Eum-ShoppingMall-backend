@@ -5,14 +5,14 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
-import com.example.shopping.domain.order.dto.OrderDetailResponse;
+import com.example.shopping.domain.order.dto.response.OrderDetailResponse;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.entity.OrderStatus;
 import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.domain.order.service.OrderService;
 import com.example.shopping.domain.order.service.OrderTxService;
-import com.example.shopping.domain.payment.dto.PaymentConfirmRequest;
-import com.example.shopping.domain.payment.dto.PaymentWebhookRequest;
+import com.example.shopping.domain.payment.dto.request.PaymentConfirmRequest;
+import com.example.shopping.domain.payment.dto.request.PaymentWebhookRequest;
 import com.example.shopping.domain.payment.entity.Payment;
 import com.example.shopping.domain.payment.entity.PaymentStatus;
 import com.example.shopping.domain.payment.gateway.PaymentGateway;

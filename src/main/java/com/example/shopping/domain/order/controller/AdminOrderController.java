@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
-import com.example.shopping.domain.order.dto.AdminOrderCancelRequest;
-import com.example.shopping.domain.order.dto.AdminOrderDetailResponse;
-import com.example.shopping.domain.order.dto.AdminOrderSummaryResponse;
-import com.example.shopping.domain.order.dto.AdminOrderUpdateRequest;
+import com.example.shopping.domain.order.dto.request.AdminOrderCancelRequest;
+import com.example.shopping.domain.order.dto.response.AdminOrderDetailResponse;
+import com.example.shopping.domain.order.dto.response.AdminOrderSummaryResponse;
+import com.example.shopping.domain.order.dto.request.AdminOrderUpdateRequest;
 import com.example.shopping.domain.order.entity.OrderStatus;
 import com.example.shopping.domain.order.service.AdminOrderService;
 import com.example.shopping.global.response.ApiResponse;

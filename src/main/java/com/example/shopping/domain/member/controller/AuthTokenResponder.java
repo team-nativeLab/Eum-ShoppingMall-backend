@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
 import com.example.shopping.domain.member.dto.AuthTokens;
-import com.example.shopping.domain.member.dto.LoginResponse;
+import com.example.shopping.domain.member.dto.response.LoginResponse;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.security.JwtProperties;
 

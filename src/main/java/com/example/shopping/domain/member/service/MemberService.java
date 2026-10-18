@@ -3,9 +3,9 @@ package com.example.shopping.domain.member.service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import com.example.shopping.domain.member.dto.MeResponse;
-import com.example.shopping.domain.member.dto.PasswordChangeRequest;
-import com.example.shopping.domain.member.dto.ProfileUpdateRequest;
+import com.example.shopping.domain.member.dto.response.MeResponse;
+import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
+import com.example.shopping.domain.member.dto.request.ProfileUpdateRequest;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberStatus;
 import com.example.shopping.domain.member.repository.MemberRepository;

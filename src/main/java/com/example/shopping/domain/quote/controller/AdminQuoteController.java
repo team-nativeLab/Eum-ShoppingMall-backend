@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.quote.dto.AdminQuoteResponse;
-import com.example.shopping.domain.quote.dto.QuoteStatusUpdateRequest;
+import com.example.shopping.domain.quote.dto.response.AdminQuoteResponse;
+import com.example.shopping.domain.quote.dto.request.QuoteStatusUpdateRequest;
 import com.example.shopping.domain.quote.entity.QuoteStatus;
 import com.example.shopping.domain.quote.service.AdminQuoteService;
 import com.example.shopping.global.response.ApiResponse;

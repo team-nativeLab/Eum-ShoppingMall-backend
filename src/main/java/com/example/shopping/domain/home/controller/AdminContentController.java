@@ -9,8 +9,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.home.dto.ContentResponse;
-import com.example.shopping.domain.home.dto.SiteContentUpsertRequest;
+import com.example.shopping.domain.home.dto.response.ContentResponse;
+import com.example.shopping.domain.home.dto.request.SiteContentUpsertRequest;
 import com.example.shopping.domain.home.service.AdminContentService;
 import com.example.shopping.global.response.ApiResponse;
 
