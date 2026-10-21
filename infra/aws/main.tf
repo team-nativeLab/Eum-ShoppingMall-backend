@@ -453,7 +453,11 @@ resource "aws_ecs_task_definition" "api" {
       { name = "TRUSTED_PROXY_CIDRS", value = join(",", var.public_subnet_cidrs) },
       { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
       { name = "REFRESH_COOKIE_SAME_SITE", value = "Strict" },
-      { name = "UPLOAD_DIR", value = "/app/uploads" }
+      { name = "UPLOAD_DIR", value = "/app/uploads" },
+      { name = "UPLOAD_STORAGE", value = var.upload_storage },
+      { name = "UPLOAD_S3_BUCKET", value = aws_s3_bucket.uploads.bucket },
+      { name = "UPLOAD_CDN_BASE_URL", value = "https://${aws_cloudfront_distribution.uploads.domain_name}" },
+      { name = "AWS_REGION", value = var.aws_region }
     ]
     secrets = concat([
       { name = "DB_USERNAME", valueFrom = "${var.database_app_secret_arn}:username::" },
@@ -470,7 +474,7 @@ resource "aws_ecs_task_definition" "api" {
       }
     }
   }])
-  depends_on = [aws_iam_role_policy_attachment.execution, aws_iam_role_policy.secrets, aws_iam_role_policy.efs]
+  depends_on = [aws_iam_role_policy_attachment.execution, aws_iam_role_policy.secrets, aws_iam_role_policy.efs, aws_iam_role_policy.uploads]
 }
 
 resource "aws_ecs_service" "api" {

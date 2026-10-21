@@ -128,6 +128,14 @@ upload:
     bucket: ${UPLOAD_S3_BUCKET:}
     region: ${AWS_REGION:}
     cdn-base-url: ${UPLOAD_CDN_BASE_URL:}
+    # 직접 업로드 주소(Presigned URL)가 유효한 시간(분, 3~60)
+    presigned-url-expiration-minutes: ${UPLOAD_PRESIGNED_URL_EXPIRATION_MINUTES:10}
+  cleanup:
+    # 상품·배너가 쓰지 않는 업로드 이미지를 지우는 시각. 올린 지 min-age-hours가 지난 파일만 지운다.
+    cron: ${UPLOAD_CLEANUP_CRON:0 30 4 * * *}
+    min-age-hours: ${UPLOAD_CLEANUP_MIN_AGE_HOURS:24}
+    # 설정·데이터 오류로 쓰는 파일까지 지우는 사고를 줄이려고 한 번에 지우는 수를 제한한다.
+    max-deletes-per-run: ${UPLOAD_CLEANUP_MAX_DELETES_PER_RUN:1000}
 
 app:
   cache:

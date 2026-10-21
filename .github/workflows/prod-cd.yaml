@@ -1,0 +1,29 @@
+
+name: CD
+
+on:
+  push:
+    branches:
+      - develop
+      - chore/cd
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy backend
+        uses: appleboy/ssh-action@v1
+        with:
+          username: ${{ secrets.SERVER_USER }}
+          host: ${{ secrets.SERVER_HOST }}
+          key: ${{ secrets.SERVER_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            cd ~/Eum-ShoppingMall-backend
+            sudo docker compose down
+            sudo docker compose up -d --build

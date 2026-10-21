@@ -18,3 +18,5 @@ database_app_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:se
 db_multi_az = false
 # For production, enable Multi-AZ and scale ECS/Redis after reviewing the cost estimate.
 enable_ecs_service = false
+# Keep local until existing EFS images are copied to S3 (docs/deployment-aws.md), then set to s3.
+upload_storage = "local"

@@ -22,3 +22,12 @@ output "redis_endpoint" {
 output "rds_master_secret_arn" {
   value = aws_db_instance.main.master_user_secret[0].secret_arn
 }
+
+output "uploads_bucket" {
+  value = aws_s3_bucket.uploads.bucket
+}
+
+output "uploads_cdn_url" {
+  description = "Base URL of uploaded images (UPLOAD_CDN_BASE_URL)."
+  value       = "https://${aws_cloudfront_distribution.uploads.domain_name}"
+}
