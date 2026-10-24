@@ -133,6 +133,9 @@ app:
   cache:
     # 공개 상품 조회의 공유 Redis 캐시 TTL (초)
     product-ttl-seconds: ${PRODUCT_READ_CACHE_TTL_SECONDS:60}
+    # Access 토큰 검증용 회원 상태(계정 상태·토큰 버전)의 Redis 캐시 TTL (초). 0이면 요청마다 DB에서 읽는다.
+    # 앱을 거치지 않고 DB에서 직접 회원을 정지하면 이 시간이 지나야 반영된다.
+    member-token-state-ttl-seconds: ${MEMBER_TOKEN_STATE_CACHE_TTL_SECONDS:300}
   seed:
     # 카테고리가 하나도 없으면 기본 카테고리(안전모, 보안경, 안전장갑, 방진마스크, 안전화, 귀마개)를 만든다.
     default-categories: ${SEED_DEFAULT_CATEGORIES:true}
