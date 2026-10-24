@@ -2,10 +2,13 @@ package com.example.shopping.domain.member.service;
 
 import java.util.Locale;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.example.shopping.domain.audit.service.AdminAuditLogService;
 import com.example.shopping.domain.member.dto.AuthTokens;
 import com.example.shopping.domain.member.dto.request.LoginRequest;
 import com.example.shopping.domain.member.dto.request.SignupRequest;
@@ -26,23 +29,27 @@ import com.example.shopping.global.security.JwtTokenProvider;
 @Service
 public class AuthService {
 
+	private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
 	private final MemberRepository memberRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final RefreshTokenService refreshTokenService;
 	private final AccessTokenService accessTokenService;
+	private final AdminAuditLogService auditLogService;
 
 	// 없는 이메일로 로그인해도 해시 비교를 한 번 수행해, 응답 시간으로 가입 여부를 추측하지 못하게 한다.
 	private final String dummyPasswordHash;
 
 	public AuthService(MemberRepository memberRepository, PasswordEncoder passwordEncoder,
 			JwtTokenProvider jwtTokenProvider, RefreshTokenService refreshTokenService,
-			AccessTokenService accessTokenService) {
+			AccessTokenService accessTokenService, AdminAuditLogService auditLogService) {
 		this.memberRepository = memberRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtTokenProvider = jwtTokenProvider;
 		this.refreshTokenService = refreshTokenService;
 		this.accessTokenService = accessTokenService;
+		this.auditLogService = auditLogService;
 		this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-timing");
 	}
 
@@ -66,13 +73,32 @@ public class AuthService {
 		return issueTokens(authenticate(request));
 	}
 
-	/** 관리자 로그인. 일반 회원 계정이면 계정이 없는 것과 똑같이 응답한다. */
-	public AuthTokens adminLogin(LoginRequest request) {
-		Member member = authenticate(request);
-		if (!member.getRole().canAccessAdminApi()) {
-			throw new BusinessException(ErrorCode.LOGIN_FAILED);
+	/**
+	 * 관리자 로그인. 일반 회원 계정이면 계정이 없는 것과 똑같이 응답한다.
+	 * 성공·실패를 감사 로그에 남긴다. 기록에 실패해도 로그인 결과는 바꾸지 않는다.
+	 */
+	public AuthTokens adminLogin(LoginRequest request, String clientIp) {
+		Member member;
+		try {
+			member = authenticate(request);
+			if (!member.getRole().canAccessAdminApi()) {
+				throw new BusinessException(ErrorCode.LOGIN_FAILED);
+			}
+		} catch (BusinessException e) {
+			recordAdminLogin(null, clientIp, request.email(), e.getErrorCode().getStatus().value());
+			throw e;
 		}
-		return issueTokens(member);
+		AuthTokens tokens = issueTokens(member);
+		recordAdminLogin(member.getId(), clientIp, null, 200);
+		return tokens;
+	}
+
+	private void recordAdminLogin(Long memberId, String clientIp, String email, int status) {
+		try {
+			auditLogService.recordAdminLogin(memberId, clientIp, email == null ? null : normalizeEmail(email), status);
+		} catch (RuntimeException e) {
+			log.error("관리자 로그인 감사 로그 저장 실패: member={}, ip={}, status={}", memberId, clientIp, status, e);
+		}
 	}
 
 	/** Refresh 토큰으로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. */
