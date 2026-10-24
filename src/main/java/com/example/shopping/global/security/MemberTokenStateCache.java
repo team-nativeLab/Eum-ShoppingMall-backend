@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -15,6 +16,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberStatus;
 import com.example.shopping.domain.member.repository.MemberRepository;
+import com.example.shopping.global.redis.RedisCircuitBreaker;
 
 /**
  * Access 토큰 검증에 쓰는 회원 상태(계정 상태, 토큰 버전)를 공유 Redis에 둔다.
@@ -30,12 +32,20 @@ public class MemberTokenStateCache {
 	private final MemberRepository memberRepository;
 	private final StringRedisTemplate redis;
 	private final Duration ttl;
+	private final RedisCircuitBreaker redisCircuitBreaker;
 
+	public MemberTokenStateCache(MemberRepository memberRepository, StringRedisTemplate redis, long ttlSeconds) {
+		this(memberRepository, redis, ttlSeconds, new RedisCircuitBreaker());
+	}
+
+	@Autowired
 	public MemberTokenStateCache(MemberRepository memberRepository, StringRedisTemplate redis,
-			@Value("${app.cache.member-token-state-ttl-seconds:300}") long ttlSeconds) {
+			@Value("${app.cache.member-token-state-ttl-seconds:300}") long ttlSeconds,
+			RedisCircuitBreaker redisCircuitBreaker) {
 		this.memberRepository = memberRepository;
 		this.redis = redis;
 		this.ttl = Duration.ofSeconds(Math.max(0, ttlSeconds));
+		this.redisCircuitBreaker = redisCircuitBreaker;
 	}
 
 	/** 없는 회원이면 빈 값 */
@@ -45,7 +55,8 @@ public class MemberTokenStateCache {
 		}
 		String key = KEY_PREFIX + memberId;
 		try {
-			MemberTokenState cached = MemberTokenState.parse(redis.opsForValue().get(key));
+			MemberTokenState cached = MemberTokenState.parse(
+					redisCircuitBreaker.execute(() -> redis.opsForValue().get(key)));
 			if (cached != null) {
 				return Optional.of(cached);
 			}
@@ -58,7 +69,7 @@ public class MemberTokenStateCache {
 		state.ifPresent(value -> {
 			try {
 				// 읽는 사이 값이 바뀌어 refresh가 먼저 새 값을 넣었다면, 방금 읽은 이전 값으로 덮어쓰지 않는다.
-				redis.opsForValue().setIfAbsent(key, value.format(), ttl);
+				redisCircuitBreaker.execute(() -> redis.opsForValue().setIfAbsent(key, value.format(), ttl));
 			} catch (DataAccessException ex) {
 				log.debug("Could not write member token state cache", ex);
 			}
@@ -75,7 +86,7 @@ public class MemberTokenStateCache {
 		String value = MemberTokenState.of(member).format();
 		Runnable write = () -> {
 			try {
-				redis.opsForValue().set(key, value, ttl);
+				redisCircuitBreaker.run(() -> redis.opsForValue().set(key, value, ttl));
 			} catch (DataAccessException ex) {
 				log.error("Could not refresh member token state for member {}; it may stay stale for up to {} seconds",
 						member.getId(), ttl.toSeconds(), ex);
