@@ -55,6 +55,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 			rule(HttpMethod.POST, "/api/v1/orders/*/cancel"),
 			rule(HttpMethod.POST, "/api/v1/payments/confirm"),
 			rule(HttpMethod.POST, "/api/v1/uploads"),
+			rule(HttpMethod.POST, "/api/v1/uploads/presigned-url"),
 			new Rule("GET /api/v1/products", PathPatternRequestMatcher.withDefaults()
 					.matcher(HttpMethod.GET, "/api/v1/products/**"), true));
 
