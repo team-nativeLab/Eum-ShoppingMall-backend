@@ -43,13 +43,6 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
 				.register(meterRegistry);
 	}
 
-	/** 감사 대상 요청인지: 관리자 API(로그인 제외)와 이미지 업로드의 변경 요청 */
-	static boolean isAudited(HttpServletRequest request) {
-		String path = request.getRequestURI();
-		return WRITE_METHODS.contains(request.getMethod()) && !path.startsWith(ADMIN_AUTH_PATH)
-				&& (path.startsWith("/api/v1/admin/") || "/api/v1/uploads".equals(path));
-	}
-
 	@Override
 	public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler,
 			Exception exception) {
@@ -74,6 +67,16 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
 			log.error("관리자 변경 감사 로그 저장 실패: actor={}, ip={}, method={}, path={}, status={}, details={}", actorId,
 					request.getRemoteAddr(), method, path, response.getStatus(), details, e);
 		}
+	}
+
+	private boolean isAuditedPath(String path) {
+		return path.startsWith("/api/v1/admin/") || "/api/v1/uploads".equals(path);
+	}
+
+	/** 감사 대상 요청인지: 관리자 API(로그인 제외)와 이미지 업로드의 변경 요청 */
+	boolean isAudited(HttpServletRequest request) {
+		String path = request.getRequestURI();
+		return WRITE_METHODS.contains(request.getMethod()) && !path.startsWith(ADMIN_AUTH_PATH) && isAuditedPath(path);
 	}
 
 	private String details(HttpServletRequest request) {

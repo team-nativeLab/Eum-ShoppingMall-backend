@@ -10,20 +10,24 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 감사 대상 요청(관리자 변경)의 본문을 컨트롤러가 읽는 동안 함께 담아 둔다.
  * 요청이 끝난 뒤 AdminAuditInterceptor가 이 내용으로 무엇을 바꿨는지 남긴다.
  */
 @Component
+@RequiredArgsConstructor
 public class AdminAuditBodyCachingFilter extends OncePerRequestFilter {
 
 	// JSON 요청 본문 상한(security.request.max-body-bytes, 기본 1MB)보다 작게 둔다. 기록은 어차피 앞부분만 남긴다.
 	private static final int CACHE_LIMIT = 64 * 1024;
 
+	private final AdminAuditInterceptor auditInterceptor;
+
 	@Override
 	protected boolean shouldNotFilter(HttpServletRequest request) {
-		return !AdminAuditInterceptor.isAudited(request) || !isJson(request);
+		return !auditInterceptor.isAudited(request) || !isJson(request);
 	}
 
 	@Override
