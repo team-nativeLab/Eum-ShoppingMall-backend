@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.shopping.domain.notification.service.NotificationService;
 import com.example.shopping.domain.support.dto.response.AdminInquiryDetailResponse;
 import com.example.shopping.domain.support.dto.response.AdminInquirySummaryResponse;
 import com.example.shopping.domain.support.dto.response.AdminNoticeResponse;
@@ -36,6 +37,8 @@ public class AdminSupportService {
 	private final NoticeRepository noticeRepository;
 	private final FaqRepository faqRepository;
 	private final InquiryRepository inquiryRepository;
+	private final InquiryAnswerNotifier inquiryAnswerNotifier;
+	private final NotificationService notificationService;
 
 	// 공지
 
@@ -107,14 +110,17 @@ public class AdminSupportService {
 	}
 
 	public AdminInquiryDetailResponse getInquiry(Long inquiryId) {
-		return AdminInquiryDetailResponse.from(findInquiry(inquiryId));
+		Inquiry inquiry = findInquiry(inquiryId);
+		return AdminInquiryDetailResponse.from(inquiry,
+				notificationService.findLatest(InquiryAnswerNotifier.REFERENCE_TYPE, inquiryId).orElse(null));
 	}
 
+	/** 답변을 등록하고 고객에게 알림톡을 보낸다. 알림은 답변이 저장된 뒤 따로 보내므로, 알림이 실패해도 답변 등록은 성공한다. */
 	@Transactional
 	public AdminInquiryDetailResponse answerInquiry(Long inquiryId, String answer) {
 		Inquiry inquiry = findInquiry(inquiryId);
 		inquiry.answer(answer);
-		return AdminInquiryDetailResponse.from(inquiry);
+		return AdminInquiryDetailResponse.from(inquiry, inquiryAnswerNotifier.notifyAnswered(inquiry).orElse(null));
 	}
 
 	private Inquiry findInquiry(Long inquiryId) {

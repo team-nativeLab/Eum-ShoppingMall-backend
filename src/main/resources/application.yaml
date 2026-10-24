@@ -130,6 +130,11 @@ upload:
     cdn-base-url: ${UPLOAD_CDN_BASE_URL:}
 
 app:
+  notification:
+    alimtalk:
+      # 문의 답변 알림톡 템플릿 코드. 알림톡 대행사 콘솔에서 승인받은 코드를 넣는다.
+      # 템플릿 변수: #{문의제목}, #{답변}. 대행사가 정해지기 전에는 알림을 보내지 않고 SKIPPED로 기록한다.
+      inquiry-answer-template: ${ALIMTALK_INQUIRY_ANSWER_TEMPLATE:INQUIRY_ANSWER}
   cache:
     # 공개 상품 조회의 공유 Redis 캐시 TTL (초)
     product-ttl-seconds: ${PRODUCT_READ_CACHE_TTL_SECONDS:60}
