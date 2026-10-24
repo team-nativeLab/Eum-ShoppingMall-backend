@@ -1,10 +1,14 @@
 package com.example.shopping.domain.member.service;
 
+import java.time.LocalDateTime;
 import java.util.Locale;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 
 import com.example.shopping.domain.member.dto.AuthTokens;
 import com.example.shopping.domain.member.dto.request.LoginRequest;
@@ -31,31 +35,53 @@ public class AuthService {
 	private final JwtTokenProvider jwtTokenProvider;
 	private final RefreshTokenService refreshTokenService;
 	private final AccessTokenService accessTokenService;
+	private final EmailVerificationService emailVerificationService;
+	private final TransactionTemplate transactionTemplate;
+	private final boolean signupEmailVerificationRequired;
 
 	// 없는 이메일로 로그인해도 해시 비교를 한 번 수행해, 응답 시간으로 가입 여부를 추측하지 못하게 한다.
 	private final String dummyPasswordHash;
 
 	public AuthService(MemberRepository memberRepository, PasswordEncoder passwordEncoder,
 			JwtTokenProvider jwtTokenProvider, RefreshTokenService refreshTokenService,
-			AccessTokenService accessTokenService) {
+			AccessTokenService accessTokenService, EmailVerificationService emailVerificationService,
+			TransactionTemplate transactionTemplate,
+			@Value("${app.auth.signup-email-verification-required:false}") boolean signupEmailVerificationRequired) {
 		this.memberRepository = memberRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtTokenProvider = jwtTokenProvider;
 		this.refreshTokenService = refreshTokenService;
 		this.accessTokenService = accessTokenService;
+		this.emailVerificationService = emailVerificationService;
+		this.transactionTemplate = transactionTemplate;
+		this.signupEmailVerificationRequired = signupEmailVerificationRequired;
 		this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-timing");
 	}
 
+	/**
+	 * 이메일 인증 토큰을 주면 인증을 확인하고 한 번 쓴다. 인증이 필수(SIGNUP_EMAIL_VERIFICATION_REQUIRED=true)인데 없으면 400.
+	 * 토큰 사용과 가입 저장은 한 트랜잭션이라 가입이 실패하면 토큰을 다시 쓸 수 있다.
+	 */
 	public SignupResponse signup(SignupRequest request) {
 		String email = normalizeEmail(request.email());
 		if (memberRepository.existsByEmail(email)) {
 			throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
 		}
+		String token = request.emailVerificationToken();
+		if (signupEmailVerificationRequired && !StringUtils.hasText(token)) {
+			throw new BusinessException(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
+		}
 
 		String phone = request.phone() == null ? null : request.phone().replace("-", "");
 		Member member = Member.create(email, passwordEncoder.encode(request.password()), request.name().trim(), phone);
 		try {
-			return SignupResponse.from(memberRepository.saveAndFlush(member));
+			return transactionTemplate.execute(status -> {
+				if (StringUtils.hasText(token)) {
+					emailVerificationService.consumeSignupToken(email, token);
+					member.markEmailVerified(LocalDateTime.now());
+				}
+				return SignupResponse.from(memberRepository.saveAndFlush(member));
+			});
 		} catch (DataIntegrityViolationException e) {
 			// 같은 이메일로 동시에 가입 요청이 들어오면 위의 중복 검사를 둘 다 통과하므로 유니크 제약이 최종 방어선이다.
 			throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);

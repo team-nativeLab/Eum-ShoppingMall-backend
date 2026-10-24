@@ -130,6 +130,20 @@ upload:
     cdn-base-url: ${UPLOAD_CDN_BASE_URL:}
 
 app:
+  auth:
+    # true면 회원가입에 이메일 인증 토큰이 필요하다. 프론트가 인증 화면을 붙이고 메일 서버(MAIL_HOST)를 설정한 뒤 켠다.
+    signup-email-verification-required: ${SIGNUP_EMAIL_VERIFICATION_REQUIRED:false}
+  mail:
+    # 인증번호 메일을 보낼 SMTP 서버 (AWS SES SMTP, 사내 메일 서버 등). 비어 있으면 보내지 않고 로그만 남긴다.
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    # 계정을 주면 SMTP 인증과 STARTTLS를 켠다.
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    # 보내는 사람 주소. MAIL_HOST를 설정하면 필수다. (예: no-reply@example.com 또는 "이음 쇼핑몰 <no-reply@example.com>")
+    from: ${MAIL_FROM:}
+    # 메일 제목 앞에 붙는 이름
+    service-name: ${MAIL_SERVICE_NAME:이음 쇼핑몰}
   cache:
     # 공개 상품 조회의 공유 Redis 캐시 TTL (초)
     product-ttl-seconds: ${PRODUCT_READ_CACHE_TTL_SECONDS:60}
