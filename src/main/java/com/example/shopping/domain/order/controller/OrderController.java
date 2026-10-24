@@ -16,11 +16,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.order.dto.AdminOrderDetailResponse.AddressResponse;
-import com.example.shopping.domain.order.dto.DeliveryRequest;
-import com.example.shopping.domain.order.dto.OrderCreateResponse;
-import com.example.shopping.domain.order.dto.OrderDetailResponse;
-import com.example.shopping.domain.order.dto.OrderSummaryResponse;
+import com.example.shopping.domain.order.dto.response.AdminOrderDetailResponse.AddressResponse;
+import com.example.shopping.domain.order.dto.request.DeliveryRequest;
+import com.example.shopping.domain.order.dto.response.OrderCreateResponse;
+import com.example.shopping.domain.order.dto.response.OrderDetailResponse;
+import com.example.shopping.domain.order.dto.response.OrderSummaryResponse;
 import com.example.shopping.domain.order.service.OrderCancelService;
 import com.example.shopping.domain.order.service.OrderService;
 import com.example.shopping.global.exception.BusinessException;

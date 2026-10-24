@@ -81,6 +81,9 @@ public class CartItem {
 
 	public CartItemStatus orderStatus() {
 		Product product = sku.getProduct();
+		if (!sku.isActive()) {
+			return CartItemStatus.NOT_ON_SALE;
+		}
 		if (product.getStatus() == ProductStatus.SOLD_OUT) {
 			return CartItemStatus.OUT_OF_STOCK;
 		}

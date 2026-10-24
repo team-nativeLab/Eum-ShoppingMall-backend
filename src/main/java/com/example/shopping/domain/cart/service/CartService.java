@@ -3,9 +3,9 @@ package com.example.shopping.domain.cart.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.cart.dto.CartItemAddRequest;
-import com.example.shopping.domain.cart.dto.CartItemUpdateRequest;
-import com.example.shopping.domain.cart.dto.CartResponse;
+import com.example.shopping.domain.cart.dto.request.CartItemAddRequest;
+import com.example.shopping.domain.cart.dto.request.CartItemUpdateRequest;
+import com.example.shopping.domain.cart.dto.response.CartResponse;
 import com.example.shopping.domain.cart.entity.CartItem;
 import com.example.shopping.domain.cart.repository.CartItemRepository;
 import com.example.shopping.domain.product.entity.ProductSku;
@@ -32,7 +32,9 @@ public class CartService {
 
 	/** 이미 담긴 옵션이면 수량을 더한다. 금액 미표시 상품도 담을 수는 있다(주문은 불가). */
 	public CartResponse addItem(Long memberId, CartItemAddRequest request) {
-		ProductSku sku = productSkuRepository.findWithProductById(request.skuId())
+		// CartItem이 아직 없을 때도 동시 삽입이 겹치지 않도록 SKU 행을 잠근다.
+		ProductSku sku = productSkuRepository.findWithProductByIdForUpdate(request.skuId())
+				.filter(ProductSku::isActive)
 				.filter(s -> ProductStatus.CUSTOMER_VISIBLE.contains(s.getProduct().getStatus()))
 				.orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
 

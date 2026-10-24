@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -25,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -32,9 +35,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.domain.member.service.AdminAccountInitializer;
 import com.example.shopping.domain.member.service.AdminBootstrapProperties;
+import com.example.shopping.domain.member.service.RefreshTokenService;
 import com.jayway.jsonpath.JsonPath;
 
 /** 관리자 API. 따로 표시하지 않은 테스트는 관리자 권한으로 호출한다. */
@@ -54,10 +60,16 @@ class AdminApiTests {
 	private JdbcTemplate jdbcTemplate;
 
 	@Autowired
+	private EntityManager entityManager;
+
+	@Autowired
 	private PasswordEncoder passwordEncoder;
 
 	@Autowired
 	private MemberRepository memberRepository;
+
+	@Autowired
+	private RefreshTokenService refreshTokenService;
 
 	// ───────── 관리자 로그인·계정 ─────────
 
@@ -87,21 +99,89 @@ class AdminApiTests {
 	@WithAnonymousUser
 	void 설정된_초기_관리자_계정은_없을_때만_만들고_기존_계정은_건드리지_않는다() throws Exception {
 		insertMember("existing@example.com", "기존회원", "USER");
+		long existingAdminId = insertMember("existing-admin@example.com", "기존 관리자", "ADMIN");
+		refreshTokenService.issue(existingAdminId, 0);
 
 		AdminAccountInitializer initializer = new AdminAccountInitializer(
-				new AdminBootstrapProperties("Boot@Example.com", PASSWORD), memberRepository, passwordEncoder);
+				new AdminBootstrapProperties("Boot@Example.com", PASSWORD), memberRepository, passwordEncoder,
+				refreshTokenService);
 		initializer.run(null);
 		initializer.run(null);
 		new AdminAccountInitializer(new AdminBootstrapProperties("existing@example.com", "another-pass-1234"),
-				memberRepository, passwordEncoder).run(null);
-		new AdminAccountInitializer(new AdminBootstrapProperties("", ""), memberRepository, passwordEncoder).run(null);
+				memberRepository, passwordEncoder, refreshTokenService).run(null);
+		new AdminAccountInitializer(new AdminBootstrapProperties("", ""), memberRepository, passwordEncoder,
+				refreshTokenService).run(null);
 
-		assertThat(jdbcTemplate.queryForObject("select count(*) from member", Long.class)).isEqualTo(2);
-		assertThat(roleOf("boot@example.com")).isEqualTo("ADMIN");
+		new AdminAccountInitializer(new AdminBootstrapProperties("existing-admin@example.com", PASSWORD),
+				memberRepository, passwordEncoder, refreshTokenService).run(null);
+
+		assertThat(jdbcTemplate.queryForObject("select count(*) from member", Long.class)).isEqualTo(3);
+		assertThat(roleOf("boot@example.com")).isEqualTo("SUPER_ADMIN");
 		assertThat(roleOf("existing@example.com")).isEqualTo("USER");
+		assertThat(roleOf("existing-admin@example.com")).isEqualTo("SUPER_ADMIN");
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where member_id = ?", Long.class,
+				existingAdminId)).isZero();
 		adminLogin("boot@example.com", PASSWORD).andExpect(status().isOk());
 		// 기존 회원의 비밀번호가 설정값으로 덮어써지지 않았다.
 		adminLogin("existing@example.com", "another-pass-1234").andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void 최고관리자만_역할을_바꾸고_변경된_회원의_토큰을_폐기한다() throws Exception {
+		long superAdminId = insertMember("super@example.com", "최고관리자", "SUPER_ADMIN");
+		long memberId = insertMember("role-target@example.com", "대상 회원", "ADMIN");
+		String accessToken = JsonPath.read(adminLogin("role-target@example.com", PASSWORD)
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.data.accessToken");
+		refreshTokenService.issue(memberId, 0);
+
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"USER"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.role").value("USER"));
+
+		assertThat(roleOf("role-target@example.com")).isEqualTo("USER");
+		assertThat(jdbcTemplate.queryForObject("select access_token_version from member where id = ?", Long.class,
+				memberId)).isZero();
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where member_id = ?", Long.class,
+				memberId)).isZero();
+		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+				.andExpect(status().isOk());
+
+		long adminId = insertMember("ordinary-admin@example.com", "관리자", "ADMIN");
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"USER"}
+						"""))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", superAdminId).with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"USER"}
+						"""))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"SUPER_ADMIN"}
+						"""))
+				.andExpect(status().isBadRequest());
+
+		entityManager.flush();
+		jdbcTemplate.update("update member set status = 'SUSPENDED' where id = ?", memberId);
+		entityManager.clear();
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"ADMIN"}
+						"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("ACCOUNT_SUSPENDED"));
+		jdbcTemplate.update("update member set status = 'WITHDRAWN' where id = ?", memberId);
+		entityManager.clear();
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"USER"}
+						"""))
+				.andExpect(status().isForbidden());
 	}
 
 	// ───────── 회원 ─────────
@@ -132,6 +212,55 @@ class AdminApiTests {
 		mockMvc.perform(get("/api/v1/admin/users/{id}", 999_999))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
+	}
+
+	@Test
+	void 관리자_변경을_기록하고_최고관리자만_감사로그를_조회한다() throws Exception {
+		long superAdminId = insertMember("audit-super@example.com", "최고관리자", "SUPER_ADMIN");
+		long adminId = insertMember("audit-admin@example.com", "관리자", "ADMIN");
+
+		mockMvc.perform(put("/api/v1/admin/contents/terms").with(superAdmin(superAdminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"title":"이용약관","body":"서비스 이용 약관"}
+						"""))
+			.andExpect(status().isOk());
+		assertThat(jdbcTemplate.queryForObject("select count(*) from admin_audit_log where actor_member_id = ?",
+				Long.class, superAdminId)).isEqualTo(1L);
+		assertThat(jdbcTemplate.queryForObject("select target_type from admin_audit_log where actor_member_id = ?",
+				String.class, superAdminId)).isEqualTo("contents");
+		assertThat(jdbcTemplate.queryForObject("select target_id from admin_audit_log where actor_member_id = ?",
+				String.class, superAdminId)).isEqualTo("terms");
+
+		mockMvc.perform(get("/api/v1/admin/audit-logs").with(admin(adminId)))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.totalElements").value(1));
+	}
+
+	@Test
+	void 관리자가_회원_계정을_정지하고_해제한다() throws Exception {
+		long adminId = insertMember("status-admin@example.com", "운영자", "ADMIN");
+		long memberId = insertMember("status-target@example.com", "대상", "USER");
+		refreshTokenService.issue(memberId, 0);
+
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/status", memberId).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"status":"SUSPENDED","reason":"비정상 주문 반복"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("SUSPENDED"))
+				.andExpect(jsonPath("$.data.suspensionReason").value("비정상 주문 반복"));
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where member_id = ?", Long.class,
+				memberId)).isZero();
+
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/status", memberId).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"status":"ACTIVE"}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("ACTIVE"))
+				.andExpect(jsonPath("$.data.suspensionReason").doesNotExist());
 	}
 
 	// ───────── 카테고리 ─────────
@@ -211,7 +340,7 @@ class AdminApiTests {
 				{"name":"안전모","slug":"head-protection","parentId":%d}
 				""".formatted(parentId)));
 		long productId = idOf(postJson("/api/v1/admin/products", """
-				{"name":"산업용 안전모","basePrice":35000,"categoryId":%d}
+				{"name":"산업용 안전모","basePrice":35000,"categoryId":%d,"status":"HIDDEN"}
 				""".formatted(childId)));
 
 		mockMvc.perform(delete("/api/v1/admin/categories/{id}", parentId))
@@ -274,6 +403,9 @@ class AdminApiTests {
 				""").andReturn().getResponse().getContentAsString();
 		long productId = ((Number) JsonPath.read(created, "$.data.id")).longValue();
 		long skuId = ((Number) JsonPath.read(created, "$.data.skus[0].id")).longValue();
+		// 관리자가 화면을 연 뒤 주문이 들어와 현재 재고가 10 → 7로 줄어든 상태.
+		jdbcTemplate.update("update product_sku set stock = 7, version = version + 1 where id = ?", skuId);
+		entityManager.clear();
 
 		patchJson("/api/v1/admin/products/" + productId, """
 				{"name":"경량 안전모","status":"HIDDEN","description":"",
@@ -285,10 +417,22 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.data.status").value("HIDDEN"))
 				.andExpect(jsonPath("$.data.description").doesNotExist())
 				.andExpect(jsonPath("$.data.basePrice").value(35000))
-				.andExpect(jsonPath("$.data.skus.length()").value(2))
+				.andExpect(jsonPath("$.data.skus.length()").value(1))
+				.andExpect(jsonPath("$.data.skus[0].price").value(35000))
+				.andExpect(jsonPath("$.data.skus[0].stock").value(7))
+				.andExpect(jsonPath("$.data.skus[0].active").value(true));
+
+		patchJson("/api/v1/admin/products/" + productId + "/skus/" + skuId, """
+				{"optionName":"흰색","price":40000}
+				""")
+				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.skus[0].price").value(40000))
-				.andExpect(jsonPath("$.data.skus[0].stock").value(5))
-				.andExpect(jsonPath("$.data.skus[1].id").isNumber())
+				.andExpect(jsonPath("$.data.skus[0].stock").value(7));
+		postJson("/api/v1/admin/products/" + productId + "/skus", """
+				{"optionName":"파랑","price":41000,"stock":3}
+				""")
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.skus.length()").value(2))
 				.andExpect(jsonPath("$.data.skus[1].optionName").value("파랑"));
 
 		mockMvc.perform(get("/api/v1/products/{id}", productId)).andExpect(status().isNotFound());
@@ -307,6 +451,26 @@ class AdminApiTests {
 		mockMvc.perform(delete("/api/v1/admin/products/{id}", productId))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+	}
+
+	@Test
+	void 고객에게_노출되는_상품에는_옵션이_필요하다() throws Exception {
+		postJson("/api/v1/admin/products", """
+				{"name":"옵션 없는 판매 상품","basePrice":5000}
+				""")
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+		String hidden = postJson("/api/v1/admin/products", """
+				{"name":"옵션 준비 중 상품","basePrice":5000,"status":"HIDDEN"}
+				""").andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+		long productId = ((Number) JsonPath.read(hidden, "$.data.id")).longValue();
+
+		patchJson("/api/v1/admin/products/" + productId, """
+				{"status":"ON_SALE"}
+				""")
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 	}
 
 	@Test
@@ -407,10 +571,10 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.code").value("CATEGORY_NOT_FOUND"));
 
 		long productId = idOf(postJson("/api/v1/admin/products", """
-				{"name":"안전모","basePrice":1000}
+				{"name":"안전모","basePrice":1000,"status":"HIDDEN"}
 				"""));
-		patchJson("/api/v1/admin/products/" + productId, """
-				{"skus":[{"id":999999,"optionName":"흰색","price":1000,"stock":1}]}
+		patchJson("/api/v1/admin/products/" + productId + "/skus/999999", """
+				{"optionName":"흰색","price":1000}
 				""")
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("SKU_NOT_FOUND"));
@@ -530,7 +694,47 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
 	}
 
-	// ───────── 고객지원 ─────────
+	// ───────── 고정 콘텐츠·고객지원 ─────────
+
+	@Test
+	void 고정_콘텐츠를_등록하고_수정해_관리자와_고객에게_제공한다() throws Exception {
+		mockMvc.perform(get("/api/v1/admin/contents/terms"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("CONTENT_NOT_FOUND"));
+
+		mockMvc.perform(put("/api/v1/admin/contents/terms").contentType(MediaType.APPLICATION_JSON).content("""
+				{"title":"이용약관","body":"제1조. 서비스 이용 조건"}
+				"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.code").value("terms"))
+				.andExpect(jsonPath("$.data.body").value("제1조. 서비스 이용 조건"));
+		mockMvc.perform(get("/api/v1/contents/terms"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.title").value("이용약관"));
+
+		mockMvc.perform(put("/api/v1/admin/contents/terms").contentType(MediaType.APPLICATION_JSON).content("""
+				{"title":"이용약관 개정","body":"2026년 개정 내용"}
+				"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.title").value("이용약관 개정"));
+		mockMvc.perform(get("/api/v1/admin/contents"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()").value(1));
+		mockMvc.perform(get("/api/v1/contents/terms"))
+				.andExpect(jsonPath("$.data.body").value("2026년 개정 내용"));
+
+		mockMvc.perform(put("/api/v1/admin/contents/terms").contentType(MediaType.APPLICATION_JSON).content("""
+				{"title":"잘못된 문서","body":"<script>alert(1)</script>"}
+				"""))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(put("/api/v1/admin/contents/unknown").contentType(MediaType.APPLICATION_JSON).content("""
+				{"title":"알 수 없는 코드","body":"내용"}
+				"""))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(get("/api/v1/contents/company"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("CONTENT_NOT_FOUND"));
+	}
 
 	@Test
 	void 공지를_비공개로_등록했다가_공개로_바꾸고_삭제한다() throws Exception {
@@ -712,10 +916,13 @@ class AdminApiTests {
 
 		// 클라이언트가 보낸 파일명·확장자가 아니라 내용으로 판별한 확장자가 붙는다.
 		assertThat(url).matches("/files/[0-9a-f-]{36}\\.png");
-		mockMvc.perform(get(url).with(anonymous()))
+		var response = mockMvc.perform(get(url).with(anonymous()))
 				.andExpect(status().isOk())
 				.andExpect(content().contentType(MediaType.IMAGE_PNG))
-				.andExpect(content().bytes(png));
+				.andExpect(content().bytes(png))
+				.andReturn().getResponse();
+		assertThat(response.getHeader("Cache-Control"))
+				.contains("public", "max-age=31536000", "immutable");
 	}
 
 	@Test
@@ -802,6 +1009,17 @@ class AdminApiTests {
 
 	private String roleOf(String email) {
 		return jdbcTemplate.queryForObject("select role from member where email = ?", String.class, email);
+	}
+
+	private org.springframework.test.web.servlet.request.RequestPostProcessor admin(long memberId) {
+		return jwt().jwt(token -> token.subject(String.valueOf(memberId)))
+				.authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+	}
+
+	private org.springframework.test.web.servlet.request.RequestPostProcessor superAdmin(long memberId) {
+		return jwt().jwt(token -> token.subject(String.valueOf(memberId)))
+				.authorities(new SimpleGrantedAuthority("ROLE_ADMIN"),
+						new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
 	}
 
 	private long insertOrder(String orderNo, long memberId, String status, long totalAmount, LocalDateTime paidAt) {

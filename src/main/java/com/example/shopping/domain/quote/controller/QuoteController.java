@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.quote.dto.QuoteCreateRequest;
-import com.example.shopping.domain.quote.dto.QuoteResponse;
+import com.example.shopping.domain.quote.dto.request.QuoteCreateRequest;
+import com.example.shopping.domain.quote.dto.response.QuoteResponse;
 import com.example.shopping.domain.quote.service.QuoteService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;

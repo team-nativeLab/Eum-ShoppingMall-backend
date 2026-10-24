@@ -10,9 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.shopping.domain.cart.entity.CartItem;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface CartItemRepository extends JpaRepository<CartItem, Long> {
 
 	/** 옵션·상품까지 한 번에 가져온다 (품목마다 추가 조회가 나가지 않도록). */
@@ -26,6 +24,10 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
 	Optional<CartItem> findByMemberIdAndSkuId(Long memberId, Long skuId);
 
 	long countByMemberId(Long memberId);
+
+	@Modifying
+	@Query("delete from CartItem c where c.memberId = :memberId")
+	int deleteAllByMemberId(@Param("memberId") Long memberId);
 
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("delete from CartItem c where c.memberId = :memberId and c.sku.id in :skuIds")

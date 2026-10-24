@@ -7,11 +7,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import com.example.shopping.domain.product.dto.AdminProductDetailResponse;
-import com.example.shopping.domain.product.dto.AdminProductSummaryResponse;
-import com.example.shopping.domain.product.dto.ProductCreateRequest;
-import com.example.shopping.domain.product.dto.ProductSkuRequest;
-import com.example.shopping.domain.product.dto.ProductUpdateRequest;
+import com.example.shopping.domain.product.dto.response.AdminProductDetailResponse;
+import com.example.shopping.domain.product.dto.response.AdminProductSummaryResponse;
+import com.example.shopping.domain.product.dto.request.ProductCreateRequest;
+import com.example.shopping.domain.product.dto.request.ProductUpdateRequest;
+import com.example.shopping.domain.product.dto.request.SkuCreateRequest;
+import com.example.shopping.domain.product.dto.request.SkuUpdateRequest;
 import com.example.shopping.domain.product.entity.Category;
 import com.example.shopping.domain.product.entity.Product;
 import com.example.shopping.domain.product.entity.ProductSku;
@@ -34,6 +35,7 @@ public class AdminProductService {
 	private final ProductRepository productRepository;
 	private final ProductSkuRepository productSkuRepository;
 	private final CategoryRepository categoryRepository;
+	private final ProductReadCache readCache;
 
 	/** 상태를 지정하지 않으면 삭제된 상품을 뺀 전체(판매중·품절·비공개)를 조회한다. */
 	public PageResponse<AdminProductSummaryResponse> search(ProductStatus status, Long categoryId, String keyword,
@@ -60,7 +62,10 @@ public class AdminProductService {
 		if (request.skus() != null) {
 			request.skus().forEach(sku -> product.addSku(sku.optionName().trim(), sku.price(), sku.stock()));
 		}
-		return AdminProductDetailResponse.from(productRepository.save(product));
+		validateVisibleProductHasSku(product);
+		AdminProductDetailResponse response = AdminProductDetailResponse.from(productRepository.save(product));
+		readCache.invalidateAfterCommit();
+		return response;
 	}
 
 	@Transactional
@@ -72,17 +77,44 @@ public class AdminProductService {
 				request.basePrice(), request.listPrice(), status);
 		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
 
-		if (request.skus() != null) {
-			for (ProductSkuRequest sku : request.skus()) {
-				if (sku.id() == null) {
-					product.addSku(sku.optionName().trim(), sku.price(), sku.stock());
-				} else {
-					findSku(product, sku.id()).update(sku.optionName().trim(), sku.price(), sku.stock());
-				}
-			}
-		}
+		validateVisibleProductHasSku(product);
 		// 새로 추가된 옵션의 ID와 갱신된 수정 시각을 응답에 싣기 위해 먼저 DB에 반영한다.
-		return AdminProductDetailResponse.from(productRepository.saveAndFlush(product));
+		AdminProductDetailResponse response = AdminProductDetailResponse.from(productRepository.saveAndFlush(product));
+		readCache.invalidateAfterCommit();
+		return response;
+	}
+
+	@Transactional
+	public AdminProductDetailResponse addSku(Long productId, SkuCreateRequest request) {
+		Product product = find(productId);
+		product.addSku(request.optionName().trim(), request.price(), request.stock());
+		AdminProductDetailResponse response = AdminProductDetailResponse.from(productRepository.saveAndFlush(product));
+		readCache.invalidateAfterCommit();
+		return response;
+	}
+
+	@Transactional
+	public AdminProductDetailResponse updateSku(Long productId, Long skuId, SkuUpdateRequest request) {
+		Product product = find(productId);
+		findSku(product, skuId).update(request.optionName().trim(), request.price());
+		AdminProductDetailResponse response = AdminProductDetailResponse.from(productRepository.saveAndFlush(product));
+		readCache.invalidateAfterCommit();
+		return response;
+	}
+
+	/** 주문·장바구니의 SKU 참조를 보존하고 고객 판매만 중지한다. 마지막 활성 옵션은 남겨 둔다. */
+	@Transactional
+	public AdminProductDetailResponse deactivateSku(Long productId, Long skuId) {
+		Product product = find(productId);
+		ProductSku sku = findSku(product, skuId);
+		long activeCount = product.getActiveSkus().size();
+		if (sku.isActive() && activeCount <= 1) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
+		}
+		sku.deactivate();
+		AdminProductDetailResponse response = AdminProductDetailResponse.from(productRepository.saveAndFlush(product));
+		readCache.invalidateAfterCommit();
+		return response;
 	}
 
 	/**
@@ -95,6 +127,7 @@ public class AdminProductService {
 		if (productSkuRepository.receiveStock(skuId, quantity, ProductSku.MAX_STOCK - quantity) == 0) {
 			throw new BusinessException(ErrorCode.STOCK_LIMIT_EXCEEDED);
 		}
+		readCache.invalidateAfterCommit();
 		// 위 쿼리가 영속성 컨텍스트를 비우므로 더해진 재고가 반영된 상태로 다시 읽는다.
 		return AdminProductDetailResponse.from(find(productId));
 	}
@@ -103,12 +136,14 @@ public class AdminProductService {
 	public AdminProductDetailResponse changePriceVisibility(Long productId, boolean priceVisible) {
 		Product product = find(productId);
 		product.changePriceVisibility(priceVisible);
+		readCache.invalidateAfterCommit();
 		return AdminProductDetailResponse.from(product);
 	}
 
 	@Transactional
 	public void delete(Long productId) {
 		find(productId).delete();
+		readCache.invalidateAfterCommit();
 	}
 
 	/** 이미 삭제된 상품은 없는 상품으로 취급한다. */
@@ -123,6 +158,13 @@ public class AdminProductService {
 				.filter(sku -> sku.getId().equals(skuId))
 				.findFirst()
 				.orElseThrow(() -> new BusinessException(ErrorCode.SKU_NOT_FOUND));
+	}
+
+	/** 고객에게 노출되는 상품은 장바구니·주문이 참조할 옵션이 하나 이상 있어야 한다. */
+	private void validateVisibleProductHasSku(Product product) {
+		if (ProductStatus.CUSTOMER_VISIBLE.contains(product.getStatus()) && product.getActiveSkus().isEmpty()) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
+		}
 	}
 
 	private Category findCategory(Long categoryId) {

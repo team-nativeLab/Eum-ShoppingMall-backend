@@ -15,12 +15,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.product.dto.AdminProductDetailResponse;
-import com.example.shopping.domain.product.dto.AdminProductSummaryResponse;
-import com.example.shopping.domain.product.dto.PriceVisibilityRequest;
-import com.example.shopping.domain.product.dto.ProductCreateRequest;
-import com.example.shopping.domain.product.dto.ProductUpdateRequest;
-import com.example.shopping.domain.product.dto.StockReceiveRequest;
+import com.example.shopping.domain.product.dto.response.AdminProductDetailResponse;
+import com.example.shopping.domain.product.dto.response.AdminProductSummaryResponse;
+import com.example.shopping.domain.product.dto.request.PriceVisibilityRequest;
+import com.example.shopping.domain.product.dto.request.ProductCreateRequest;
+import com.example.shopping.domain.product.dto.request.ProductUpdateRequest;
+import com.example.shopping.domain.product.dto.request.StockReceiveRequest;
+import com.example.shopping.domain.product.dto.request.SkuCreateRequest;
+import com.example.shopping.domain.product.dto.request.SkuUpdateRequest;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.service.AdminProductService;
 import com.example.shopping.global.response.ApiResponse;
@@ -59,11 +61,33 @@ public class AdminProductController {
 		return ApiResponse.ok(adminProductService.create(request));
 	}
 
-	/** ADM-004, 007 상품 수정·판매 상태 변경 */
+	/** ADM-004 상품 정보·판매 상태 변경. 옵션은 SKU 전용 API에서 관리한다. */
 	@PatchMapping("/{productId}")
 	public ApiResponse<AdminProductDetailResponse> updateProduct(@PathVariable Long productId,
 			@Valid @RequestBody ProductUpdateRequest request) {
 		return ApiResponse.ok(adminProductService.update(productId, request));
+	}
+
+	/** 상품 옵션 추가 */
+	@PostMapping("/{productId}/skus")
+	@ResponseStatus(HttpStatus.CREATED)
+	public ApiResponse<AdminProductDetailResponse> addSku(@PathVariable Long productId,
+			@Valid @RequestBody SkuCreateRequest request) {
+		return ApiResponse.ok(adminProductService.addSku(productId, request));
+	}
+
+	/** 상품 옵션명·가격 수정. 재고는 이 API로 바꾸지 않는다. */
+	@PatchMapping("/{productId}/skus/{skuId}")
+	public ApiResponse<AdminProductDetailResponse> updateSku(@PathVariable Long productId, @PathVariable Long skuId,
+			@Valid @RequestBody SkuUpdateRequest request) {
+		return ApiResponse.ok(adminProductService.updateSku(productId, skuId, request));
+	}
+
+	/** 주문 이력을 보존하기 위해 SKU 행을 지우지 않고 판매 중지한다. */
+	@DeleteMapping("/{productId}/skus/{skuId}")
+	public ApiResponse<AdminProductDetailResponse> deactivateSku(@PathVariable Long productId,
+			@PathVariable Long skuId) {
+		return ApiResponse.ok(adminProductService.deactivateSku(productId, skuId));
 	}
 
 	/** ADM-003, 004 상품 삭제. 행을 지우지 않고 상태만 DELETED로 바꾼다. */

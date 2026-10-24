@@ -6,9 +6,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.product.dto.AdminCategoryResponse;
-import com.example.shopping.domain.product.dto.CategoryCreateRequest;
-import com.example.shopping.domain.product.dto.CategoryUpdateRequest;
+import com.example.shopping.domain.product.dto.response.AdminCategoryResponse;
+import com.example.shopping.domain.product.dto.request.CategoryCreateRequest;
+import com.example.shopping.domain.product.dto.request.CategoryUpdateRequest;
 import com.example.shopping.domain.product.entity.Category;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.CategoryRepository;
@@ -25,6 +25,7 @@ public class AdminCategoryService {
 
 	private final CategoryRepository categoryRepository;
 	private final ProductRepository productRepository;
+	private final ProductReadCache readCache;
 
 	/** 비노출 카테고리까지 전부. 트리는 parentId로 프론트에서 조립한다. */
 	public List<AdminCategoryResponse> getAll() {
@@ -43,7 +44,9 @@ public class AdminCategoryService {
 		}
 		Category category = Category.create(parent, request.name().trim(), request.slug(), sortOrder, active);
 		category.update(null, null, request.description(), request.iconKey(), null, null);
-		return AdminCategoryResponse.from(saveCheckingSlug(category));
+		AdminCategoryResponse response = AdminCategoryResponse.from(saveCheckingSlug(category));
+		readCache.invalidateAfterCommit();
+		return response;
 	}
 
 	@Transactional
@@ -55,7 +58,9 @@ public class AdminCategoryService {
 		String name = request.name() == null ? null : request.name().trim();
 		category.update(name, request.slug(), request.description(), request.iconKey(), request.sortOrder(),
 				request.active());
-		return AdminCategoryResponse.from(saveCheckingSlug(category));
+		AdminCategoryResponse response = AdminCategoryResponse.from(saveCheckingSlug(category));
+		readCache.invalidateAfterCommit();
+		return response;
 	}
 
 	/** 하위 카테고리나 소속 상품이 있으면 거부한다. 소프트 삭제된 상품은 소속 상품으로 세지 않는다. */
@@ -72,6 +77,7 @@ public class AdminCategoryService {
 		try {
 			categoryRepository.deleteById(categoryId);
 			categoryRepository.flush();
+			readCache.invalidateAfterCommit();
 		} catch (DataIntegrityViolationException e) {
 			// 위의 검사와 삭제 사이에 다른 요청이 하위 카테고리나 상품을 추가한 경우
 			throw new BusinessException(ErrorCode.CATEGORY_NOT_EMPTY);

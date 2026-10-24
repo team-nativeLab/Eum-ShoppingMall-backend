@@ -2,6 +2,8 @@ package com.example.shopping.domain.member.entity;
 
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.ColumnDefault;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -33,14 +35,19 @@ public class RefreshToken {
 	@Column(nullable = false)
 	private LocalDateTime expiresAt;
 
+	@ColumnDefault("0")
+	@Column(name = "token_version", nullable = false)
+	private long tokenVersion;
+
 	// 재발급에 사용된 시각. 한 번 쓴 토큰은 다시 쓸 수 없다. 아직 쓰지 않았으면 null
 	private LocalDateTime usedAt;
 
-	public static RefreshToken create(Long memberId, String tokenHash, LocalDateTime expiresAt) {
+	public static RefreshToken create(Long memberId, String tokenHash, LocalDateTime expiresAt, long tokenVersion) {
 		RefreshToken token = new RefreshToken();
 		token.memberId = memberId;
 		token.tokenHash = tokenHash;
 		token.expiresAt = expiresAt;
+		token.tokenVersion = tokenVersion;
 		return token;
 	}
 }

@@ -5,11 +5,12 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.home.dto.BannerCreateRequest;
-import com.example.shopping.domain.home.dto.BannerResponse;
-import com.example.shopping.domain.home.dto.BannerUpdateRequest;
+import com.example.shopping.domain.home.dto.request.BannerCreateRequest;
+import com.example.shopping.domain.home.dto.response.BannerResponse;
+import com.example.shopping.domain.home.dto.request.BannerUpdateRequest;
 import com.example.shopping.domain.home.entity.Banner;
 import com.example.shopping.domain.home.repository.BannerRepository;
+import com.example.shopping.domain.product.service.ProductReadCache;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 
@@ -21,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 public class AdminBannerService {
 
 	private final BannerRepository bannerRepository;
+	private final ProductReadCache readCache;
 
 	/** 비노출 배너까지 전부, 노출 순서대로 */
 	public List<BannerResponse> getAll() {
@@ -34,7 +36,9 @@ public class AdminBannerService {
 		int sortOrder = request.sortOrder() == null ? 0 : request.sortOrder();
 		boolean visible = request.visible() == null || request.visible();
 		Banner banner = Banner.create(request.imageUrl(), request.linkUrl(), sortOrder, visible);
-		return BannerResponse.from(bannerRepository.save(banner));
+		BannerResponse response = BannerResponse.from(bannerRepository.save(banner));
+		readCache.invalidateAfterCommit();
+		return response;
 	}
 
 	@Transactional
@@ -42,6 +46,7 @@ public class AdminBannerService {
 		Banner banner = bannerRepository.findById(bannerId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.BANNER_NOT_FOUND));
 		banner.update(request.imageUrl(), request.linkUrl(), request.sortOrder(), request.visible());
+		readCache.invalidateAfterCommit();
 		return BannerResponse.from(banner);
 	}
 
@@ -51,5 +56,6 @@ public class AdminBannerService {
 			throw new BusinessException(ErrorCode.BANNER_NOT_FOUND);
 		}
 		bannerRepository.deleteById(bannerId);
+		readCache.invalidateAfterCommit();
 	}
 }

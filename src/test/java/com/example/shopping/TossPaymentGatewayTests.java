@@ -1,5 +1,7 @@
 package com.example.shopping;
 
+import java.time.LocalDateTime;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
@@ -71,7 +73,7 @@ class TossPaymentGatewayTests {
 		assertThat(payment.isApproved()).isTrue();
 		assertThat(payment.totalAmount()).isEqualTo(60000);
 		assertThat(payment.method()).isEqualTo("카드");
-		assertThat(payment.approvedAt()).isNotNull();
+		assertThat(payment.approvedAt()).isEqualTo(LocalDateTime.of(2026, 10, 13, 10, 16, 2));
 		assertThat(payment.raw()).contains("issuerCode");
 		server.verify();
 	}
@@ -131,11 +133,17 @@ class TossPaymentGatewayTests {
 		server.expect(requestTo(BASE_URL + "/v1/payments/orders/ORDER-1"))
 				.andRespond(withSuccess("""
 						{"paymentKey":"pay-key","orderId":"ORDER-1","status":"WAITING_FOR_DEPOSIT","totalAmount":1000,
-						 "balanceAmount":1000,"method":"가상계좌","approvedAt":null}
+						 "balanceAmount":1000,"method":"가상계좌","approvedAt":null,"secret":"hook-secret",
+						 "virtualAccount":{"bankCode":"004","accountNumber":"12345678","customerName":"홍길동",
+						 "dueDate":"2026-10-20T23:59:59"}}
 						""", MediaType.APPLICATION_JSON));
 		assertThat(gateway.findByOrderNo("ORDER-1")).hasValueSatisfying(payment -> {
 			assertThat(payment.status()).isEqualTo(PgStatus.WAITING_FOR_DEPOSIT);
 			assertThat(payment.approvedAt()).isNull();
+			assertThat(payment.secret()).isEqualTo("hook-secret");
+			assertThat(payment.virtualAccount().bankCode()).isEqualTo("004");
+			assertThat(payment.virtualAccount().accountNumber()).isEqualTo("12345678");
+			assertThat(payment.virtualAccount().dueDate()).isEqualTo(LocalDateTime.of(2026, 10, 20, 23, 59, 59));
 		});
 	}
 

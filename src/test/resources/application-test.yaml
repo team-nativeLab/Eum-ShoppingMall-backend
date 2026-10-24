@@ -7,9 +7,23 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+  flyway:
+    # H2 테스트는 JPA가 스키마를 만들고, MySQL 전용 Flyway SQL은 CI의 MySQL 검증에서 실행한다.
+    enabled: false
 
 cors:
   allowed-origins: http://localhost:3000
+
+management:
+  health:
+    redis:
+      # 이 프로파일은 Redis 없이 실행하며, Redis 연동 검증은 필터 단위 테스트에서 대역으로 수행한다.
+      enabled: false
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState
 
 security:
   jwt:
@@ -19,10 +33,12 @@ security:
     requests-per-minute: 100000
 
 upload:
-  storage: local
   dir: build/test-uploads
 
 app:
+  cache:
+    # 검색 캐시 Redis 호출은 단위 테스트에서 대역으로 검증한다.
+    product-ttl-seconds: 0
   scheduling:
     # 주기 작업은 테스트에서 직접 호출한다.
     enabled: false

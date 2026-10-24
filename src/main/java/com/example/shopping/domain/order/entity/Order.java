@@ -7,6 +7,7 @@ import java.util.List;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import com.example.shopping.domain.order.OrderAmounts;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.global.entity.BaseTimeEntity;
 import com.example.shopping.global.exception.BusinessException;
@@ -67,6 +68,26 @@ public class Order extends BaseTimeEntity {
 	@Column(nullable = false, length = 30)
 	private OrderStatus status = OrderStatus.PENDING;
 
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@Column(name = "cancel_previous_status", length = 30)
+	private OrderStatus cancelPreviousStatus;
+
+	@Column(name = "cancel_requested_at")
+	private LocalDateTime cancelRequestedAt;
+
+	@Column(name = "cancel_idempotency_key", length = 300)
+	private String cancelIdempotencyKey;
+
+	@Column(name = "cancel_reason", length = 200)
+	private String cancelReason;
+
+	@Column(name = "cancelled_by_member_id")
+	private Long cancelledByMemberId;
+
+	@Column(name = "cancelled_at")
+	private LocalDateTime cancelledAt;
+
 	// 최종 결제 금액 = itemAmount - discountAmount + shippingFee (서버 계산값만 신뢰)
 	@Column(nullable = false)
 	private long totalAmount;
@@ -126,22 +147,23 @@ public class Order extends BaseTimeEntity {
 	}
 
 	/** 품목을 다 담은 뒤 금액과 주문명을 확정한다. 금액이 상한을 넘으면 거절한다. */
-	public void finalizeAmounts(long discountAmount, long shippingFee) {
+	public void finalizeAmounts() {
 		try {
 			long sum = 0;
 			for (OrderItem item : items) {
 				sum = Math.addExact(sum, Math.multiplyExact(item.getOrderPrice(), item.getQuantity()));
 			}
-			this.itemAmount = sum;
-			this.totalAmount = Math.addExact(Math.subtractExact(sum, discountAmount), shippingFee);
+			OrderAmounts amounts = OrderAmounts.calculate(sum);
+			this.itemAmount = amounts.itemAmount();
+			this.discountAmount = amounts.discountAmount();
+			this.shippingFee = amounts.shippingFee();
+			this.totalAmount = amounts.totalAmount();
 		} catch (ArithmeticException e) {
 			throw new BusinessException(ErrorCode.ORDER_AMOUNT_TOO_LARGE);
 		}
 		if (totalAmount > MAX_TOTAL_AMOUNT) {
 			throw new BusinessException(ErrorCode.ORDER_AMOUNT_TOO_LARGE);
 		}
-		this.discountAmount = discountAmount;
-		this.shippingFee = shippingFee;
 
 		String suffix = items.size() > 1 ? " 외 " + (items.size() - 1) + "건" : "";
 		String firstName = items.get(0).getProductName();
@@ -170,5 +192,12 @@ public class Order extends BaseTimeEntity {
 		if (trackingNumber != null) {
 			this.trackingNumber = trackingNumber;
 		}
+	}
+
+	/** 결제 전 주문을 관리자가 만료시킬 때 취소 이력을 저장한다. */
+	public void recordAdminCancellation(String reason, Long adminId) {
+		this.cancelReason = reason;
+		this.cancelledByMemberId = adminId;
+		this.cancelledAt = LocalDateTime.now();
 	}
 }

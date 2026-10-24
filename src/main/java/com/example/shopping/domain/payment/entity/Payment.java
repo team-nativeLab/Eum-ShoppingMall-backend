@@ -1,12 +1,17 @@
 package com.example.shopping.domain.payment.entity;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.Base64;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.payment.gateway.PgPayment;
+import com.example.shopping.domain.payment.gateway.PgVirtualAccount;
 import com.example.shopping.global.entity.BaseTimeEntity;
 
 import jakarta.persistence.Column;
@@ -67,6 +72,21 @@ public class Payment extends BaseTimeEntity {
 
 	private LocalDateTime approvedAt;
 
+	@Column(name = "virtual_account_bank_code", length = 10)
+	private String virtualAccountBankCode;
+
+	@Column(name = "virtual_account_number", length = 20)
+	private String virtualAccountNumber;
+
+	@Column(name = "virtual_account_customer_name", length = 100)
+	private String virtualAccountCustomerName;
+
+	@Column(name = "virtual_account_due_at")
+	private LocalDateTime virtualAccountDueAt;
+
+	@Column(name = "webhook_secret_hash", length = 64)
+	private String webhookSecretHash;
+
 	/** PG가 승인한 결과를 그대로 기록한다. */
 	public static Payment of(Long orderId, PgPayment pg, PaymentStatus status) {
 		Payment payment = new Payment();
@@ -76,8 +96,63 @@ public class Payment extends BaseTimeEntity {
 		payment.status = status;
 		payment.approvedAmount = pg.totalAmount();
 		payment.balanceAmount = pg.balanceAmount();
-		payment.pgRaw = pg.raw();
+		// 가상계좌 응답에는 웹훅 검증 비밀값이 포함되므로 원문 전체를 DB에 보관하지 않는다.
+		payment.pgRaw = pg.secret() == null ? pg.raw() : null;
 		payment.approvedAt = pg.approvedAt();
+		PgVirtualAccount virtualAccount = pg.virtualAccount();
+		if (virtualAccount != null) {
+			payment.virtualAccountBankCode = virtualAccount.bankCode();
+			payment.virtualAccountNumber = virtualAccount.accountNumber();
+			payment.virtualAccountCustomerName = virtualAccount.customerName();
+			payment.virtualAccountDueAt = virtualAccount.dueDate();
+		}
+		payment.webhookSecretHash = hashWebhookSecret(pg.secret());
 		return payment;
+	}
+
+	/** 입금 상태 변경은 PG 조회 결과를 검증한 서비스에서만 호출한다. */
+	public void recordDeposit(PgPayment pg) {
+		if (status != PaymentStatus.WAITING_DEPOSIT) {
+			throw new IllegalStateException("가상계좌 입금 대기 결제가 아닙니다.");
+		}
+		status = PaymentStatus.DONE;
+		balanceAmount = pg.balanceAmount();
+		pgRaw = pg.secret() == null ? pg.raw() : null;
+	}
+
+	public void expireVirtualAccount() {
+		if (status != PaymentStatus.WAITING_DEPOSIT) {
+			throw new IllegalStateException("가상계좌 입금 대기 결제가 아닙니다.");
+		}
+		status = PaymentStatus.FAILED;
+	}
+
+	public void revertDeposit(PgPayment pg) {
+		if (status != PaymentStatus.DONE) {
+			throw new IllegalStateException("입금 완료된 가상계좌 결제가 아닙니다.");
+		}
+		status = PaymentStatus.WAITING_DEPOSIT;
+		balanceAmount = pg.balanceAmount();
+		pgRaw = pg.secret() == null ? pg.raw() : null;
+	}
+
+	public boolean matchesWebhookSecret(String secret) {
+		if (webhookSecretHash == null || secret == null) {
+			return false;
+		}
+		return MessageDigest.isEqual(webhookSecretHash.getBytes(StandardCharsets.US_ASCII),
+				hashWebhookSecret(secret).getBytes(StandardCharsets.US_ASCII));
+	}
+
+	private static String hashWebhookSecret(String secret) {
+		if (secret == null) {
+			return null;
+		}
+		try {
+			return Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256")
+					.digest(secret.getBytes(StandardCharsets.UTF_8)));
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException("SHA-256 is unavailable", e);
+		}
 	}
 }

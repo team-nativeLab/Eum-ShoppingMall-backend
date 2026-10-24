@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,9 +32,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.member.dto.LoginRequest;
-import com.example.shopping.domain.member.dto.PasswordChangeRequest;
-import com.example.shopping.domain.member.dto.SignupRequest;
+import com.example.shopping.domain.member.dto.request.LoginRequest;
+import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
+import com.example.shopping.domain.member.dto.request.SignupRequest;
+import com.example.shopping.domain.member.service.RefreshTokenService;
 import com.jayway.jsonpath.JsonPath;
 
 import jakarta.persistence.EntityManager;
@@ -59,35 +62,37 @@ class SecurityTests {
 	private PasswordEncoder passwordEncoder;
 
 	@Autowired
+	private RefreshTokenService refreshTokenService;
+
+	@Autowired
 	private EntityManager entityManager;
 
 	// ───────── 로그인 잠금 ─────────
 
 	@Test
-	void 비밀번호를_다섯_번_틀리면_맞는_비밀번호로도_로그인할_수_없다가_잠금이_풀리면_다시_된다() throws Exception {
+	void 다른_IP의_회원_로그인_실패가_계정을_잠그지_않는다() throws Exception {
 		insertMember(EMAIL, "USER");
 
 		for (int i = 0; i < 5; i++) {
-			login(EMAIL, "wrong-pass-" + i)
+			loginFrom("/api/v1/auth/login", EMAIL, "wrong-pass-" + i, "198.51.100.10")
 					.andExpect(status().isUnauthorized())
 					.andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
 		}
-		login(EMAIL, PASSWORD)
-				.andExpect(status().isTooManyRequests())
-				.andExpect(jsonPath("$.code").value("LOGIN_LOCKED"));
-		// 관리자 로그인 경로로도 우회할 수 없다.
-		mockMvc.perform(post("/api/v1/admin/auth/login").contentType(MediaType.APPLICATION_JSON)
-						.content(credentials(EMAIL, PASSWORD)))
-				.andExpect(status().isTooManyRequests());
+		loginFrom("/api/v1/auth/login", EMAIL, PASSWORD, "198.51.100.11")
+				.andExpect(status().isOk());
+	}
 
-		// 잠금 시간이 지난 상황을 만든다.
-		jdbcTemplate.update("update member set locked_until = ? where email = ?",
-				LocalDateTime.now().minusSeconds(1), EMAIL);
-		entityManager.clear();
+	@Test
+	void 다른_IP의_관리자_로그인_실패가_관리자_계정을_잠그지_않는다() throws Exception {
+		insertMember(EMAIL, "ADMIN");
 
-		login(EMAIL, PASSWORD).andExpect(status().isOk());
-		assertThat(jdbcTemplate.queryForObject("select failed_login_count from member where email = ?",
-				Integer.class, EMAIL)).isZero();
+		for (int i = 0; i < 5; i++) {
+			loginFrom("/api/v1/admin/auth/login", EMAIL, "wrong-pass-" + i, "198.51.100.20")
+					.andExpect(status().isUnauthorized())
+					.andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
+		}
+		loginFrom("/api/v1/admin/auth/login", EMAIL, PASSWORD, "198.51.100.21")
+				.andExpect(status().isOk());
 	}
 
 	@Test
@@ -152,17 +157,48 @@ class SecurityTests {
 	}
 
 	@Test
-	void 로그아웃하면_Refresh_토큰이_폐기되고_쿠키가_지워진다() throws Exception {
+	void 오래된_사용_토큰과_만료_토큰을_500개씩_나눠_지우고_최근_사용_토큰은_남긴다() {
 		long memberId = insertMember(EMAIL, "USER");
-		Cookie cookie = login(EMAIL, PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE);
+		LocalDateTime now = LocalDateTime.now();
+		List<Object[]> tokens = new ArrayList<>(1202);
+		for (int i = 0; i < 600; i++) {
+			tokens.add(new Object[] {memberId, String.format("%064x", i + 1), now.minusDays(2), null});
+		}
+		for (int i = 0; i < 600; i++) {
+			tokens.add(new Object[] {memberId, String.format("%064x", i + 601), now.plusDays(12), now.minusDays(2)});
+		}
+		tokens.add(new Object[] {memberId, String.format("%064x", 1201), now.plusDays(12), now.minusHours(1)});
+		tokens.add(new Object[] {memberId, String.format("%064x", 1202), now.plusDays(12), null});
+		jdbcTemplate.batchUpdate("""
+				INSERT INTO refresh_token (member_id, token_hash, expires_at, used_at, token_version)
+				VALUES (?, ?, ?, ?, 0)
+				""", tokens);
 
-		MockHttpServletResponse response = mockMvc.perform(post("/api/v1/auth/logout").with(member(memberId))
-						.cookie(cookie))
+		assertThat(refreshTokenService.purgeExpired()).isEqualTo(1000);
+		assertThat(refreshTokenService.purgeExpired()).isEqualTo(200);
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token", Long.class)).isEqualTo(2);
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where used_at >= ?", Long.class,
+				now.minusDays(1))).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where used_at is null", Long.class))
+				.isEqualTo(1);
+	}
+
+	@Test
+	void 로그아웃하면_Access와_Refresh_토큰이_폐기되고_쿠키가_지워진다() throws Exception {
+		insertMember(EMAIL, "USER");
+		MockHttpServletResponse loginResponse = login(EMAIL, PASSWORD).andReturn().getResponse();
+		Cookie cookie = loginResponse.getCookie(REFRESH_COOKIE);
+		String accessToken = JsonPath.read(loginResponse.getContentAsString(), "$.data.accessToken");
+
+		MockHttpServletResponse response = mockMvc.perform(post("/api/v1/auth/logout")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken).cookie(cookie))
 				.andExpect(status().isOk())
 				.andReturn().getResponse();
 		assertThat(response.getCookie(REFRESH_COOKIE).getMaxAge()).isZero();
 
 		refresh(cookie).andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/v1/cart").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+				.andExpect(status().isUnauthorized());
 	}
 
 	@Test
@@ -205,12 +241,27 @@ class SecurityTests {
 		refresh(cookie).andExpect(status().isUnauthorized());
 	}
 
+	@Test
+	void 계정이_정지되면_이미_발급된_Access_토큰도_거절한다() throws Exception {
+		insertMember(EMAIL, "USER");
+		MockHttpServletResponse loginResponse = login(EMAIL, PASSWORD).andReturn().getResponse();
+		String accessToken = JsonPath.read(loginResponse.getContentAsString(), "$.data.accessToken");
+
+		jdbcTemplate.update("update member set status = 'SUSPENDED' where email = ?", EMAIL);
+		entityManager.clear();
+
+		mockMvc.perform(get("/api/v1/cart").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+				.andExpect(status().isUnauthorized());
+	}
+
 	// ───────── 비밀번호 변경 ─────────
 
 	@Test
 	void 비밀번호를_바꾸면_새_비밀번호로만_로그인되고_다른_기기의_로그인이_끊긴다() throws Exception {
 		long memberId = insertMember(EMAIL, "USER");
-		Cookie otherDevice = login(EMAIL, PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE);
+		MockHttpServletResponse otherDeviceLogin = login(EMAIL, PASSWORD).andReturn().getResponse();
+		Cookie otherDevice = otherDeviceLogin.getCookie(REFRESH_COOKIE);
+		String oldAccessToken = JsonPath.read(otherDeviceLogin.getContentAsString(), "$.data.accessToken");
 
 		mockMvc.perform(patch("/api/v1/me/password").with(member(memberId))
 						.contentType(MediaType.APPLICATION_JSON).content("""
@@ -237,9 +288,15 @@ class SecurityTests {
 								""".formatted(PASSWORD)))
 				.andExpect(status().isOk());
 
+		// A pre-change refresh generation must not mint a usable token after the password update.
+		String lateRefresh = refreshTokenService.issue(memberId, 0);
+		refresh(new Cookie(REFRESH_COOKIE, lateRefresh)).andExpect(status().isUnauthorized());
+
 		login(EMAIL, PASSWORD).andExpect(status().isUnauthorized());
 		login(EMAIL, "new-pass-5678").andExpect(status().isOk());
 		refresh(otherDevice).andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/v1/cart").header(HttpHeaders.AUTHORIZATION, "Bearer " + oldAccessToken))
+				.andExpect(status().isUnauthorized());
 	}
 
 	// ───────── 가격 비공개 ─────────
@@ -271,8 +328,15 @@ class SecurityTests {
 	@Test
 	void 헬스_체크_외의_운영_엔드포인트는_관리자가_아니면_접근할_수_없다() throws Exception {
 		mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
+		mockMvc.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
 		mockMvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/actuator/env").with(member(1))).andExpect(status().isForbidden());
+	}
+
+	@Test
+	void 허용되지_않은_Origin의_Refresh_쿠키_요청은_거부한다() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/refresh").header("Origin", "https://evil.example"))
+				.andExpect(status().isForbidden());
 	}
 
 	@Test
@@ -339,6 +403,13 @@ class SecurityTests {
 	private ResultActions login(String email, String password) throws Exception {
 		return mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
 				.content(credentials(email, password)));
+	}
+
+	private ResultActions loginFrom(String path, String email, String password, String remoteAddress) throws Exception {
+		return mockMvc.perform(post(path).with(request -> {
+			request.setRemoteAddr(remoteAddress);
+			return request;
+		}).contentType(MediaType.APPLICATION_JSON).content(credentials(email, password)));
 	}
 
 	private ResultActions refresh(Cookie cookie) throws Exception {

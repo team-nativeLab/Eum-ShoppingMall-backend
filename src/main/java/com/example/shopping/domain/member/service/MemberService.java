@@ -3,12 +3,15 @@ package com.example.shopping.domain.member.service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import com.example.shopping.domain.member.dto.MeResponse;
-import com.example.shopping.domain.member.dto.PasswordChangeRequest;
-import com.example.shopping.domain.member.dto.ProfileUpdateRequest;
+import com.example.shopping.domain.member.dto.response.MeResponse;
+import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
+import com.example.shopping.domain.member.dto.request.ProfileUpdateRequest;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberStatus;
 import com.example.shopping.domain.member.repository.MemberRepository;
+import com.example.shopping.domain.cart.repository.CartItemRepository;
+import com.example.shopping.domain.order.repository.CheckoutDeliveryRepository;
+import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 
@@ -22,6 +25,9 @@ public class MemberService {
 	private final MemberRepository memberRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final RefreshTokenService refreshTokenService;
+	private final CartItemRepository cartItemRepository;
+	private final CheckoutDeliveryRepository checkoutDeliveryRepository;
+	private final OrderRepository orderRepository;
 
 	public MeResponse getMe(Long memberId) {
 		return MeResponse.from(findActive(memberId));
@@ -45,6 +51,22 @@ public class MemberService {
 			throw new BusinessException(ErrorCode.PASSWORD_NOT_CHANGED);
 		}
 		member.changePassword(passwordEncoder.encode(request.newPassword()));
+		memberRepository.save(member);
+		refreshTokenService.revokeAll(memberId);
+	}
+
+	@org.springframework.transaction.annotation.Transactional
+	public void withdraw(Long memberId, String password) {
+		Member member = findActive(memberId);
+		if (!passwordEncoder.matches(password, member.getPasswordHash())) {
+			throw new BusinessException(ErrorCode.CURRENT_PASSWORD_MISMATCH);
+		}
+		if (orderRepository.countOrdersBlockingWithdrawal(memberId) > 0) {
+			throw new BusinessException(ErrorCode.ACCOUNT_HAS_ACTIVE_ORDERS);
+		}
+		cartItemRepository.deleteAllByMemberId(memberId);
+		checkoutDeliveryRepository.deleteByMemberId(memberId);
+		member.withdraw();
 		memberRepository.save(member);
 		refreshTokenService.revokeAll(memberId);
 	}

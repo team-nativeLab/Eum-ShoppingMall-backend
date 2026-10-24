@@ -6,7 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.quote.dto.AdminQuoteResponse;
+import com.example.shopping.domain.quote.dto.response.AdminQuoteResponse;
 import com.example.shopping.domain.quote.entity.QuoteInquiry;
 import com.example.shopping.domain.quote.entity.QuoteStatus;
 import com.example.shopping.domain.quote.repository.QuoteInquiryRepository;

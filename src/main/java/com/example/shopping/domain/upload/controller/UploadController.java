@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.example.shopping.domain.upload.dto.UploadResponse;
+import com.example.shopping.domain.upload.dto.response.UploadResponse;
 import com.example.shopping.domain.upload.service.UploadService;
 import com.example.shopping.global.response.ApiResponse;
 

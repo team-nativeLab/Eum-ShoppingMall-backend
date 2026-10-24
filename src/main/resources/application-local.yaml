@@ -8,12 +8,15 @@ spring:
     password: shopping
   jpa:
     hibernate:
-      # 로컬에서만 엔티티 기준으로 테이블을 자동 생성한다. 스키마가 굳으면 Flyway로 옮긴다.
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    # 기존 로컬 DB는 엔티티 update로 만들어졌을 수 있다. 로컬에서만 기존 스키마를 V1으로 인식한다.
+    baseline-on-migrate: true
+    baseline-version: 1
 
 cors:
   allowed-origins: http://localhost:3000
@@ -34,7 +37,3 @@ admin:
   bootstrap:
     email: admin@example.com
     password: local-admin-1234
-
-upload:
-  # 로컬은 S3 없이 서버 디스크(uploads 폴더)에 저장한다.
-  storage: local

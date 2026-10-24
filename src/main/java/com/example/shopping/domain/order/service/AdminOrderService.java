@@ -5,14 +5,16 @@ import java.util.Set;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.util.StringUtils;
 
-import com.example.shopping.domain.order.dto.AdminOrderDetailResponse;
-import com.example.shopping.domain.order.dto.AdminOrderSummaryResponse;
-import com.example.shopping.domain.order.dto.AdminOrderUpdateRequest;
+import com.example.shopping.domain.order.dto.response.AdminOrderDetailResponse;
+import com.example.shopping.domain.order.dto.response.AdminOrderSummaryResponse;
+import com.example.shopping.domain.order.dto.request.AdminOrderUpdateRequest;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.entity.OrderStatus;
 import com.example.shopping.domain.order.repository.OrderRepository;
+import com.example.shopping.domain.order.service.OrderCancelService;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
@@ -37,6 +39,7 @@ public class AdminOrderService {
 
 	private final OrderRepository orderRepository;
 	private final PaymentRepository paymentRepository;
+	private final OrderCancelService orderCancelService;
 
 	public PageResponse<AdminOrderSummaryResponse> search(OrderStatus status, Long memberId, String orderNo,
 			Pageable pageable) {
@@ -48,6 +51,11 @@ public class AdminOrderService {
 
 	public AdminOrderDetailResponse getDetail(Long orderId) {
 		return toDetail(find(orderId));
+	}
+
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void cancel(Long orderId, Long adminId, String reason) {
+		orderCancelService.cancelByAdmin(orderId, adminId, reason.trim());
 	}
 
 	@Transactional

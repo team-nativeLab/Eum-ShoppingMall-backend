@@ -1,6 +1,5 @@
 package com.example.shopping.domain.member.service;
 
-import java.time.LocalDateTime;
 import java.util.Locale;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -8,12 +7,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.shopping.domain.member.dto.AuthTokens;
-import com.example.shopping.domain.member.dto.LoginRequest;
-import com.example.shopping.domain.member.dto.SignupRequest;
-import com.example.shopping.domain.member.dto.SignupResponse;
+import com.example.shopping.domain.member.dto.request.LoginRequest;
+import com.example.shopping.domain.member.dto.request.SignupRequest;
+import com.example.shopping.domain.member.dto.response.SignupResponse;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberRole;
 import com.example.shopping.domain.member.entity.MemberStatus;
+import com.example.shopping.domain.member.entity.RefreshToken;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
@@ -26,24 +26,23 @@ import com.example.shopping.global.security.JwtTokenProvider;
 @Service
 public class AuthService {
 
-	// 연속으로 이만큼 틀리면 LOCK_MINUTES 동안 로그인을 막는다. 비밀번호를 하나씩 대입해 보는 공격을 늦춘다.
-	static final int MAX_LOGIN_FAILURES = 5;
-	static final int LOCK_MINUTES = 10;
-
 	private final MemberRepository memberRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final RefreshTokenService refreshTokenService;
+	private final AccessTokenService accessTokenService;
 
 	// 없는 이메일로 로그인해도 해시 비교를 한 번 수행해, 응답 시간으로 가입 여부를 추측하지 못하게 한다.
 	private final String dummyPasswordHash;
 
 	public AuthService(MemberRepository memberRepository, PasswordEncoder passwordEncoder,
-			JwtTokenProvider jwtTokenProvider, RefreshTokenService refreshTokenService) {
+			JwtTokenProvider jwtTokenProvider, RefreshTokenService refreshTokenService,
+			AccessTokenService accessTokenService) {
 		this.memberRepository = memberRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtTokenProvider = jwtTokenProvider;
 		this.refreshTokenService = refreshTokenService;
+		this.accessTokenService = accessTokenService;
 		this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-timing");
 	}
 
@@ -70,7 +69,7 @@ public class AuthService {
 	/** 관리자 로그인. 일반 회원 계정이면 계정이 없는 것과 똑같이 응답한다. */
 	public AuthTokens adminLogin(LoginRequest request) {
 		Member member = authenticate(request);
-		if (member.getRole() != MemberRole.ADMIN) {
+		if (!member.getRole().canAccessAdminApi()) {
 			throw new BusinessException(ErrorCode.LOGIN_FAILED);
 		}
 		return issueTokens(member);
@@ -78,30 +77,24 @@ public class AuthService {
 
 	/** Refresh 토큰으로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. */
 	public AuthTokens refresh(String refreshToken) {
-		Long memberId = refreshTokenService.consume(refreshToken);
-		Member member = memberRepository.findById(memberId)
+		RefreshToken consumed = refreshTokenService.consume(refreshToken);
+		Member member = memberRepository.findById(consumed.getMemberId())
 				.filter(m -> m.getStatus() == MemberStatus.ACTIVE)
 				.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+		if (consumed.getTokenVersion() != member.getAccessTokenVersion()) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED);
+		}
 		return issueTokens(member);
 	}
 
-	/** 이 기기의 Refresh 토큰을 폐기한다. 이미 발급된 Access 토큰은 만료될 때까지(최대 15분) 유효하다. */
-	public void logout(String refreshToken) {
+	/** Refresh 토큰과 요청에 포함된 유효한 Access 토큰을 폐기한다. */
+	public void logout(String refreshToken, String authorizationHeader) {
+		accessTokenService.revokeIfValid(authorizationHeader);
 		refreshTokenService.revoke(refreshToken);
 	}
 
 	private Member authenticate(LoginRequest request) {
 		Member member = memberRepository.findByEmail(normalizeEmail(request.email())).orElse(null);
-		LocalDateTime now = LocalDateTime.now();
-
-		if (member != null && member.isLoginLocked(now)) {
-			// 잠긴 동안에는 비밀번호가 맞는지조차 확인하지 않는다 (맞았다는 사실이 새어 나가지 않도록).
-			throw new BusinessException(ErrorCode.LOGIN_LOCKED);
-		}
-		if (member != null && member.getLockedUntil() != null) {
-			// 잠금 시간이 지났으면 실패 횟수를 처음부터 다시 센다.
-			memberRepository.resetLoginFailures(member.getId());
-		}
 
 		String passwordHash = member == null ? dummyPasswordHash : member.getPasswordHash();
 		boolean passwordMatches = passwordEncoder.matches(request.password(), passwordHash);
@@ -111,11 +104,7 @@ public class AuthService {
 			throw new BusinessException(ErrorCode.LOGIN_FAILED);
 		}
 		if (!passwordMatches) {
-			memberRepository.recordLoginFailure(member.getId(), MAX_LOGIN_FAILURES, now.plusMinutes(LOCK_MINUTES));
 			throw new BusinessException(ErrorCode.LOGIN_FAILED);
-		}
-		if (member.getFailedLoginCount() > 0) {
-			memberRepository.resetLoginFailures(member.getId());
 		}
 		// 계정 상태는 본인 확인(비밀번호 일치)이 끝난 뒤에만 알려준다.
 		if (member.getStatus() == MemberStatus.SUSPENDED) {
@@ -125,8 +114,9 @@ public class AuthService {
 	}
 
 	private AuthTokens issueTokens(Member member) {
-		String accessToken = jwtTokenProvider.createAccessToken(member.getId(), member.getRole().name());
-		String refreshToken = refreshTokenService.issue(member.getId());
+		String accessToken = jwtTokenProvider.createAccessToken(member.getId(), member.getRole().name(),
+				member.getAccessTokenVersion());
+		String refreshToken = refreshTokenService.issue(member.getId(), member.getAccessTokenVersion());
 		return new AuthTokens(accessToken, jwtTokenProvider.accessTokenExpiry(), refreshToken);
 	}
 

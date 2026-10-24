@@ -17,6 +17,7 @@ public enum ErrorCode {
 	TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "토큰이 만료되었습니다."),
 	FORBIDDEN(HttpStatus.FORBIDDEN, "권한이 없습니다."),
 	TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "요청이 많습니다. 잠시 후 다시 시도해 주세요."),
+	SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "서버가 일시적으로 요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
 	CONCURRENT_UPDATE(HttpStatus.CONFLICT, "다른 요청이 먼저 처리되었습니다. 새로고침 후 다시 시도해 주세요."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다."),
 	NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 주소를 찾을 수 없습니다."),
@@ -25,7 +26,6 @@ public enum ErrorCode {
 	FILE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "파일이 너무 큽니다. 5MB 이하의 파일만 올릴 수 있습니다."),
 	REQUEST_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "요청 내용이 너무 큽니다."),
 	INVALID_FILE(HttpStatus.BAD_REQUEST, "업로드할 수 없는 파일입니다. JPG, PNG, GIF, WEBP 이미지만 올릴 수 있습니다."),
-	UPLOAD_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요."),
 	BANNER_NOT_FOUND(HttpStatus.NOT_FOUND, "배너를 찾을 수 없습니다."),
 	CONTENT_NOT_FOUND(HttpStatus.NOT_FOUND, "콘텐츠를 찾을 수 없습니다."),
 
@@ -37,6 +37,7 @@ public enum ErrorCode {
 	MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "회원을 찾을 수 없습니다."),
 	CURRENT_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "현재 비밀번호가 올바르지 않습니다."),
 	PASSWORD_NOT_CHANGED(HttpStatus.BAD_REQUEST, "새 비밀번호가 현재 비밀번호와 같습니다."),
+	ACCOUNT_HAS_ACTIVE_ORDERS(HttpStatus.CONFLICT, "진행 중인 주문이 있어 탈퇴할 수 없습니다."),
 
 	// 상품
 	PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
@@ -67,7 +68,9 @@ public enum ErrorCode {
 	PAYMENT_FAILED(HttpStatus.UNPROCESSABLE_CONTENT, "결제에 실패했습니다."),
 	PAYMENT_IN_PROGRESS(HttpStatus.CONFLICT, "이미 결제가 진행 중이거나 완료된 주문입니다."),
 	PAYMENT_PENDING_CONFIRMATION(HttpStatus.ACCEPTED, "결제 결과를 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요."),
+	PAYMENT_WEBHOOK_UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "결제 웹훅 인증에 실패했습니다."),
 	CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "취소할 수 없는 상태입니다."),
+	CANCEL_PENDING_CONFIRMATION(HttpStatus.ACCEPTED, "취소 결과를 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요."),
 	CANCEL_FAILED(HttpStatus.BAD_GATEWAY, "결제 취소에 실패했습니다. 잠시 후 다시 시도해 주세요."),
 
 	// 고객지원

@@ -1,6 +1,7 @@
 package com.example.shopping.domain.payment.gateway;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Base64;
@@ -25,6 +26,8 @@ import tools.jackson.databind.json.JsonMapper;
 /** 토스페이먼츠 결제 API 연동. 시크릿 키를 Basic 인증으로 보낸다. */
 @Slf4j
 public class TossPaymentGateway implements PaymentGateway {
+
+	private static final ZoneId BUSINESS_TIME_ZONE = ZoneId.of("Asia/Seoul");
 
 	private final RestClient restClient;
 	private final TossProperties properties;
@@ -109,9 +112,22 @@ public class TossPaymentGateway implements PaymentGateway {
 				payment.method(),
 				payment.approvedAt() == null ? null
 						: OffsetDateTime.parse(payment.approvedAt())
-								.atZoneSameInstant(ZoneId.systemDefault())
+								.atZoneSameInstant(BUSINESS_TIME_ZONE)
 								.toLocalDateTime(),
-				raw);
+				raw, toVirtualAccount(payment.virtualAccount()), payment.secret());
+	}
+
+	private PgVirtualAccount toVirtualAccount(TossVirtualAccount virtualAccount) {
+		if (virtualAccount == null) {
+			return null;
+		}
+		try {
+			return new PgVirtualAccount(virtualAccount.bankCode(), virtualAccount.accountNumber(),
+					virtualAccount.customerName(), virtualAccount.dueDate() == null
+							? null : LocalDateTime.parse(virtualAccount.dueDate()));
+		} catch (java.time.DateTimeException e) {
+			throw new PgUnavailableException("토스페이먼츠 가상계좌 입금 기한을 해석할 수 없습니다.", e);
+		}
 	}
 
 	private String errorCode(String responseBody) {
@@ -125,7 +141,11 @@ public class TossPaymentGateway implements PaymentGateway {
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	record TossPayment(String paymentKey, String orderId, String status, Long totalAmount, Long balanceAmount,
-			String method, String approvedAt) {
+			String method, String approvedAt, TossVirtualAccount virtualAccount, String secret) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record TossVirtualAccount(String bankCode, String accountNumber, String customerName, String dueDate) {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)

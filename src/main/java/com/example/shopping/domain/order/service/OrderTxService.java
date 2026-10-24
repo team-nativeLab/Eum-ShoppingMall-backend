@@ -17,6 +17,7 @@ import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
+import com.example.shopping.domain.product.service.ProductReadCache;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 
@@ -35,6 +36,7 @@ public class OrderTxService {
 	private final ProductSkuRepository productSkuRepository;
 	private final ProductRepository productRepository;
 	private final CartItemRepository cartItemRepository;
+	private final ProductReadCache productReadCache;
 
 	/** 결제 승인을 시작한다. 이미 진행 중이거나 끝났거나 기한이 지났으면 false */
 	@Transactional
@@ -66,15 +68,55 @@ public class OrderTxService {
 			return true;
 		}
 		if (pg.status() == PgStatus.WAITING_FOR_DEPOSIT) {
-			if (orderRepository.changeStatus(orderId, OrderStatus.PAYMENT_PROCESSING, OrderStatus.WAITING_DEPOSIT,
-					now) == 1) {
+			if (!hasVirtualAccountDetails(pg)) {
+				return false;
+			}
+			if (orderRepository.markWaitingDeposit(orderId, pg.virtualAccount().dueDate(), now) == 1) {
 				paymentRepository.save(Payment.of(orderId, pg, PaymentStatus.WAITING_DEPOSIT));
 				removeOrderedItemsFromCart(orderId);
+				return true;
 			}
-			return true;
+			return false;
 		}
 		orderRepository.changeStatus(orderId, OrderStatus.PAYMENT_PROCESSING, OrderStatus.PENDING, now);
 		return false;
+	}
+
+	/** PG 조회에서 입금 완료가 확인된 가상계좌 주문을 결제로 확정한다. 중복 웹훅은 상태 조건으로 막는다. */
+	@Transactional
+	public boolean completeVirtualAccountDeposit(Long orderId, Long paymentId, PgPayment pg) {
+		if (orderRepository.markDepositPaid(orderId, LocalDateTime.now()) != 1) {
+			return false;
+		}
+		Payment payment = paymentRepository.findById(paymentId).orElseThrow();
+		payment.recordDeposit(pg);
+		addSalesCount(orderId, 1);
+		return true;
+	}
+
+	/** PG 확인 결과 입금 기한이 지나 입금되지 않은 가상계좌 주문의 재고를 해제한다. */
+	@Transactional
+	public boolean expireVirtualAccount(Long orderId, Long paymentId) {
+		LocalDateTime now = LocalDateTime.now();
+		if (orderRepository.expireWaitingDeposit(orderId, now) != 1) {
+			return false;
+		}
+		Payment payment = paymentRepository.findById(paymentId).orElseThrow();
+		payment.expireVirtualAccount();
+		restoreStock(orderId);
+		return true;
+	}
+
+	/** PG가 DONE 결제를 다시 입금 대기로 바꾼 경우 미배송 주문을 보류하고 판매 수량을 되돌린다. */
+	@Transactional
+	public boolean revertVirtualAccountDeposit(Long orderId, Long paymentId, PgPayment pg) {
+		if (orderRepository.revertDepositCompletion(orderId, LocalDateTime.now()) != 1) {
+			return false;
+		}
+		Payment payment = paymentRepository.findById(paymentId).orElseThrow();
+		payment.revertDeposit(pg);
+		addSalesCount(orderId, -1);
+		return true;
 	}
 
 	/** 결제 기한이 지난 주문을 만료시키고 잡아 둔 재고를 되돌린다. 실제로 만료시켰으면 true */
@@ -103,33 +145,67 @@ public class OrderTxService {
 
 	/** 취소를 시작한다. 그사이 상태가 바뀌었으면(배송 시작 등) false */
 	@Transactional
-	public boolean claimCancel(Long orderId, OrderStatus from) {
-		return orderRepository.changeStatus(orderId, from, OrderStatus.CANCELED, LocalDateTime.now()) == 1;
+	public boolean claimCancel(Long orderId, OrderStatus from, String idempotencyKey, String reason, Long actorId) {
+		return orderRepository.claimCancel(orderId, from, idempotencyKey, reason, actorId, LocalDateTime.now()) == 1;
 	}
 
-	/** PG 취소가 실패했을 때 주문을 취소 전 상태로 되돌린다. */
+	/** 관리자 요청으로 미결제 주문을 만료한다. 가상계좌 결제는 PG 취소 확인 후 호출한다. */
+	@Transactional
+	public void completeUnpaidAdminCancellation(Long orderId, Long paymentId) {
+		if (orderRepository.finishUnpaidCancellation(orderId, LocalDateTime.now()) != 1) {
+			return;
+		}
+		if (paymentId != null) {
+			Payment payment = paymentRepository.findById(paymentId).orElseThrow();
+			if (payment.getStatus() == PaymentStatus.WAITING_DEPOSIT) {
+				payment.expireVirtualAccount();
+			}
+		}
+		orderRepository.cancelItems(orderId);
+		restoreStock(orderId);
+	}
+
+	/** PG 취소가 확실히 거절됐을 때 주문을 취소 전 상태로 되돌린다. */
 	@Transactional
 	public void revertCancel(Long orderId, OrderStatus to) {
-		orderRepository.changeStatus(orderId, OrderStatus.CANCELED, to, LocalDateTime.now());
+		orderRepository.revertCancel(orderId, to, LocalDateTime.now());
 	}
 
-	/** PG 취소가 끝난 뒤 결제·품목 상태를 바꾸고 재고를 되돌린다. 두 번 불려도 한 번만 반영된다. */
+	/** PG 취소가 확인된 뒤 결제·주문·품목 상태와 재고를 반영한다. 두 번 불려도 한 번만 반영된다. */
 	@Transactional
 	public void completeCancel(Long orderId, Long paymentId) {
-		if (paymentRepository.markCanceled(paymentId) == 1) {
+		orderRepository.finishCancel(orderId, LocalDateTime.now());
+		if (orderRepository.isCanceled(orderId)) {
+			orderRepository.clearCancelRecoveryData(orderId);
+		}
+		if (orderRepository.isCanceled(orderId) && paymentRepository.markCanceled(paymentId) == 1) {
 			orderRepository.cancelItems(orderId);
 			restoreStock(orderId);
 			addSalesCount(orderId, -1);
 		}
 	}
 
+	/** 주기 보정 작업을 조건부로 점유한다. 동시 실행 중 한 서버만 PG를 호출한다. */
+	@Transactional
+	public boolean claimCancellationRecovery(Long orderId, LocalDateTime now) {
+		return orderRepository.claimCancellationRecovery(orderId, now.minusMinutes(5), now) == 1;
+	}
+
 	private void restoreStock(Long orderId) {
-		orderedQuantities(orderId).forEach(q -> productSkuRepository.increaseStock(q[0], (int) q[1]));
+		List<long[]> quantities = orderedQuantities(orderId);
+		quantities.forEach(q -> productSkuRepository.increaseStock(q[0], (int) q[1]));
+		if (!quantities.isEmpty()) {
+			productReadCache.invalidateAfterCommit();
+		}
 	}
 
 	/** 주문한 수량만큼 상품의 누적 판매 수량(인기순 정렬 기준)을 더하거나(sign = 1, 결제 완료) 뺀다(sign = -1, 취소). */
 	private void addSalesCount(Long orderId, int sign) {
-		orderedQuantities(orderId).forEach(q -> productRepository.addSalesCount(q[0], sign * q[1]));
+		List<long[]> quantities = orderedQuantities(orderId);
+		quantities.forEach(q -> productRepository.addSalesCount(q[0], sign * q[1]));
+		if (!quantities.isEmpty()) {
+			productReadCache.invalidateAfterCommit();
+		}
 	}
 
 	/** 주문 품목의 {옵션 ID, 수량} 목록. 재고·판매 수량 쿼리가 영속성 컨텍스트를 비우므로 값을 먼저 꺼내 둔다. */
@@ -143,6 +219,15 @@ public class OrderTxService {
 		Order order = findOrder(orderId);
 		List<Long> skuIds = order.getItems().stream().map(item -> item.getSkuId()).toList();
 		cartItemRepository.deleteByMemberIdAndSkuIds(order.getMemberId(), skuIds);
+	}
+
+	private boolean hasVirtualAccountDetails(PgPayment pg) {
+		return pg.virtualAccount() != null
+				&& pg.virtualAccount().bankCode() != null
+				&& pg.virtualAccount().accountNumber() != null
+				&& pg.virtualAccount().customerName() != null
+				&& pg.virtualAccount().dueDate() != null
+				&& pg.secret() != null;
 	}
 
 	private Order findOrder(Long orderId) {

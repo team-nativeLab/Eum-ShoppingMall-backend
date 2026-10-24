@@ -1,0 +1,12 @@
+.git
+.github
+.codex
+.gradle
+build
+**/build
+.idea
+*.iml
+.env
+.env.*
+terraform.tfstate
+terraform.tfstate.*

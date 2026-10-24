@@ -11,6 +11,14 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      # Keep pool sizing configurable per DB instance and application replica count.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:3000}
+      max-lifetime: ${DB_CONNECTION_MAX_LIFETIME_MS:1800000}
+  transaction:
+    # Bound how long a transaction may hold a connection. Tune with real workload data.
+    default-timeout: ${DB_TRANSACTION_TIMEOUT_SECONDS:10s}
   jpa:
     open-in-view: false
     hibernate:
@@ -18,14 +26,21 @@ spring:
     properties:
       hibernate:
         default_batch_fetch_size: 100
+        jdbc:
+          time_zone: Asia/Seoul
+      jakarta:
+        persistence:
+          # JPA query timeout is expressed in milliseconds.
+          query:
+            timeout: ${DB_QUERY_TIMEOUT_MS:5000}
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
     web:
       pageable:
         # ?size=에 큰 값을 넣어 한 번에 대량 조회하는 것을 막는다.
-        max-page-size: ${MAX_PAGE_SIZE}
+        max-page-size: 100
   servlet:
     multipart:
       max-file-size: 5MB
@@ -34,15 +49,37 @@ spring:
     # 검증에 실패한 입력값(비밀번호 등)이 예외 메시지에 실려 로그로 남지 않게 한다. (개발 도구가 켜져 있어도 끈다.)
     log-resolved-exception: false
 
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] [requestId=%X{requestId:-}] %-5level %logger{36} - %msg%n%ex"
+
 server:
-  shutdown: ${SHUTDOWN}
-  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY}
+  shutdown: graceful
+  forward-headers-strategy: native
+  tomcat:
+    redirect-context-root: false
+    remoteip:
+      # Set this to the exact proxy CIDRs in each deployment. Only trusted peers may supply forwarded client IPs.
+      internal-proxies: ${TRUSTED_PROXY_CIDRS:127.0.0.1/32,::1/128}
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
 
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          # Redis backs request limits and access-token revocation/version checks.
+          include: readinessState,redis
   health:
     redis:
-      # Redis는 아직 쓰지 않는다. 분산락·캐시를 도입할 때 켠다.
-      enabled: false
+      enabled: true
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
@@ -58,15 +95,19 @@ security:
   jwt:
     secret: ${JWT_SECRET}
     # Access 토큰 15분, Refresh 토큰 14일
-    access-token-expiry: 900 ${ACCESS_TOKEN_EXPIRY}
-    refresh-token-expiry: 1209600 ${REFRESH_TOKEN_EXPIRY}
-    refresh-cookie-secure: ${REFRESH_COOKIE_SECURE}
+    access-token-expiry: 900
+    refresh-token-expiry: 1209600
+    refresh-cookie-secure: true
+    # Strict by default. Set to None only when frontend/API are cross-site and both use HTTPS.
+    refresh-cookie-same-site: ${REFRESH_COOKIE_SAME_SITE:Strict}
   rate-limit:
     # 로그인·회원가입·문의 접수·주문·결제 등에 적용하는 IP별 분당 요청 한도
-    requests-per-minute: ${RATE_LIMIT_PER_MINUTE}
+    requests-per-minute: ${RATE_LIMIT_PER_MINUTE:10}
+    # 자동완성을 포함한 공개 상품 조회의 IP별 분당 한도
+    public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:120}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
-    max-body-bytes: ${MAX_REQUEST_BODY_BYTES}
+    max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}
 
 admin:
   bootstrap:
@@ -80,19 +121,20 @@ payment:
     secret-key: ${TOSS_SECRET_KEY:}
 
 upload:
-  # 업로드한 이미지를 저장할 곳: s3(운영) 또는 local(서버 디스크, 로컬 개발·테스트용)
-  storage: ${UPLOAD_STORAGE}
-  dir: ${UPLOAD_DIR}
+  # local stores files on disk; s3 uses the bucket/CDN settings below.
+  storage: ${UPLOAD_STORAGE:local}
+  dir: ${UPLOAD_DIR:uploads}
   s3:
-    bucket: ${S3_BUCKET}
-    region: ${S3_REGION}
-    public-url: ${S3_PUBLIC_URL}
-    key-prefix: ${S3_KEY_PREFIX}
-    presigned-url-expiration-minutes: ${PRESIGNED_URL_EXPIRATION_MINUTES}
+    bucket: ${UPLOAD_S3_BUCKET:}
+    region: ${AWS_REGION:}
+    cdn-base-url: ${UPLOAD_CDN_BASE_URL:}
 
 app:
+  cache:
+    # 공개 상품 조회의 공유 Redis 캐시 TTL (초)
+    product-ttl-seconds: ${PRODUCT_READ_CACHE_TTL_SECONDS:60}
   seed:
-    # 카테고리가 하나도 없으면 기본 카테고리(안전모, 보안경, 안전장갑, 발진마스크, 안전화, 귀마개)를 만든다.
+    # 카테고리가 하나도 없으면 기본 카테고리(안전모, 보안경, 안전장갑, 방진마스크, 안전화, 귀마개)를 만든다.
     default-categories: ${SEED_DEFAULT_CATEGORIES:true}
   client:
     # 앱이 구동할 때 받아 가는 설정 (GET /api/v1/app/config)

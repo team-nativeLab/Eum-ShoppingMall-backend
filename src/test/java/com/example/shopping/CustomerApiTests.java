@@ -1,5 +1,6 @@
 package com.example.shopping;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,10 +21,14 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.jayway.jsonpath.JsonPath;
+import com.example.shopping.domain.member.service.RefreshTokenService;
 
 /** 로그인한 회원이 쓰는 API (내 정보, 장바구니, 문의, 견적)와 공개 콘텐츠 API */
 @SpringBootTest
@@ -41,6 +47,9 @@ class CustomerApiTests {
 
 	@Autowired
 	private PasswordEncoder passwordEncoder;
+
+	@Autowired
+	private RefreshTokenService refreshTokenService;
 
 	// ───────── 내 정보 ─────────
 
@@ -80,6 +89,38 @@ class CustomerApiTests {
 
 		mockMvc.perform(get("/api/v1/me").with(member(suspendedId))).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/api/v1/me").with(member(999_999))).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void 회원은_비밀번호를_확인해_탈퇴하고_진행중_주문이_있으면_탈퇴할_수_없다() throws Exception {
+		long memberId = insertMember("withdraw@example.com", "ACTIVE");
+		refreshTokenService.issue(memberId, 0);
+		mockMvc.perform(delete("/api/v1/me").with(member(memberId)).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"password\":\"wrong-password\"}"))
+			.andExpect(status().isBadRequest());
+
+		mockMvc.perform(delete("/api/v1/me").with(member(memberId)).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"password\":\"test-pass-1234\"}"))
+			.andExpect(status().isOk());
+		assertThat(jdbcTemplate.queryForObject("select status from member where id = ?", String.class, memberId))
+				.isEqualTo("WITHDRAWN");
+		assertThat(jdbcTemplate.queryForObject("select withdrawn_at from member where id = ?", Object.class, memberId))
+				.isNotNull();
+		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where member_id = ?", Long.class,
+				memberId)).isZero();
+		assertThat(jdbcTemplate.queryForObject("select email from member where id = ?", String.class, memberId))
+				.isEqualTo("withdrawn+" + memberId + "@invalid.local");
+
+		long activeMemberId = insertMember("active-order@example.com", "ACTIVE");
+		jdbcTemplate.update("""
+				insert into orders (order_no, member_id, status, total_amount, item_amount, discount_amount,
+				                    shipping_fee, order_name, recipient, expires_at, version, created_at, updated_at)
+				values ('ORD-ACTIVE-WITHDRAW', ?, 'PAID', 10000, 10000, 0, 0, '상품', '홍길동', now(), 0, now(), now())
+				""", activeMemberId);
+		mockMvc.perform(delete("/api/v1/me").with(member(activeMemberId)).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"password\":\"test-pass-1234\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("ACCOUNT_HAS_ACTIVE_ORDERS"));
 	}
 
 	// ───────── 장바구니 ─────────
@@ -126,6 +167,72 @@ class CustomerApiTests {
 	}
 
 	@Test
+	void 판매_중지한_옵션은_고객에게_숨기고_기존_장바구니에서는_주문할_수_없다() throws Exception {
+		long memberId = insertMember("sku-retire@example.com", "ACTIVE");
+		RequestPostProcessor admin = jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+		String created = mockMvc.perform(post("/api/v1/admin/products").with(admin)
+					.contentType(MediaType.APPLICATION_JSON).content("""
+							{"name":"옵션 중지 테스트","basePrice":1000,
+							 "skus":[{"optionName":"기본","price":1000,"stock":5},
+							         {"optionName":"대형","price":1200,"stock":5}]}
+							"""))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		long productId = ((Number) JsonPath.read(created, "$.data.id")).longValue();
+		long retiredSkuId = ((Number) JsonPath.read(created, "$.data.skus[0].id")).longValue();
+		long remainingSkuId = ((Number) JsonPath.read(created, "$.data.skus[1].id")).longValue();
+
+		addToCart(member(memberId), retiredSkuId, 1);
+		mockMvc.perform(delete("/api/v1/admin/products/{productId}/skus/{skuId}", productId, retiredSkuId)
+					.with(admin))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.skus[0].active").value(false));
+
+		mockMvc.perform(get("/api/v1/products/{productId}", productId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.skus.length()").value(1))
+				.andExpect(jsonPath("$.data.skus[0].id").value(remainingSkuId));
+		mockMvc.perform(get("/api/v1/products").param("query", "옵션 중지 테스트"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content[0].optionRequired").value(false))
+				.andExpect(jsonPath("$.data.content[0].defaultSkuId").value(remainingSkuId));
+		mockMvc.perform(get("/api/v1/cart").with(member(memberId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[0].status").value("NOT_ON_SALE"))
+				.andExpect(jsonPath("$.data.orderableCount").value(0));
+		mockMvc.perform(post("/api/v1/cart/items").with(member(memberId)).contentType(MediaType.APPLICATION_JSON)
+					.content(cartItem(retiredSkuId, 1)))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+		mockMvc.perform(delete("/api/v1/admin/products/{productId}/skus/{skuId}", productId, remainingSkuId)
+					.with(admin))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+	}
+
+	@Test
+	void 장바구니_결제예정금액은_무료배송_경계와_주문_계산을_따른다() throws Exception {
+		long[] itemAmounts = { 99_999, 100_000, 100_001 };
+		long[] discounts = { 999, 1_000, 1_000 };
+		long[] shippingFees = { 5_000, 0, 0 };
+		long[] paymentAmounts = { 104_000, 99_000, 99_001 };
+		RequestPostProcessor me = member(1);
+
+		for (int i = 0; i < itemAmounts.length; i++) {
+			jdbcTemplate.update("delete from cart_item where member_id = ?", 1L);
+			long sku = insertProductWithSku("배송 정책 테스트 " + i, itemAmounts[i], true, "ON_SALE", 1);
+			mockMvc.perform(post("/api/v1/cart/items").with(me).contentType(MediaType.APPLICATION_JSON)
+						.content(cartItem(sku, 1)))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.itemAmount").value(itemAmounts[i]))
+					.andExpect(jsonPath("$.data.totalAmount").value(itemAmounts[i]))
+					.andExpect(jsonPath("$.data.discountAmount").value(discounts[i]))
+					.andExpect(jsonPath("$.data.shippingFee").value(shippingFees[i]))
+					.andExpect(jsonPath("$.data.paymentAmount").value(paymentAmounts[i]));
+		}
+	}
+
+	@Test
 	void 금액_미표시와_품절_상품은_장바구니에서_주문_불가로_표시되고_가격이_새지_않는다() throws Exception {
 		long hiddenSku = insertProductWithSku("견적 전용 장비", 987654, false, "ON_SALE", 10);
 		long shortSku = insertProductWithSku("안전화", 50000, true, "ON_SALE", 1);
@@ -144,6 +251,9 @@ class CustomerApiTests {
 				.andExpect(jsonPath("$.data.items[2].status").value("OUT_OF_STOCK"))
 				.andExpect(jsonPath("$.data.orderableCount").value(0))
 				.andExpect(jsonPath("$.data.totalAmount").value(0))
+				.andExpect(jsonPath("$.data.discountAmount").value(0))
+				.andExpect(jsonPath("$.data.shippingFee").value(0))
+				.andExpect(jsonPath("$.data.paymentAmount").value(0))
 				.andExpect(content().string(not(containsString("987654"))));
 	}
 
@@ -338,6 +448,18 @@ class CustomerApiTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.minVersion").value("1.0.0"))
 				.andExpect(jsonPath("$.data.maintenance").value(false));
+	}
+
+	@Test
+	void 요청_ID를_검증해_응답에_돌려준다() throws Exception {
+		mockMvc.perform(get("/api/v1/app/config").header("X-Request-Id", "support.case_17-abc"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("X-Request-Id", "support.case_17-abc"));
+
+		String generated = mockMvc.perform(get("/api/v1/app/config").header("X-Request-Id", "invalid request id"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getHeader("X-Request-Id");
+		org.assertj.core.api.Assertions.assertThat(generated).matches("[0-9a-f-]{36}");
 	}
 
 	// ───────── 도우미 ─────────

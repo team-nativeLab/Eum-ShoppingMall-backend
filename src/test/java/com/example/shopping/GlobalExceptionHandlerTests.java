@@ -2,10 +2,13 @@ package com.example.shopping;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.SQLTransientConnectionException;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
@@ -43,6 +46,18 @@ class GlobalExceptionHandlerTests {
 		assertThat(response.getStatusCode().value()).isEqualTo(500);
 		assertThat(response.getBody().code()).isEqualTo("INTERNAL_ERROR");
 		assertThat(response.getBody().message()).doesNotContain("jdbc");
+	}
+
+	@Test
+	void DB_커넥션_대기_시간_초과는_503과_Retry_After로_응답한다() {
+		CannotGetJdbcConnectionException exception = new CannotGetJdbcConnectionException("pool exhausted",
+				new SQLTransientConnectionException("Connection is not available, request timed out"));
+
+		ResponseEntity<ApiResponse<Void>> response = handler.handleUnexpected(exception);
+
+		assertThat(response.getStatusCode().value()).isEqualTo(503);
+		assertThat(response.getHeaders().getFirst("Retry-After")).isEqualTo("3");
+		assertThat(response.getBody().code()).isEqualTo("SERVICE_UNAVAILABLE");
 	}
 
 	private void assertConflict(ResponseEntity<ApiResponse<Void>> response) {

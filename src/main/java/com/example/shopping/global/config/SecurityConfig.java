@@ -1,11 +1,14 @@
 package com.example.shopping.global.config;
 
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,9 +20,13 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -36,9 +43,11 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
+import com.example.shopping.global.security.AccessTokenValidator;
 import com.example.shopping.global.security.JwtProperties;
 import com.example.shopping.global.security.JwtTokenProvider;
 import com.example.shopping.global.security.RateLimitFilter;
+import com.example.shopping.global.security.RefreshCookieOriginFilter;
 import com.example.shopping.global.security.RequestSizeLimitFilter;
 import com.example.shopping.global.security.SecurityErrorHandler;
 
@@ -77,7 +86,10 @@ public class SecurityConfig {
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity http, SecurityErrorHandler errorHandler,
 			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
+			@Value("${cors.allowed-origins}") List<String> allowedOrigins,
+			StringRedisTemplate redisTemplate,
 			@Value("${security.rate-limit.requests-per-minute}") int requestsPerMinute,
+			@Value("${security.rate-limit.public-product-requests-per-minute:120}") int publicProductRequestsPerMinute,
 			@Value("${security.request.max-body-bytes}") long maxBodyBytes) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
@@ -90,7 +102,8 @@ public class SecurityConfig {
 						.requestMatchers("/error").permitAll()
 						.requestMatchers(HttpMethod.GET, PUBLIC_GET).permitAll()
 						// 견적 문의·1:1 문의 접수는 비회원도 가능하다. 같은 경로의 GET(내 내역 조회)은 로그인이 필요하다.
-						.requestMatchers(HttpMethod.POST, "/api/v1/quotes", "/api/v1/support/inquiries").permitAll()
+						.requestMatchers(HttpMethod.POST, "/api/v1/quotes", "/api/v1/support/inquiries",
+								"/api/v1/payments/webhook").permitAll()
 						.requestMatchers(API_DOCS).permitAll()
 						.requestMatchers("/actuator/health/**").permitAll()
 						// 헬스 체크 외의 운영 엔드포인트는 켜더라도 관리자만 볼 수 있다.
@@ -107,7 +120,10 @@ public class SecurityConfig {
 						.accessDeniedHandler(errorHandler))
 				.addFilterBefore(new RequestSizeLimitFilter(maxBodyBytes, exceptionResolver),
 						BearerTokenAuthenticationFilter.class)
-				.addFilterBefore(new RateLimitFilter(requestsPerMinute, exceptionResolver, Clock.systemUTC()),
+				.addFilterBefore(new RateLimitFilter(requestsPerMinute, publicProductRequestsPerMinute,
+						exceptionResolver, Clock.systemUTC(), redisTemplate),
+						BearerTokenAuthenticationFilter.class)
+				.addFilterBefore(new RefreshCookieOriginFilter(allowedOrigins, exceptionResolver),
 						BearerTokenAuthenticationFilter.class);
 		return http.build();
 	}
@@ -125,14 +141,22 @@ public class SecurityConfig {
 		return request -> publicAuth.matches(request) ? null : delegate.resolve(request);
 	}
 
-	/** 토큰의 role 클레임(USER, ADMIN)을 ROLE_USER, ROLE_ADMIN 권한으로 바꾼다. */
+	/** 최고 관리자는 관리자 API 전체 권한과 최고 관리자 전용 권한을 모두 받는다. */
 	private JwtAuthenticationConverter jwtAuthenticationConverter() {
 		JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
 		authorities.setAuthoritiesClaimName(JwtTokenProvider.ROLE_CLAIM);
 		authorities.setAuthorityPrefix("ROLE_");
 
 		JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-		converter.setJwtGrantedAuthoritiesConverter(authorities);
+		converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+			Collection<GrantedAuthority> tokenAuthorities = authorities.convert(jwt);
+			List<GrantedAuthority> result = tokenAuthorities == null
+					? new ArrayList<>() : new ArrayList<>(tokenAuthorities);
+			if ("SUPER_ADMIN".equals(jwt.getClaimAsString(JwtTokenProvider.ROLE_CLAIM))) {
+				result.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+			}
+			return result;
+		});
 		return converter;
 	}
 
@@ -142,8 +166,12 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	JwtDecoder jwtDecoder(JwtProperties properties) {
-		return NimbusJwtDecoder.withSecretKey(properties.secretKey()).macAlgorithm(MacAlgorithm.HS256).build();
+	JwtDecoder jwtDecoder(JwtProperties properties, AccessTokenValidator accessTokenValidator) {
+		NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(properties.secretKey())
+				.macAlgorithm(MacAlgorithm.HS256).build();
+		decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+				JwtValidators.createDefault(), accessTokenValidator));
+		return decoder;
 	}
 
 	@Bean

@@ -6,7 +6,7 @@ import java.io.UncheckedIOException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.example.shopping.domain.upload.dto.UploadResponse;
+import com.example.shopping.domain.upload.dto.response.UploadResponse;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 

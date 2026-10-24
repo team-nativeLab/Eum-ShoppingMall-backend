@@ -3,21 +3,26 @@ package com.example.shopping.domain.order.controller;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
-import com.example.shopping.domain.order.dto.AdminOrderDetailResponse;
-import com.example.shopping.domain.order.dto.AdminOrderSummaryResponse;
-import com.example.shopping.domain.order.dto.AdminOrderUpdateRequest;
+import com.example.shopping.domain.order.dto.request.AdminOrderCancelRequest;
+import com.example.shopping.domain.order.dto.response.AdminOrderDetailResponse;
+import com.example.shopping.domain.order.dto.response.AdminOrderSummaryResponse;
+import com.example.shopping.domain.order.dto.request.AdminOrderUpdateRequest;
 import com.example.shopping.domain.order.entity.OrderStatus;
 import com.example.shopping.domain.order.service.AdminOrderService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
+import com.example.shopping.global.security.CurrentMember;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -50,5 +55,13 @@ public class AdminOrderController {
 	public ApiResponse<AdminOrderDetailResponse> updateOrder(@PathVariable Long orderId,
 			@Valid @RequestBody AdminOrderUpdateRequest request) {
 		return ApiResponse.ok(adminOrderService.update(orderId, request));
+	}
+
+	/** 결제 환불 또는 결제 대기 주문 만료를 처리한다. */
+	@PostMapping("/{orderId}/cancel")
+	public ApiResponse<AdminOrderDetailResponse> cancelOrder(@AuthenticationPrincipal Jwt jwt,
+			@PathVariable Long orderId, @Valid @RequestBody AdminOrderCancelRequest request) {
+		adminOrderService.cancel(orderId, CurrentMember.id(jwt), request.reason());
+		return ApiResponse.ok(adminOrderService.getDetail(orderId));
 	}
 }

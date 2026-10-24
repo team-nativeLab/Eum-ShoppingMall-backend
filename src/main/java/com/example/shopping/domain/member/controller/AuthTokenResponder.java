@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
 import com.example.shopping.domain.member.dto.AuthTokens;
-import com.example.shopping.domain.member.dto.LoginResponse;
+import com.example.shopping.domain.member.dto.response.LoginResponse;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.security.JwtProperties;
 
@@ -44,7 +44,7 @@ public class AuthTokenResponder {
 		return ResponseCookie.from(REFRESH_COOKIE, value)
 				.httpOnly(true)
 				.secure(jwtProperties.refreshCookieSecure())
-				.sameSite("Strict")
+				.sameSite(jwtProperties.refreshCookieSameSite())
 				.path(COOKIE_PATH)
 				.maxAge(maxAge)
 				.build();

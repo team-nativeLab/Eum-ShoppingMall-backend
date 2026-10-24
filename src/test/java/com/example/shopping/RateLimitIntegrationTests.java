@@ -41,4 +41,30 @@ class RateLimitIntegrationTests {
 		// 조회 API는 제한 대상이 아니다.
 		mockMvc.perform(get("/api/v1/products")).andExpect(status().isOk());
 	}
+
+	@Test
+	void 회원과_관리자_로그인_한도를_우회하려_경로를_바꿔도_같은_IP는_429를_받는다() throws Exception {
+		String body = """
+				{"email":"nobody@example.com","password":"wrong-pass-1234"}
+				""";
+		String remoteAddress = "192.0.2.42";
+
+		mockMvc.perform(post("/api/v1/auth/login").with(request -> {
+			request.setRemoteAddr(remoteAddress);
+			return request;
+		}).contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isUnauthorized());
+		mockMvc.perform(post("/api/v1/admin/auth/login").with(request -> {
+			request.setRemoteAddr(remoteAddress);
+			return request;
+		}).contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isUnauthorized());
+
+		mockMvc.perform(post("/api/v1/auth/login").with(request -> {
+			request.setRemoteAddr(remoteAddress);
+			return request;
+		}).contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isTooManyRequests())
+				.andExpect(jsonPath("$.code").value("TOO_MANY_REQUESTS"));
+	}
 }

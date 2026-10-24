@@ -1,15 +1,19 @@
 package com.example.shopping.global.exception;
 
+import java.sql.SQLTransientConnectionException;
 import java.util.List;
 
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.core.PropertyReferenceException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.TransactionTimedOutException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -75,6 +79,10 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception e) {
+		if (isDatabaseCapacityTimeout(e)) {
+			log.warn("DB 커넥션 또는 쿼리 대기 시간 초과", e);
+			return serviceUnavailableResponse();
+		}
 		// 없는 주소(404), 잘못된 요청 방식(405), 필수 파라미터 누락(400) 같은 스프링 MVC 표준 예외
 		if (e instanceof ErrorResponse errorResponse) {
 			return toResponse(errorResponse);
@@ -85,6 +93,24 @@ public class GlobalExceptionHandler {
 
 	private ResponseEntity<ApiResponse<Void>> toResponse(ErrorCode errorCode) {
 		return ResponseEntity.status(errorCode.getStatus()).body(ApiResponse.fail(errorCode));
+	}
+
+	private boolean isDatabaseCapacityTimeout(Throwable exception) {
+		for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+			if (cause instanceof SQLTransientConnectionException
+					|| cause instanceof TransactionTimedOutException
+					|| cause instanceof QueryTimeoutException
+					|| cause instanceof jakarta.persistence.QueryTimeoutException) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private ResponseEntity<ApiResponse<Void>> serviceUnavailableResponse() {
+		return ResponseEntity.status(ErrorCode.SERVICE_UNAVAILABLE.getStatus())
+				.header(HttpHeaders.RETRY_AFTER, "3")
+				.body(ApiResponse.fail(ErrorCode.SERVICE_UNAVAILABLE));
 	}
 
 	/** 스프링이 정한 상태코드는 유지하되, 코드와 메시지는 우리 에러 코드로 바꿔 내려준다. */

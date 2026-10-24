@@ -157,13 +157,18 @@ class AuthApiTests {
 	void 일반_회원_토큰으로는_관리자_API를_호출할_수_없고_관리자_토큰으로는_호출할_수_있다() throws Exception {
 		signup(EMAIL, PASSWORD, "홍길동", null);
 		insertMember("admin@example.com", PASSWORD, "ADMIN", "ACTIVE");
+		insertMember("super-admin@example.com", PASSWORD, "SUPER_ADMIN", "ACTIVE");
 
 		String memberToken = loginAndGetToken(EMAIL, PASSWORD);
 		String adminToken = loginAndGetToken("admin@example.com", PASSWORD);
+		String superAdminToken = loginAndGetToken("super-admin@example.com", PASSWORD);
 
 		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken))
 				.andExpect(status().isForbidden());
 		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION,
+					"Bearer " + superAdminToken))
 				.andExpect(status().isOk());
 	}
 

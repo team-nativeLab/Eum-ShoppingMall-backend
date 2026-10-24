@@ -9,10 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import org.springframework.util.StringUtils;
 
-import com.example.shopping.domain.support.dto.FaqResponse;
-import com.example.shopping.domain.support.dto.InquiryCreateRequest;
-import com.example.shopping.domain.support.dto.InquiryResponse;
-import com.example.shopping.domain.support.dto.NoticeResponse;
+import com.example.shopping.domain.support.dto.response.FaqResponse;
+import com.example.shopping.domain.support.dto.request.InquiryCreateRequest;
+import com.example.shopping.domain.support.dto.response.InquiryResponse;
+import com.example.shopping.domain.support.dto.response.NoticeResponse;
 import com.example.shopping.domain.support.entity.Inquiry;
 import com.example.shopping.domain.support.repository.FaqRepository;
 import com.example.shopping.domain.support.repository.InquiryRepository;
