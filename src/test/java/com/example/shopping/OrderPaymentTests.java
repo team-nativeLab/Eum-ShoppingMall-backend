@@ -475,6 +475,25 @@ class OrderPaymentTests {
 	}
 
 	@Test
+	void 가상계좌_보정_작업이_잠금을_잡고_있어도_결제_기한_만료는_처리된다() throws Exception {
+		long sku = insertProductWithSku("안전모", 30000, true, 5);
+		String expiredOrder = createOrder(buyer, sku, 2);
+		jdbcTemplate.update("update orders set expires_at = ? where order_no = ?",
+				LocalDateTime.now().minusMinutes(1), expiredOrder);
+		// 다른 서버가 PG를 조회하며 가상계좌 보정 잠금을 오래 잡고 있는 상황
+		jdbcTemplate.update("""
+				update scheduler_lock set lock_until = ?, lock_owner = 'other-instance'
+				where lock_name = 'reconcileWaitingDeposits'
+				""", LocalDateTime.now().plusMinutes(10));
+		entityManager.clear();
+
+		scheduler.expireUnpaidOrders();
+
+		assertThat(statusOf(expiredOrder)).isEqualTo("EXPIRED");
+		assertThat(stockOf(sku)).isEqualTo(5);
+	}
+
+	@Test
 	void 가상계좌_입금_웹훅은_PG를_재조회하고_한번만_입금완료를_반영한다() throws Exception {
 		long sku = insertProductWithSku("안전모", 30000, true, 5);
 		String orderNo = createOrder(buyer, sku, 1);
@@ -543,7 +562,7 @@ class OrderPaymentTests {
 		confirm(buyer, orderNo, 34700).andExpect(status().isOk());
 		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(waiting));
 
-		scheduler.expireUnpaidOrders();
+		scheduler.reconcileExpiredDeposits();
 
 		assertThat(statusOf(orderNo)).isEqualTo("EXPIRED");
 		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("FAILED");
