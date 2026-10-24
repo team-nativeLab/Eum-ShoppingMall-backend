@@ -3,7 +3,6 @@ package com.example.shopping.domain.member.service;
 import java.time.LocalDateTime;
 import java.util.Locale;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,29 +31,30 @@ public class AuthService {
 
 	private final MemberRepository memberRepository;
 	private final PasswordEncoder passwordEncoder;
-	private final JwtTokenProvider jwtTokenProvider;
-	private final RefreshTokenService refreshTokenService;
-	private final AccessTokenService accessTokenService;
 	private final EmailVerificationService emailVerificationService;
 	private final TransactionTemplate transactionTemplate;
 	private final boolean signupEmailVerificationRequired;
+	private final JwtTokenProvider jwtTokenProvider;
+	private final RefreshTokenService refreshTokenService;
+	private final AccessTokenService accessTokenService;
 
 	// 없는 이메일로 로그인해도 해시 비교를 한 번 수행해, 응답 시간으로 가입 여부를 추측하지 못하게 한다.
 	private final String dummyPasswordHash;
 
-	public AuthService(MemberRepository memberRepository, PasswordEncoder passwordEncoder,
+	public AuthService(EmailVerificationService emailVerificationService, TransactionTemplate transactionTemplate,
+			@org.springframework.beans.factory.annotation.Value("${app.auth.signup-email-verification-required:false}")
+			boolean signupEmailVerificationRequired,
+			MemberRepository memberRepository, PasswordEncoder passwordEncoder,
 			JwtTokenProvider jwtTokenProvider, RefreshTokenService refreshTokenService,
-			AccessTokenService accessTokenService, EmailVerificationService emailVerificationService,
-			TransactionTemplate transactionTemplate,
-			@Value("${app.auth.signup-email-verification-required:false}") boolean signupEmailVerificationRequired) {
+			AccessTokenService accessTokenService) {
 		this.memberRepository = memberRepository;
 		this.passwordEncoder = passwordEncoder;
-		this.jwtTokenProvider = jwtTokenProvider;
-		this.refreshTokenService = refreshTokenService;
-		this.accessTokenService = accessTokenService;
 		this.emailVerificationService = emailVerificationService;
 		this.transactionTemplate = transactionTemplate;
 		this.signupEmailVerificationRequired = signupEmailVerificationRequired;
+		this.jwtTokenProvider = jwtTokenProvider;
+		this.refreshTokenService = refreshTokenService;
+		this.accessTokenService = accessTokenService;
 		this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-timing");
 	}
 
