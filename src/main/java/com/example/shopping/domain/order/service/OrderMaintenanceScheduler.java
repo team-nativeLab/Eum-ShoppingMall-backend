@@ -46,10 +46,13 @@ public class OrderMaintenanceScheduler {
 	private final RefreshTokenService refreshTokenService;
 	private final SchedulerLockService schedulerLockService;
 
-	/** 결제 기한이 지난 결제 대기 주문을 만료시키고 잡아 둔 재고를 되돌린다. */
+	/**
+	 * 결제 기한이 지난 결제 대기 주문을 만료시키고 잡아 둔 재고를 되돌린다.
+	 * DB만 쓰는 작업이라 자기 잠금으로 돌린다. PG를 부르는 가상계좌 작업이 느려도 재고 반환이 늦어지지 않는다.
+	 */
 	@Scheduled(fixedDelay = 60_000)
 	public void expireUnpaidOrders() {
-		runLocked("expireUnpaidOrders", "reconcileWaitingDeposits", (stats, owner) -> {
+		runLocked("expireUnpaidOrders", (stats, owner) -> {
 			List<Long> pendingIds = orderRepository.findExpiredPendingIds(LocalDateTime.now(),
 					PageRequest.of(0, DB_BATCH_SIZE));
 			for (Long orderId : pendingIds) {
@@ -58,7 +61,16 @@ public class OrderMaintenanceScheduler {
 				}
 				process(stats, "주문 만료 처리", orderId, () -> orderTxService.expire(orderId));
 			}
+		});
+	}
 
+	/**
+	 * 입금 기한이 지난 가상계좌를 PG에서 확인해 입금 완료나 만료로 정리한다.
+	 * 같은 가상계좌를 동시에 보정하지 않도록 가상계좌 상태 보정과 같은 잠금을 쓴다.
+	 */
+	@Scheduled(fixedDelay = 60_000)
+	public void reconcileExpiredDeposits() {
+		runLocked("reconcileExpiredDeposits", "reconcileWaitingDeposits", (stats, owner) -> {
 			List<Long> expiredDepositIds = orderRepository.findExpiredWaitingDepositIds(LocalDateTime.now(),
 					PageRequest.of(0, PG_BATCH_SIZE));
 			for (Long orderId : expiredDepositIds) {
