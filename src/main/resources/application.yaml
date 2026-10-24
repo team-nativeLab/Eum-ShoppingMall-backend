@@ -37,6 +37,9 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      # Redis가 응답을 멈춰도 요청이 오래 묶이지 않게 짧게 둔다. 넘기면 각 기능의 대체 동작(DB 조회 등)으로 넘어간다.
+      timeout: ${REDIS_COMMAND_TIMEOUT:500ms}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
     web:
       pageable:
         # ?size=에 큰 값을 넣어 한 번에 대량 조회하는 것을 막는다.
@@ -75,8 +78,9 @@ management:
         enabled: true
       group:
         readiness:
-          # Redis backs request limits and access-token revocation/version checks.
-          include: readinessState,redis
+          # Redis는 넣지 않는다. Redis가 멈추면 로드밸런서가 모든 서버를 내려 Redis와 상관없는 기능까지 멈추기 때문이다.
+          # Redis를 쓰는 기능은 장애 때 대체 동작으로 계속 응답하고, Redis 상태는 /actuator/health(관리자)와 지표로 본다.
+          include: readinessState
   health:
     redis:
       enabled: true
@@ -133,6 +137,9 @@ app:
   cache:
     # 공개 상품 조회의 공유 Redis 캐시 TTL (초)
     product-ttl-seconds: ${PRODUCT_READ_CACHE_TTL_SECONDS:60}
+    # Access 토큰 검증용 회원 상태(계정 상태·토큰 버전)의 Redis 캐시 TTL (초). 0이면 요청마다 DB에서 읽는다.
+    # 앱을 거치지 않고 DB에서 직접 회원을 정지하면 이 시간이 지나야 반영된다.
+    member-token-state-ttl-seconds: ${MEMBER_TOKEN_STATE_CACHE_TTL_SECONDS:300}
   seed:
     # 카테고리가 하나도 없으면 기본 카테고리(안전모, 보안경, 안전장갑, 방진마스크, 안전화, 귀마개)를 만든다.
     default-categories: ${SEED_DEFAULT_CATEGORIES:true}

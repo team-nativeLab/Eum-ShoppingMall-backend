@@ -14,6 +14,7 @@ import com.example.shopping.domain.order.repository.CheckoutDeliveryRepository;
 import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
+import com.example.shopping.global.security.MemberTokenStateCache;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,6 +29,7 @@ public class MemberService {
 	private final CartItemRepository cartItemRepository;
 	private final CheckoutDeliveryRepository checkoutDeliveryRepository;
 	private final OrderRepository orderRepository;
+	private final MemberTokenStateCache memberTokenStateCache;
 
 	public MeResponse getMe(Long memberId) {
 		return MeResponse.from(findActive(memberId));
@@ -52,6 +54,7 @@ public class MemberService {
 		}
 		member.changePassword(passwordEncoder.encode(request.newPassword()));
 		memberRepository.save(member);
+		memberTokenStateCache.refresh(member);
 		refreshTokenService.revokeAll(memberId);
 	}
 
@@ -68,6 +71,7 @@ public class MemberService {
 		checkoutDeliveryRepository.deleteByMemberId(memberId);
 		member.withdraw();
 		memberRepository.save(member);
+		memberTokenStateCache.refresh(member);
 		refreshTokenService.revokeAll(memberId);
 	}
 
