@@ -26,6 +26,10 @@ public enum ErrorCode {
 	FILE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "파일이 너무 큽니다. 5MB 이하의 파일만 올릴 수 있습니다."),
 	REQUEST_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "요청 내용이 너무 큽니다."),
 	INVALID_FILE(HttpStatus.BAD_REQUEST, "업로드할 수 없는 파일입니다. JPG, PNG, GIF, WEBP 이미지만 올릴 수 있습니다."),
+	UPLOAD_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+	UPLOAD_NOT_FOUND(HttpStatus.NOT_FOUND, "업로드된 파일을 찾을 수 없습니다. 다시 업로드해 주세요."),
+	PRESIGNED_UPLOAD_NOT_SUPPORTED(HttpStatus.NOT_IMPLEMENTED, "이 서버에서는 직접 업로드를 쓸 수 없습니다. 파일 업로드(POST /api/v1/uploads)를 사용해 주세요."),
+	INVALID_IMAGE_URL(HttpStatus.BAD_REQUEST, "이미지 주소는 파일 업로드 API가 돌려준 주소만 쓸 수 있습니다."),
 	BANNER_NOT_FOUND(HttpStatus.NOT_FOUND, "배너를 찾을 수 없습니다."),
 	CONTENT_NOT_FOUND(HttpStatus.NOT_FOUND, "콘텐츠를 찾을 수 없습니다."),
 
