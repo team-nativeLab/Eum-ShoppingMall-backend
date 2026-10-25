@@ -49,7 +49,9 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
 	}
 
 	private boolean isAuditedPath(String path) {
-		return path.startsWith("/api/v1/admin/") || "/api/v1/uploads".equals(path);
+		// 이미지 업로드는 서버를 거치는 업로드와 직접 업로드의 완료 요청을 남긴다.
+		return path.startsWith("/api/v1/admin/") || "/api/v1/uploads".equals(path)
+				|| "/api/v1/uploads/complete".equals(path);
 	}
 
 	private Long authenticatedMemberId() {
