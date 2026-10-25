@@ -872,7 +872,7 @@ class AdminApiTests {
 				{"imageUrl":"/files/second.png","sortOrder":2}
 				""").andExpect(status().isCreated()).andExpect(jsonPath("$.data.visible").value(true)));
 		long firstId = idOf(postJson("/api/v1/admin/banners", """
-				{"imageUrl":"https://cdn.example.com/first.png","linkUrl":"/products/1","sortOrder":1,"visible":false}
+				{"imageUrl":"/files/first.png","linkUrl":"/products/1","sortOrder":1,"visible":false}
 				""").andExpect(status().isCreated()));
 
 		mockMvc.perform(get("/api/v1/admin/banners"))
@@ -884,7 +884,7 @@ class AdminApiTests {
 				{"linkUrl":"","visible":true}
 				""")
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.imageUrl").value("https://cdn.example.com/first.png"))
+				.andExpect(jsonPath("$.data.imageUrl").value("/files/first.png"))
 				.andExpect(jsonPath("$.data.linkUrl").doesNotExist())
 				.andExpect(jsonPath("$.data.visible").value(true));
 
@@ -900,6 +900,31 @@ class AdminApiTests {
 		mockMvc.perform(delete("/api/v1/admin/banners/{id}", secondId))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("BANNER_NOT_FOUND"));
+	}
+
+	@Test
+	void 상품과_배너_이미지는_업로드_API가_돌려준_주소만_받는다() throws Exception {
+		postJson("/api/v1/admin/banners", """
+				{"imageUrl":"https://tracker.example.com/a.png"}
+				""").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_IMAGE_URL"));
+		postJson("/api/v1/admin/products", """
+				{"name":"안전모","basePrice":1000,"status":"HIDDEN","imageUrl":"/files/../application.yaml"}
+				""").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_IMAGE_URL"));
+
+		long productId = idOf(postJson("/api/v1/admin/products", """
+				{"name":"안전모","basePrice":1000,"status":"HIDDEN","imageUrl":"/files/helmet.png"}
+				"""));
+		patchJson("/api/v1/admin/products/" + productId, """
+				{"imageUrl":"https://tracker.example.com/a.png"}
+				""").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_IMAGE_URL"));
+
+		// 제한 전에 저장한 외부 주소는 수정 화면이 그대로 다시 보내도 통과한다.
+		jdbcTemplate.update("update product set image_url = ? where id = ?", "https://old.example.com/a.png",
+				productId);
+		entityManager.clear();
+		patchJson("/api/v1/admin/products/" + productId, """
+				{"name":"새 안전모","imageUrl":"https://old.example.com/a.png"}
+				""").andExpect(status().isOk());
 	}
 
 	// ───────── 파일 업로드 ─────────
@@ -942,6 +967,20 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 		mockMvc.perform(post("/api/v1/uploads").contentType(MediaType.APPLICATION_JSON).content("{}"))
 				.andExpect(status().isUnsupportedMediaType());
+	}
+
+	@Test
+	void 로컬_저장소에서는_직접_업로드를_쓸_수_없다고_알린다() throws Exception {
+		postJson("/api/v1/uploads/presigned-url", """
+				{"contentType":"image/png","contentLength":12}
+				""")
+				.andExpect(status().isNotImplemented())
+				.andExpect(jsonPath("$.code").value("PRESIGNED_UPLOAD_NOT_SUPPORTED"));
+		postJson("/api/v1/uploads/complete", """
+				{"fileKey":"products/2026/10/a.png"}
+				""")
+				.andExpect(status().isNotImplemented())
+				.andExpect(jsonPath("$.code").value("PRESIGNED_UPLOAD_NOT_SUPPORTED"));
 	}
 
 	// ───────── 대시보드 ─────────
