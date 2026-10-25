@@ -66,6 +66,10 @@ public class SecurityConfig {
 			"/api/v1/auth/login",
 			"/api/v1/auth/refresh",
 			"/api/v1/auth/logout",
+			"/api/v1/auth/email-verifications",
+			"/api/v1/auth/email-verifications/confirm",
+			"/api/v1/auth/password-reset",
+			"/api/v1/auth/password-reset/confirm",
 			"/api/v1/admin/auth/login",
 	};
 

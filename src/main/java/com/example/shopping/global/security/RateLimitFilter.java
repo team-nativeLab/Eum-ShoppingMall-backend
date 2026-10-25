@@ -47,6 +47,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
 			rule(HttpMethod.POST, "/api/v1/auth/login", "POST /api/v1/login"),
 			rule(HttpMethod.POST, "/api/v1/auth/signup"),
 			rule(HttpMethod.POST, "/api/v1/auth/refresh"),
+			// 인증번호 발송(메일 비용·스팸)과 확인(번호 대입)을 IP별로 제한한다.
+			rule(HttpMethod.POST, "/api/v1/auth/email-verifications"),
+			rule(HttpMethod.POST, "/api/v1/auth/email-verifications/confirm"),
+			rule(HttpMethod.POST, "/api/v1/auth/password-reset"),
+			rule(HttpMethod.POST, "/api/v1/auth/password-reset/confirm"),
 			rule(HttpMethod.POST, "/api/v1/admin/auth/login", "POST /api/v1/login"),
 			rule(HttpMethod.PATCH, "/api/v1/me/password"),
 			rule(HttpMethod.POST, "/api/v1/quotes"),
