@@ -117,6 +117,23 @@ variable "desired_count" {
   }
 }
 
+variable "upload_storage" {
+  description = "Image storage: local keeps files on the EFS volume, s3 uses the uploads bucket behind CloudFront. Switch to s3 after copying existing files (docs/deployment-aws.md)."
+  type        = string
+  default     = "local"
+  validation {
+    condition     = contains(["local", "s3"], var.upload_storage)
+    error_message = "upload_storage must be local or s3."
+  }
+  validation {
+    condition = var.upload_storage == "local" || (
+      contains(keys(var.application_secret_arns), "UPLOAD_S3_ACCESS_KEY") &&
+      contains(keys(var.application_secret_arns), "UPLOAD_S3_SECRET_KEY")
+    )
+    error_message = "upload_storage = s3 needs UPLOAD_S3_ACCESS_KEY and UPLOAD_S3_SECRET_KEY in application_secret_arns."
+  }
+}
+
 variable "enable_ecs_service" {
   description = "Keep false until the restricted DB user and schema are ready."
   type        = bool
