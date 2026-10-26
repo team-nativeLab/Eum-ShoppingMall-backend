@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -76,7 +77,7 @@ class AdminApiTests {
 	@Test
 	@WithAnonymousUser
 	void 관리자_로그인은_관리자_계정에만_토큰을_준다() throws Exception {
-		insertMember("admin@example.com", "관리자", "ADMIN");
+		long adminId = insertMember("admin@example.com", "관리자", "ADMIN");
 		insertMember("member@example.com", "홍길동", "USER");
 
 		String body = adminLogin("admin@example.com", PASSWORD)
@@ -93,6 +94,19 @@ class AdminApiTests {
 		adminLogin("admin@example.com", "wrong-pass-1234")
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
+
+		// 성공·실패를 감사 로그에 남긴다. 실패는 누가 했는지 모르므로 입력한 이메일만 남기고, 비밀번호는 남기지 않는다.
+		var logins = jdbcTemplate.queryForList("""
+				select actor_member_id, response_status, details from admin_audit_log
+				where action = 'LOGIN' order by id
+				""");
+		assertThat(logins).extracting(row -> row.get("RESPONSE_STATUS")).containsExactly(200, 401, 401);
+		assertThat(logins.get(0).get("ACTOR_MEMBER_ID")).isEqualTo(adminId);
+		assertThat(logins.get(1).get("ACTOR_MEMBER_ID")).isNull();
+		assertThat((String) logins.get(1).get("DETAILS")).contains("member@example.com");
+		assertThat((String) logins.get(2).get("DETAILS")).contains("admin@example.com");
+		assertThat(logins).allSatisfy(row -> assertThat(String.valueOf(row.get("DETAILS")))
+				.doesNotContain(PASSWORD, "wrong-pass-1234"));
 	}
 
 	@Test
@@ -230,12 +244,16 @@ class AdminApiTests {
 				String.class, superAdminId)).isEqualTo("contents");
 		assertThat(jdbcTemplate.queryForObject("select target_id from admin_audit_log where actor_member_id = ?",
 				String.class, superAdminId)).isEqualTo("terms");
+		// 무엇으로 바꿨는지(요청 본문)도 남긴다.
+		assertThat(jdbcTemplate.queryForObject("select details from admin_audit_log where actor_member_id = ?",
+				String.class, superAdminId)).isEqualTo("{\"title\":\"이용약관\",\"body\":\"서비스 이용 약관\"}");
 
 		mockMvc.perform(get("/api/v1/admin/audit-logs").with(admin(adminId)))
 				.andExpect(status().isForbidden());
 		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.totalElements").value(1));
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].details").value(Matchers.containsString("서비스 이용 약관")));
 	}
 
 	@Test

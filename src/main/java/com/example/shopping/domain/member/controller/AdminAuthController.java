@@ -11,6 +11,7 @@ import com.example.shopping.domain.member.dto.response.LoginResponse;
 import com.example.shopping.domain.member.service.AuthService;
 import com.example.shopping.global.response.ApiResponse;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -24,7 +25,8 @@ public class AdminAuthController {
 
 	/** ADM-001 관리자 로그인. 권한이 ADMIN인 계정만 토큰을 받는다. 재발급·로그아웃은 회원과 같은 API를 쓴다. */
 	@PostMapping("/login")
-	public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
-		return responder.withTokens(authService.adminLogin(request));
+	public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request,
+			HttpServletRequest httpRequest) {
+		return responder.withTokens(authService.adminLogin(request, httpRequest.getRemoteAddr()));
 	}
 }
