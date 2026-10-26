@@ -93,7 +93,7 @@ public class SecurityConfig {
 			@Value("${cors.allowed-origins}") List<String> allowedOrigins,
 			StringRedisTemplate redisTemplate,
 			@Value("${security.rate-limit.requests-per-minute}") int requestsPerMinute,
-			@Value("${security.rate-limit.public-product-requests-per-minute:120}") int publicProductRequestsPerMinute,
+			@Value("${security.rate-limit.public-product-requests-per-minute:300}") int publicProductRequestsPerMinute,
 			@Value("${security.request.max-body-bytes}") long maxBodyBytes) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
