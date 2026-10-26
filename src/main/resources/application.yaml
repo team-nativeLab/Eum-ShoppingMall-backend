@@ -107,8 +107,9 @@ security:
   rate-limit:
     # 로그인·회원가입·문의 접수·주문·결제 등에 적용하는 IP별 분당 요청 한도
     requests-per-minute: ${RATE_LIMIT_PER_MINUTE:10}
-    # 자동완성을 포함한 공개 상품 조회의 IP별 분당 한도
-    public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:120}
+    # 공개 상품 조회의 IP별 분당 한도. 목록·필터 개수·브랜드·상세를 각각 따로 세고, 자동 완성은 이 값의 두 배다.
+    # 한 사무실 직원들이 같은 공인 IP로 접속하므로 넉넉하게 둔다. 크롤링 같은 대량 요청은 프록시·WAF에서 막는다.
+    public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:300}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
     max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}
@@ -132,8 +133,33 @@ upload:
     bucket: ${UPLOAD_S3_BUCKET:}
     region: ${AWS_REGION:}
     cdn-base-url: ${UPLOAD_CDN_BASE_URL:}
+    # 업로드 전용 IAM 사용자의 액세스 키. 값은 서버 환경변수로만 넣는다.
+    access-key: ${UPLOAD_S3_ACCESS_KEY:}
+    secret-key: ${UPLOAD_S3_SECRET_KEY:}
+    # 직접 업로드 주소(Presigned URL)가 유효한 시간(분, 3~60)
+    presigned-url-expiration-minutes: ${UPLOAD_PRESIGNED_URL_EXPIRATION_MINUTES:10}
+  cleanup:
+    # 상품·배너가 쓰지 않는 업로드 이미지를 지우는 시각. 올린 지 min-age-hours가 지난 파일만 지운다.
+    cron: ${UPLOAD_CLEANUP_CRON:0 30 4 * * *}
+    min-age-hours: ${UPLOAD_CLEANUP_MIN_AGE_HOURS:24}
+    # 설정·데이터 오류로 쓰는 파일까지 지우는 사고를 줄이려고 한 번에 지우는 수를 제한한다.
+    max-deletes-per-run: ${UPLOAD_CLEANUP_MAX_DELETES_PER_RUN:1000}
 
 app:
+  auth:
+    # true면 회원가입에 이메일 인증 토큰이 필요하다. 프론트가 인증 화면을 붙이고 메일 서버(MAIL_HOST)를 설정한 뒤 켠다.
+    signup-email-verification-required: ${SIGNUP_EMAIL_VERIFICATION_REQUIRED:false}
+  mail:
+    # 인증번호 메일을 보낼 SMTP 서버 (AWS SES SMTP, 사내 메일 서버 등). 비어 있으면 보내지 않고 로그만 남긴다.
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    # 계정을 주면 SMTP 인증과 STARTTLS를 켠다.
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    # 보내는 사람 주소. MAIL_HOST를 설정하면 필수다. (예: no-reply@example.com 또는 "이음 쇼핑몰 <no-reply@example.com>")
+    from: ${MAIL_FROM:}
+    # 메일 제목 앞에 붙는 이름
+    service-name: ${MAIL_SERVICE_NAME:이음 쇼핑몰}
   cache:
     # 공개 상품 조회의 공유 Redis 캐시 TTL (초)
     product-ttl-seconds: ${PRODUCT_READ_CACHE_TTL_SECONDS:60}

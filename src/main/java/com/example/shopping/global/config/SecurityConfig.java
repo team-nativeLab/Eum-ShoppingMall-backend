@@ -67,6 +67,10 @@ public class SecurityConfig {
 			"/api/v1/auth/login",
 			"/api/v1/auth/refresh",
 			"/api/v1/auth/logout",
+			"/api/v1/auth/email-verifications",
+			"/api/v1/auth/email-verifications/confirm",
+			"/api/v1/auth/password-reset",
+			"/api/v1/auth/password-reset/confirm",
 			"/api/v1/admin/auth/login",
 	};
 
@@ -90,7 +94,7 @@ public class SecurityConfig {
 			@Value("${cors.allowed-origins}") List<String> allowedOrigins,
 			StringRedisTemplate redisTemplate, RedisCircuitBreaker redisCircuitBreaker,
 			@Value("${security.rate-limit.requests-per-minute}") int requestsPerMinute,
-			@Value("${security.rate-limit.public-product-requests-per-minute:120}") int publicProductRequestsPerMinute,
+			@Value("${security.rate-limit.public-product-requests-per-minute:300}") int publicProductRequestsPerMinute,
 			@Value("${security.request.max-body-bytes}") long maxBodyBytes) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
@@ -108,7 +112,8 @@ public class SecurityConfig {
 						.requestMatchers(API_DOCS).permitAll()
 						.requestMatchers("/actuator/health/**").permitAll()
 						// 헬스 체크 외의 운영 엔드포인트는 켜더라도 관리자만 볼 수 있다.
-						.requestMatchers("/api/v1/admin/**", "/api/v1/uploads", "/actuator/**").hasRole("ADMIN")
+						.requestMatchers("/api/v1/admin/**", "/api/v1/uploads", "/api/v1/uploads/**", "/actuator/**")
+								.hasRole("ADMIN")
 						.anyRequest().authenticated())
 				// Authorization: Bearer 헤더의 Access 토큰을 검증해 로그인 회원으로 인증한다.
 				.oauth2ResourceServer(oauth2 -> oauth2

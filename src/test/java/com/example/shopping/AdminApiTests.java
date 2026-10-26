@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -76,7 +77,7 @@ class AdminApiTests {
 	@Test
 	@WithAnonymousUser
 	void 관리자_로그인은_관리자_계정에만_토큰을_준다() throws Exception {
-		insertMember("admin@example.com", "관리자", "ADMIN");
+		long adminId = insertMember("admin@example.com", "관리자", "ADMIN");
 		insertMember("member@example.com", "홍길동", "USER");
 
 		String body = adminLogin("admin@example.com", PASSWORD)
@@ -93,6 +94,19 @@ class AdminApiTests {
 		adminLogin("admin@example.com", "wrong-pass-1234")
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
+
+		// 성공·실패를 감사 로그에 남긴다. 실패는 누가 했는지 모르므로 입력한 이메일만 남기고, 비밀번호는 남기지 않는다.
+		var logins = jdbcTemplate.queryForList("""
+				select actor_member_id, response_status, details from admin_audit_log
+				where action = 'LOGIN' order by id
+				""");
+		assertThat(logins).extracting(row -> row.get("RESPONSE_STATUS")).containsExactly(200, 401, 401);
+		assertThat(logins.get(0).get("ACTOR_MEMBER_ID")).isEqualTo(adminId);
+		assertThat(logins.get(1).get("ACTOR_MEMBER_ID")).isNull();
+		assertThat((String) logins.get(1).get("DETAILS")).contains("member@example.com");
+		assertThat((String) logins.get(2).get("DETAILS")).contains("admin@example.com");
+		assertThat(logins).allSatisfy(row -> assertThat(String.valueOf(row.get("DETAILS")))
+				.doesNotContain(PASSWORD, "wrong-pass-1234"));
 	}
 
 	@Test
@@ -230,12 +244,16 @@ class AdminApiTests {
 				String.class, superAdminId)).isEqualTo("contents");
 		assertThat(jdbcTemplate.queryForObject("select target_id from admin_audit_log where actor_member_id = ?",
 				String.class, superAdminId)).isEqualTo("terms");
+		// 무엇으로 바꿨는지(요청 본문)도 남긴다.
+		assertThat(jdbcTemplate.queryForObject("select details from admin_audit_log where actor_member_id = ?",
+				String.class, superAdminId)).isEqualTo("{\"title\":\"이용약관\",\"body\":\"서비스 이용 약관\"}");
 
 		mockMvc.perform(get("/api/v1/admin/audit-logs").with(admin(adminId)))
 				.andExpect(status().isForbidden());
 		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.totalElements").value(1));
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].details").value(Matchers.containsString("서비스 이용 약관")));
 	}
 
 	@Test
@@ -872,7 +890,7 @@ class AdminApiTests {
 				{"imageUrl":"/files/second.png","sortOrder":2}
 				""").andExpect(status().isCreated()).andExpect(jsonPath("$.data.visible").value(true)));
 		long firstId = idOf(postJson("/api/v1/admin/banners", """
-				{"imageUrl":"https://cdn.example.com/first.png","linkUrl":"/products/1","sortOrder":1,"visible":false}
+				{"imageUrl":"/files/first.png","linkUrl":"/products/1","sortOrder":1,"visible":false}
 				""").andExpect(status().isCreated()));
 
 		mockMvc.perform(get("/api/v1/admin/banners"))
@@ -884,7 +902,7 @@ class AdminApiTests {
 				{"linkUrl":"","visible":true}
 				""")
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.imageUrl").value("https://cdn.example.com/first.png"))
+				.andExpect(jsonPath("$.data.imageUrl").value("/files/first.png"))
 				.andExpect(jsonPath("$.data.linkUrl").doesNotExist())
 				.andExpect(jsonPath("$.data.visible").value(true));
 
@@ -900,6 +918,31 @@ class AdminApiTests {
 		mockMvc.perform(delete("/api/v1/admin/banners/{id}", secondId))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("BANNER_NOT_FOUND"));
+	}
+
+	@Test
+	void 상품과_배너_이미지는_업로드_API가_돌려준_주소만_받는다() throws Exception {
+		postJson("/api/v1/admin/banners", """
+				{"imageUrl":"https://tracker.example.com/a.png"}
+				""").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_IMAGE_URL"));
+		postJson("/api/v1/admin/products", """
+				{"name":"안전모","basePrice":1000,"status":"HIDDEN","imageUrl":"/files/../application.yaml"}
+				""").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_IMAGE_URL"));
+
+		long productId = idOf(postJson("/api/v1/admin/products", """
+				{"name":"안전모","basePrice":1000,"status":"HIDDEN","imageUrl":"/files/helmet.png"}
+				"""));
+		patchJson("/api/v1/admin/products/" + productId, """
+				{"imageUrl":"https://tracker.example.com/a.png"}
+				""").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_IMAGE_URL"));
+
+		// 제한 전에 저장한 외부 주소는 수정 화면이 그대로 다시 보내도 통과한다.
+		jdbcTemplate.update("update product set image_url = ? where id = ?", "https://old.example.com/a.png",
+				productId);
+		entityManager.clear();
+		patchJson("/api/v1/admin/products/" + productId, """
+				{"name":"새 안전모","imageUrl":"https://old.example.com/a.png"}
+				""").andExpect(status().isOk());
 	}
 
 	// ───────── 파일 업로드 ─────────
@@ -942,6 +985,20 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 		mockMvc.perform(post("/api/v1/uploads").contentType(MediaType.APPLICATION_JSON).content("{}"))
 				.andExpect(status().isUnsupportedMediaType());
+	}
+
+	@Test
+	void 로컬_저장소에서는_직접_업로드를_쓸_수_없다고_알린다() throws Exception {
+		postJson("/api/v1/uploads/presigned-url", """
+				{"contentType":"image/png","contentLength":12}
+				""")
+				.andExpect(status().isNotImplemented())
+				.andExpect(jsonPath("$.code").value("PRESIGNED_UPLOAD_NOT_SUPPORTED"));
+		postJson("/api/v1/uploads/complete", """
+				{"fileKey":"products/2026/10/a.png"}
+				""")
+				.andExpect(status().isNotImplemented())
+				.andExpect(jsonPath("$.code").value("PRESIGNED_UPLOAD_NOT_SUPPORTED"));
 	}
 
 	// ───────── 대시보드 ─────────
