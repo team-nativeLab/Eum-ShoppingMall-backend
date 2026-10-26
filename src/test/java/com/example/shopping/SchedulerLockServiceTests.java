@@ -68,4 +68,17 @@ class SchedulerLockServiceTests {
 		assertThat(schedulerLockService.advanceCursor("job", secondOwner, 42)).isTrue();
 		assertThat(schedulerLockService.getCursor("job", secondOwner)).isEqualTo(42);
 	}
+
+	@Test
+	void 잠금_행이_없는_작업은_처음_쓸_때_행을_만들어_잡는다() {
+		Optional<String> owner = schedulerLockService.tryAcquire("new-job", Duration.ofMinutes(1));
+
+		assertThat(owner).isPresent();
+		assertThat(schedulerLockService.tryAcquire("new-job", Duration.ofMinutes(1))).isEmpty();
+		assertThat(schedulerLockService.getCursor("new-job", owner.orElseThrow())).isZero();
+		assertThat(schedulerLockService.release("new-job", owner.orElseThrow())).isTrue();
+		assertThat(schedulerLockService.tryAcquire("new-job", Duration.ofMinutes(1))).isPresent();
+		assertThat(jdbcTemplate.queryForObject("select count(*) from scheduler_lock where lock_name = 'new-job'",
+				Integer.class)).isEqualTo(1);
+	}
 }
