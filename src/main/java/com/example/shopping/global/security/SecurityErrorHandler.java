@@ -51,6 +51,9 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
 		if (isExpiredToken(e)) {
 			return ErrorCode.TOKEN_EXPIRED;
 		}
+		if (hasValidationError(e, AccessTokenValidator.STATE_UNAVAILABLE.getErrorCode())) {
+			return ErrorCode.SERVICE_UNAVAILABLE;
+		}
 		// 토큰 없이(비회원으로) 장바구니를 쓰려고 한 경우. 잘못되거나 만료된 토큰을 보낸 경우는 해당하지 않는다.
 		if (e instanceof InsufficientAuthenticationException && isCartRequest(request)) {
 			return ErrorCode.LOGIN_REQUIRED;
@@ -61,6 +64,11 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
 	private boolean isCartRequest(HttpServletRequest request) {
 		String uri = request.getRequestURI();
 		return uri.equals(CART_PATH) || uri.startsWith(CART_PATH + "/");
+	}
+
+	private boolean hasValidationError(AuthenticationException e, String errorCode) {
+		return e.getCause() instanceof JwtValidationException validation
+				&& validation.getErrors().stream().anyMatch(error -> errorCode.equals(error.getErrorCode()));
 	}
 
 	private boolean isExpiredToken(AuthenticationException e) {

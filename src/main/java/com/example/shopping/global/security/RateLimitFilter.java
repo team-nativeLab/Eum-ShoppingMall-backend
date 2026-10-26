@@ -22,6 +22,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
+import com.example.shopping.global.redis.RedisCircuitBreaker;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -77,6 +78,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 	private final HandlerExceptionResolver resolver;
 	private final Clock clock;
 	private final StringRedisTemplate redisTemplate;
+	private final RedisCircuitBreaker redisCircuitBreaker;
 
 	private final ConcurrentHashMap<String, Window> windows = new ConcurrentHashMap<>();
 	private final AtomicLong lastSweptWindow = new AtomicLong();
@@ -89,11 +91,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
 	public RateLimitFilter(int requestsPerMinute, int publicProductRequestsPerMinute,
 			HandlerExceptionResolver resolver, Clock clock, StringRedisTemplate redisTemplate) {
+		this(requestsPerMinute, publicProductRequestsPerMinute, resolver, clock, redisTemplate,
+				new RedisCircuitBreaker(clock));
+	}
+
+	public RateLimitFilter(int requestsPerMinute, int publicProductRequestsPerMinute,
+			HandlerExceptionResolver resolver, Clock clock, StringRedisTemplate redisTemplate,
+			RedisCircuitBreaker redisCircuitBreaker) {
 		this.requestsPerMinute = requestsPerMinute;
 		this.publicProductRequestsPerMinute = publicProductRequestsPerMinute;
 		this.resolver = resolver;
 		this.clock = clock;
 		this.redisTemplate = redisTemplate;
+		this.redisCircuitBreaker = redisCircuitBreaker;
 	}
 
 	@Override
@@ -132,8 +142,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
 		Window localWindow = incrementLocal(key, currentWindow);
 		String redisKey = "rate-limit:" + currentWindow + ":" + key;
 		try {
-			Long count = redisTemplate.execute(INCREMENT_SCRIPT, Collections.singletonList(redisKey),
-					Long.toString(WINDOW_MILLIS));
+			Long count = redisCircuitBreaker.execute(() -> redisTemplate.execute(INCREMENT_SCRIPT,
+					Collections.singletonList(redisKey), Long.toString(WINDOW_MILLIS)));
 			if (count == null) {
 				throw new DataAccessResourceFailureException("Redis returned no rate-limit counter");
 			}

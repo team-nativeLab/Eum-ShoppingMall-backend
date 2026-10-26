@@ -43,6 +43,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
+import com.example.shopping.global.redis.RedisCircuitBreaker;
 import com.example.shopping.global.security.AccessTokenValidator;
 import com.example.shopping.global.security.JwtProperties;
 import com.example.shopping.global.security.JwtTokenProvider;
@@ -91,7 +92,7 @@ public class SecurityConfig {
 	SecurityFilterChain filterChain(HttpSecurity http, SecurityErrorHandler errorHandler,
 			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
 			@Value("${cors.allowed-origins}") List<String> allowedOrigins,
-			StringRedisTemplate redisTemplate,
+			StringRedisTemplate redisTemplate, RedisCircuitBreaker redisCircuitBreaker,
 			@Value("${security.rate-limit.requests-per-minute}") int requestsPerMinute,
 			@Value("${security.rate-limit.public-product-requests-per-minute:300}") int publicProductRequestsPerMinute,
 			@Value("${security.request.max-body-bytes}") long maxBodyBytes) throws Exception {
@@ -126,7 +127,7 @@ public class SecurityConfig {
 				.addFilterBefore(new RequestSizeLimitFilter(maxBodyBytes, exceptionResolver),
 						BearerTokenAuthenticationFilter.class)
 				.addFilterBefore(new RateLimitFilter(requestsPerMinute, publicProductRequestsPerMinute,
-						exceptionResolver, Clock.systemUTC(), redisTemplate),
+						exceptionResolver, Clock.systemUTC(), redisTemplate, redisCircuitBreaker),
 						BearerTokenAuthenticationFilter.class)
 				.addFilterBefore(new RefreshCookieOriginFilter(allowedOrigins, exceptionResolver),
 						BearerTokenAuthenticationFilter.class);
