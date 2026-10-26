@@ -39,6 +39,8 @@ app:
   cache:
     # 검색 캐시 Redis 호출은 단위 테스트에서 대역으로 검증한다.
     product-ttl-seconds: 0
+    # 회원 상태 캐시도 끈다. 테스트가 DB를 직접 고쳐 정지 상태 등을 만들기 때문이다. 캐시 동작은 단위 테스트에서 검증한다.
+    member-token-state-ttl-seconds: 0
   scheduling:
     # 주기 작업은 테스트에서 직접 호출한다.
     enabled: false

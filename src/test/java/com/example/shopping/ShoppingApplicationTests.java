@@ -139,6 +139,8 @@ class ShoppingApplicationTests {
 	void 관리자_API는_로그인_없이는_401을_돌려준다() throws Exception {
 		mockMvc.perform(get("/api/v1/admin/orders")).andExpect(status().isUnauthorized());
 		mockMvc.perform(post("/api/v1/uploads")).andExpect(status().isUnauthorized());
+		mockMvc.perform(post("/api/v1/uploads/presigned-url")).andExpect(status().isUnauthorized());
+		mockMvc.perform(post("/api/v1/uploads/complete")).andExpect(status().isUnauthorized());
 	}
 
 	@Test
@@ -155,6 +157,8 @@ class ShoppingApplicationTests {
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.code").value("FORBIDDEN"));
 		mockMvc.perform(post("/api/v1/uploads")).andExpect(status().isForbidden());
+		mockMvc.perform(post("/api/v1/uploads/presigned-url")).andExpect(status().isForbidden());
+		mockMvc.perform(post("/api/v1/uploads/complete")).andExpect(status().isForbidden());
 	}
 
 	@Test
