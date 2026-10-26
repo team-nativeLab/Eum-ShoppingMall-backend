@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.shopping.domain.member.dto.request.LoginRequest;
 import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
+import com.example.shopping.domain.member.dto.request.PasswordResetConfirmRequest;
 import com.example.shopping.domain.member.dto.request.SignupRequest;
 import com.example.shopping.domain.member.service.RefreshTokenService;
 import com.jayway.jsonpath.JsonPath;
@@ -352,7 +353,12 @@ class SecurityTests {
 	@Test
 	void 비밀번호가_담긴_요청_객체는_문자열로_바꿔도_비밀번호가_드러나지_않는다() {
 		assertThat(new LoginRequest(EMAIL, PASSWORD).toString()).contains(EMAIL).doesNotContain(PASSWORD);
-		assertThat(new SignupRequest(EMAIL, PASSWORD, "홍길동", null).toString()).doesNotContain(PASSWORD);
+		assertThat(new SignupRequest(EMAIL, PASSWORD, "홍길동", null, "verification-token").toString())
+				.doesNotContain(PASSWORD)
+				.doesNotContain("verification-token");
+		assertThat(new PasswordResetConfirmRequest(EMAIL, "123456", "new-pass-5678").toString())
+				.doesNotContain("123456")
+				.doesNotContain("new-pass-5678");
 		assertThat(new PasswordChangeRequest(PASSWORD, "new-pass-5678").toString())
 				.doesNotContain(PASSWORD)
 				.doesNotContain("new-pass-5678");

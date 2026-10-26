@@ -23,6 +23,7 @@ import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.validation.SortValidator;
+import com.example.shopping.global.security.MemberTokenStateCache;
 
 import lombok.RequiredArgsConstructor;
 
@@ -37,6 +38,7 @@ public class AdminMemberService {
 	private final MemberRepository memberRepository;
 	private final OrderRepository orderRepository;
 	private final RefreshTokenService refreshTokenService;
+	private final MemberTokenStateCache memberTokenStateCache;
 
 	public PageResponse<AdminMemberSummaryResponse> search(String keyword, Pageable pageable) {
 		SortValidator.requireAllowed(pageable, SORTABLE);
@@ -104,6 +106,7 @@ public class AdminMemberService {
 		}
 		if (target.getStatus() != status) {
 			target.changeStatus(status, request.reason() == null ? null : request.reason().trim());
+			memberTokenStateCache.refresh(target);
 			if (status == MemberStatus.SUSPENDED) {
 				refreshTokenService.revokeAll(targetId);
 			}

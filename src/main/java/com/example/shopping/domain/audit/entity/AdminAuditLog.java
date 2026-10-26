@@ -22,7 +22,8 @@ public class AdminAuditLog extends BaseTimeEntity {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@Column(nullable = false)
+	/** 관리자 로그인 실패처럼 누가 했는지 모르는 기록은 비어 있다. */
+	@Column
 	private Long actorMemberId;
 
 	@Column(nullable = false, length = 45)
@@ -40,11 +41,15 @@ public class AdminAuditLog extends BaseTimeEntity {
 	@Column(nullable = false, length = 500)
 	private String summary;
 
+	/** 바꾼 항목과 값(요청 본문). 비밀번호 같은 민감한 값은 가려서 남긴다. */
+	@Column(columnDefinition = "TEXT")
+	private String details;
+
 	@Column(nullable = false)
 	private int responseStatus;
 
 	public static AdminAuditLog create(Long actorMemberId, String ipAddress, String action, String targetType,
-			String targetId, String summary, int responseStatus) {
+			String targetId, String summary, String details, int responseStatus) {
 		AdminAuditLog log = new AdminAuditLog();
 		log.actorMemberId = actorMemberId;
 		log.ipAddress = ipAddress;
@@ -52,6 +57,7 @@ public class AdminAuditLog extends BaseTimeEntity {
 		log.targetType = targetType;
 		log.targetId = targetId;
 		log.summary = summary;
+		log.details = details;
 		log.responseStatus = responseStatus;
 		return log;
 	}
