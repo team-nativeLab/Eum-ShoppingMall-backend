@@ -70,6 +70,9 @@ public class Member extends BaseTimeEntity {
 	// 기존 DB 스키마 호환을 위해 유지한다. 로그인 실패 제한에는 사용하지 않는다.
 	private LocalDateTime lockedUntil;
 
+	/** 가입할 때 이메일 인증을 마친 시각. 인증 없이 가입한 계정(기능 도입 전 가입 등)은 비어 있다. */
+	private LocalDateTime emailVerifiedAt;
+
 	/** 일반 회원(USER, ACTIVE)으로 생성한다. */
 	public static Member create(String email, String passwordHash, String name, String phone) {
 		Member member = new Member();
@@ -90,6 +93,10 @@ public class Member extends BaseTimeEntity {
 		Member member = create(email, passwordHash, name, null);
 		member.role = MemberRole.SUPER_ADMIN;
 		return member;
+	}
+
+	public void markEmailVerified(LocalDateTime verifiedAt) {
+		this.emailVerifiedAt = verifiedAt;
 	}
 
 	public void changeRole(MemberRole role) {

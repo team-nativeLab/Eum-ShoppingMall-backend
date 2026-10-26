@@ -12,8 +12,14 @@ import org.springframework.data.repository.query.Param;
 
 import com.example.shopping.domain.product.entity.Product;
 import com.example.shopping.domain.product.entity.ProductStatus;
+import com.example.shopping.domain.upload.service.ImageReferences;
 
-public interface ProductRepository extends JpaRepository<Product, Long>, ProductSearchRepository {
+public interface ProductRepository extends JpaRepository<Product, Long>, ProductSearchRepository, ImageReferences {
+
+	/** 참조 없는 이미지 정리용. 삭제 처리된 상품도 행이 남아 있으므로 그 이미지도 지우지 않는다. */
+	@Override
+	@Query("select distinct p.imageUrl from Product p where p.imageUrl is not null")
+	List<String> findAllImageUrls();
 
 	/** 관리자용 검색. 카테고리·검색어는 선택 조건이며 넘겨준 상태의 상품만 조회한다. */
 	@Query("""

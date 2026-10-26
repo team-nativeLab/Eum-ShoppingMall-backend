@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import com.example.shopping.global.redis.RedisCircuitBreaker;
+
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -29,12 +31,20 @@ public class ProductReadCache {
 	private final StringRedisTemplate redis;
 	private final JsonMapper jsonMapper;
 	private final Duration ttl;
+	private final RedisCircuitBreaker redisCircuitBreaker;
 
+	public ProductReadCache(StringRedisTemplate redis, JsonMapper jsonMapper, long ttlSeconds) {
+		this(redis, jsonMapper, ttlSeconds, new RedisCircuitBreaker());
+	}
+
+	@org.springframework.beans.factory.annotation.Autowired
 	public ProductReadCache(StringRedisTemplate redis, JsonMapper jsonMapper,
-			@org.springframework.beans.factory.annotation.Value("${app.cache.product-ttl-seconds:60}") long ttlSeconds) {
+			@org.springframework.beans.factory.annotation.Value("${app.cache.product-ttl-seconds:60}") long ttlSeconds,
+			RedisCircuitBreaker redisCircuitBreaker) {
 		this.redis = redis;
 		this.jsonMapper = jsonMapper;
 		this.ttl = Duration.ofSeconds(Math.max(0, ttlSeconds));
+		this.redisCircuitBreaker = redisCircuitBreaker;
 	}
 
 	public <T> T getOrLoad(Object key, Class<T> type, Supplier<T> loader) {
@@ -51,10 +61,10 @@ public class ProductReadCache {
 		}
 		String cacheKey;
 		try {
-			String version = redis.opsForValue().get(VERSION_KEY);
+			String version = redisCircuitBreaker.execute(() -> redis.opsForValue().get(VERSION_KEY));
 			cacheKey = "product-read-cache:" + (version == null ? "0" : version) + ":"
 					+ hash(jsonMapper.writeValueAsString(key));
-			String cached = redis.opsForValue().get(cacheKey);
+			String cached = redisCircuitBreaker.execute(() -> redis.opsForValue().get(cacheKey));
 			if (cached != null) {
 				return reader.read(cached);
 			}
@@ -65,7 +75,8 @@ public class ProductReadCache {
 
 		T value = loader.get();
 		try {
-			redis.opsForValue().set(cacheKey, jsonMapper.writeValueAsString(value), ttl);
+			String json = jsonMapper.writeValueAsString(value);
+			redisCircuitBreaker.run(() -> redis.opsForValue().set(cacheKey, json, ttl));
 		} catch (DataAccessException | JacksonException | IllegalArgumentException ex) {
 			log.debug("Could not write product read cache", ex);
 		}
@@ -79,7 +90,7 @@ public class ProductReadCache {
 		}
 		Runnable invalidate = () -> {
 			try {
-				redis.opsForValue().increment(VERSION_KEY);
+				redisCircuitBreaker.run(() -> redis.opsForValue().increment(VERSION_KEY));
 			} catch (DataAccessException ex) {
 				log.warn("Could not invalidate product read cache; entries expire after {} seconds", ttl.toSeconds(), ex);
 			}
