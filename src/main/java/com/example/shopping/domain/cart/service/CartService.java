@@ -8,6 +8,7 @@ import com.example.shopping.domain.cart.dto.request.CartItemUpdateRequest;
 import com.example.shopping.domain.cart.dto.response.CartResponse;
 import com.example.shopping.domain.cart.entity.CartItem;
 import com.example.shopping.domain.cart.repository.CartItemRepository;
+import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.domain.product.entity.ProductSku;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
@@ -24,6 +25,7 @@ public class CartService {
 
 	private final CartItemRepository cartItemRepository;
 	private final ProductSkuRepository productSkuRepository;
+	private final MemberRepository memberRepository;
 
 	@Transactional(readOnly = true)
 	public CartResponse getCart(Long memberId) {
@@ -32,8 +34,11 @@ public class CartService {
 
 	/** 이미 담긴 옵션이면 수량을 더한다. 금액 미표시 상품도 담을 수는 있다(주문은 불가). */
 	public CartResponse addItem(Long memberId, CartItemAddRequest request) {
-		// CartItem이 아직 없을 때도 동시 삽입이 겹치지 않도록 SKU 행을 잠근다.
-		ProductSku sku = productSkuRepository.findWithProductByIdForUpdate(request.skuId())
+		// 같은 회원의 동시 요청만 한 줄로 세운다. 그래야 같은 옵션의 첫 행이 두 번 들어가거나 수량이 빠지지 않고,
+		// 담을 수 있는 종류 수(MAX_KINDS)도 넘지 않는다. 모든 회원이 함께 쓰는 옵션 행은 잠그지 않으므로
+		// 다른 회원의 장바구니 담기나 주문(재고 차감)·입고와 서로 기다리지 않는다. 회원이 있는지는 토큰 검증에서 이미 확인했다.
+		memberRepository.findByIdForUpdate(memberId);
+		ProductSku sku = productSkuRepository.findWithProductById(request.skuId())
 				.filter(ProductSku::isActive)
 				.filter(s -> ProductStatus.CUSTOMER_VISIBLE.contains(s.getProduct().getStatus()))
 				.orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));

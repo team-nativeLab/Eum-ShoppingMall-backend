@@ -3,21 +3,17 @@ package com.example.shopping.domain.product.repository;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.shopping.domain.product.entity.ProductSku;
 
-import jakarta.persistence.LockModeType;
-
 public interface ProductSkuRepository extends JpaRepository<ProductSku, Long> {
 
-	/** 장바구니 추가를 SKU별로 직렬화해 기존 행 갱신과 첫 행 삽입을 보호한다. */
-	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	/** 상품까지 함께 읽는다. 잠그지 않는다. */
 	@Query("select s from ProductSku s join fetch s.product where s.id = :id")
-	Optional<ProductSku> findWithProductByIdForUpdate(@Param("id") Long id);
+	Optional<ProductSku> findWithProductById(@Param("id") Long id);
 
 	/**
 	 * 재고가 충분할 때만 차감한다. 0을 돌려주면 재고 부족이다.
