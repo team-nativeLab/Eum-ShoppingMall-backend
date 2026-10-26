@@ -37,6 +37,9 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      # Redis가 응답을 멈춰도 요청이 오래 묶이지 않게 짧게 둔다. 넘기면 각 기능의 대체 동작(DB 조회 등)으로 넘어간다.
+      timeout: ${REDIS_COMMAND_TIMEOUT:500ms}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
     web:
       pageable:
         # ?size=에 큰 값을 넣어 한 번에 대량 조회하는 것을 막는다.
@@ -75,8 +78,9 @@ management:
         enabled: true
       group:
         readiness:
-          # Redis backs request limits and access-token revocation/version checks.
-          include: readinessState,redis
+          # Redis는 넣지 않는다. Redis가 멈추면 로드밸런서가 모든 서버를 내려 Redis와 상관없는 기능까지 멈추기 때문이다.
+          # Redis를 쓰는 기능은 장애 때 대체 동작으로 계속 응답하고, Redis 상태는 /actuator/health(관리자)와 지표로 본다.
+          include: readinessState
   health:
     redis:
       enabled: true
@@ -103,8 +107,9 @@ security:
   rate-limit:
     # 로그인·회원가입·문의 접수·주문·결제 등에 적용하는 IP별 분당 요청 한도
     requests-per-minute: ${RATE_LIMIT_PER_MINUTE:10}
-    # 자동완성을 포함한 공개 상품 조회의 IP별 분당 한도
-    public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:120}
+    # 공개 상품 조회의 IP별 분당 한도. 목록·필터 개수·브랜드·상세를 각각 따로 세고, 자동 완성은 이 값의 두 배다.
+    # 한 사무실 직원들이 같은 공인 IP로 접속하므로 넉넉하게 둔다. 크롤링 같은 대량 요청은 프록시·WAF에서 막는다.
+    public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:300}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
     max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}
