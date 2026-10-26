@@ -1,5 +1,6 @@
 package com.example.shopping.domain.product.service;
 
+import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.data.domain.Pageable;
@@ -20,6 +21,7 @@ import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.CategoryRepository;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
+import com.example.shopping.domain.upload.service.UploadService;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.response.PageResponse;
@@ -36,6 +38,7 @@ public class AdminProductService {
 	private final ProductSkuRepository productSkuRepository;
 	private final CategoryRepository categoryRepository;
 	private final ProductReadCache readCache;
+	private final UploadService uploadService;
 
 	/** 상태를 지정하지 않으면 삭제된 상품을 뺀 전체(판매중·품절·비공개)를 조회한다. */
 	public PageResponse<AdminProductSummaryResponse> search(ProductStatus status, Long categoryId, String keyword,
@@ -54,6 +57,7 @@ public class AdminProductService {
 	@Transactional
 	public AdminProductDetailResponse create(ProductCreateRequest request) {
 		ProductStatus status = request.status() == null ? ProductStatus.ON_SALE : requireManageable(request.status());
+		uploadService.requireUploadedImageUrl(request.imageUrl());
 		boolean priceVisible = request.priceVisible() == null || request.priceVisible();
 		Product product = Product.create(findCategory(request.categoryId()), request.name().trim(),
 				request.description(), request.imageUrl(), request.basePrice(), request.listPrice(), priceVisible,
@@ -72,6 +76,10 @@ public class AdminProductService {
 	public AdminProductDetailResponse update(Long productId, ProductUpdateRequest request) {
 		Product product = find(productId);
 		ProductStatus status = request.status() == null ? null : requireManageable(request.status());
+		// 수정 화면이 기존 값을 그대로 다시 보내도 통과시킨다. 제한 전에 저장한 외부 주소일 수 있다.
+		if (!Objects.equals(request.imageUrl(), product.getImageUrl())) {
+			uploadService.requireUploadedImageUrl(request.imageUrl());
+		}
 		String name = request.name() == null ? null : request.name().trim();
 		product.update(findCategory(request.categoryId()), name, request.description(), request.imageUrl(),
 				request.basePrice(), request.listPrice(), status);
