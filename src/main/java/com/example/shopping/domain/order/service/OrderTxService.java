@@ -2,6 +2,8 @@ package com.example.shopping.domain.order.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.function.BiFunction;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,51 +43,59 @@ public class OrderTxService {
 	/** 결제 승인을 시작한다. 이미 진행 중이거나 끝났거나 기한이 지났으면 false */
 	@Transactional
 	public boolean startPayment(Long orderId) {
-		return orderRepository.startPayment(orderId, LocalDateTime.now()) == 1;
+		return transition(Set.of(OrderStatus.PENDING), OrderStatus.PAYMENT_PROCESSING,
+				(from, to) -> orderRepository.startPayment(orderId, from, to, LocalDateTime.now())) == 1;
 	}
 
 	/** 승인이 확정적으로 실패했을 때 다시 결제를 시도할 수 있게 되돌린다. */
 	@Transactional
 	public void revertPayment(Long orderId) {
-		orderRepository.changeStatus(orderId, OrderStatus.PAYMENT_PROCESSING, OrderStatus.PENDING,
-				LocalDateTime.now());
+		transition(Set.of(OrderStatus.PAYMENT_PROCESSING), OrderStatus.PENDING,
+				(from, to) -> orderRepository.changeStatus(orderId, from, to, LocalDateTime.now()));
 	}
 
 	/**
 	 * PG 승인 결과를 반영한다. 결제가 끝난 품목은 장바구니에서 뺀다.
 	 *
-	 * @return PG 상태가 결제 완료·입금 대기가 아니어서 주문을 결제 전으로 되돌렸으면 false
+	 * @return 결제 완료나 입금 대기를 주문에 반영했으면 true. 그사이 주문 상태가 바뀌어(결제 보정 작업이 되돌림 등)
+	 *         반영하지 못했거나, PG 상태가 결제 완료·입금 대기가 아니어서 결제 전으로 되돌렸으면 false
 	 */
 	@Transactional
 	public boolean completePayment(Long orderId, PgPayment pg) {
 		LocalDateTime now = LocalDateTime.now();
 		if (pg.status() == PgStatus.DONE) {
-			if (orderRepository.markPaid(orderId, now) == 1) {
-				paymentRepository.save(Payment.of(orderId, pg, PaymentStatus.DONE));
-				addSalesCount(orderId, 1);
-				removeOrderedItemsFromCart(orderId);
+			if (transition(Set.of(OrderStatus.PAYMENT_PROCESSING), OrderStatus.PAID,
+					(from, to) -> orderRepository.markPaid(orderId, from, to, now)) != 1) {
+				return false;
 			}
+			paymentRepository.save(Payment.of(orderId, pg, PaymentStatus.DONE));
+			addSalesCount(orderId, 1);
+			removeOrderedItemsFromCart(orderId);
 			return true;
 		}
 		if (pg.status() == PgStatus.WAITING_FOR_DEPOSIT) {
 			if (!hasVirtualAccountDetails(pg)) {
 				return false;
 			}
-			if (orderRepository.markWaitingDeposit(orderId, pg.virtualAccount().dueDate(), now) == 1) {
+			if (transition(Set.of(OrderStatus.PAYMENT_PROCESSING), OrderStatus.WAITING_DEPOSIT,
+					(from, to) -> orderRepository.markWaitingDeposit(orderId, from, to,
+							pg.virtualAccount().dueDate(), now)) == 1) {
 				paymentRepository.save(Payment.of(orderId, pg, PaymentStatus.WAITING_DEPOSIT));
 				removeOrderedItemsFromCart(orderId);
 				return true;
 			}
 			return false;
 		}
-		orderRepository.changeStatus(orderId, OrderStatus.PAYMENT_PROCESSING, OrderStatus.PENDING, now);
+		transition(Set.of(OrderStatus.PAYMENT_PROCESSING), OrderStatus.PENDING,
+				(from, to) -> orderRepository.changeStatus(orderId, from, to, now));
 		return false;
 	}
 
 	/** PG 조회에서 입금 완료가 확인된 가상계좌 주문을 결제로 확정한다. 중복 웹훅은 상태 조건으로 막는다. */
 	@Transactional
 	public boolean completeVirtualAccountDeposit(Long orderId, Long paymentId, PgPayment pg) {
-		if (orderRepository.markDepositPaid(orderId, LocalDateTime.now()) != 1) {
+		if (transition(Set.of(OrderStatus.WAITING_DEPOSIT), OrderStatus.PAID,
+				(from, to) -> orderRepository.markPaid(orderId, from, to, LocalDateTime.now())) != 1) {
 			return false;
 		}
 		Payment payment = paymentRepository.findById(paymentId).orElseThrow();
@@ -98,7 +108,8 @@ public class OrderTxService {
 	@Transactional
 	public boolean expireVirtualAccount(Long orderId, Long paymentId) {
 		LocalDateTime now = LocalDateTime.now();
-		if (orderRepository.expireWaitingDeposit(orderId, now) != 1) {
+		if (transition(Set.of(OrderStatus.WAITING_DEPOSIT), OrderStatus.EXPIRED,
+				(from, to) -> orderRepository.expire(orderId, from, to, now)) != 1) {
 			return false;
 		}
 		Payment payment = paymentRepository.findById(paymentId).orElseThrow();
@@ -110,7 +121,8 @@ public class OrderTxService {
 	/** PG가 DONE 결제를 다시 입금 대기로 바꾼 경우 미배송 주문을 보류하고 판매 수량을 되돌린다. */
 	@Transactional
 	public boolean revertVirtualAccountDeposit(Long orderId, Long paymentId, PgPayment pg) {
-		if (orderRepository.revertDepositCompletion(orderId, LocalDateTime.now()) != 1) {
+		if (transition(Set.of(OrderStatus.PAID, OrderStatus.PREPARING), OrderStatus.WAITING_DEPOSIT,
+				(from, to) -> orderRepository.revertDepositCompletion(orderId, from, to, LocalDateTime.now())) != 1) {
 			return false;
 		}
 		Payment payment = paymentRepository.findById(paymentId).orElseThrow();
@@ -122,7 +134,8 @@ public class OrderTxService {
 	/** 결제 기한이 지난 주문을 만료시키고 잡아 둔 재고를 되돌린다. 실제로 만료시켰으면 true */
 	@Transactional
 	public boolean expire(Long orderId) {
-		if (orderRepository.expire(orderId, LocalDateTime.now()) == 0) {
+		if (transition(Set.of(OrderStatus.PENDING), OrderStatus.EXPIRED,
+				(from, to) -> orderRepository.expire(orderId, from, to, LocalDateTime.now())) == 0) {
 			return false;
 		}
 		restoreStock(orderId);
@@ -137,7 +150,8 @@ public class OrderTxService {
 	public void expirePendingOrdersOf(Long memberId) {
 		LocalDateTime now = LocalDateTime.now();
 		for (Long orderId : orderRepository.findPendingIdsByMemberId(memberId)) {
-			if (orderRepository.changeStatus(orderId, OrderStatus.PENDING, OrderStatus.EXPIRED, now) == 1) {
+			if (transition(Set.of(OrderStatus.PENDING), OrderStatus.EXPIRED,
+					(from, to) -> orderRepository.changeStatus(orderId, from, to, now)) == 1) {
 				restoreStock(orderId);
 			}
 		}
@@ -146,13 +160,16 @@ public class OrderTxService {
 	/** 취소를 시작한다. 그사이 상태가 바뀌었으면(배송 시작 등) false */
 	@Transactional
 	public boolean claimCancel(Long orderId, OrderStatus from, String idempotencyKey, String reason, Long actorId) {
-		return orderRepository.claimCancel(orderId, from, idempotencyKey, reason, actorId, LocalDateTime.now()) == 1;
+		return transition(Set.of(from), OrderStatus.CANCEL_REQUESTED,
+				(sources, to) -> orderRepository.claimCancel(orderId, from, to, idempotencyKey, reason, actorId,
+						LocalDateTime.now())) == 1;
 	}
 
 	/** 관리자 요청으로 미결제 주문을 만료한다. 가상계좌 결제는 PG 취소 확인 후 호출한다. */
 	@Transactional
 	public void completeUnpaidAdminCancellation(Long orderId, Long paymentId) {
-		if (orderRepository.finishUnpaidCancellation(orderId, LocalDateTime.now()) != 1) {
+		if (transition(Set.of(OrderStatus.CANCEL_REQUESTED), OrderStatus.EXPIRED,
+				(from, to) -> orderRepository.finishUnpaidCancellation(orderId, from, to, LocalDateTime.now())) != 1) {
 			return;
 		}
 		if (paymentId != null) {
@@ -168,13 +185,15 @@ public class OrderTxService {
 	/** PG 취소가 확실히 거절됐을 때 주문을 취소 전 상태로 되돌린다. */
 	@Transactional
 	public void revertCancel(Long orderId, OrderStatus to) {
-		orderRepository.revertCancel(orderId, to, LocalDateTime.now());
+		transition(Set.of(OrderStatus.CANCEL_REQUESTED), to, (from, target) -> orderRepository.revertCancel(orderId,
+				OrderStatus.CANCEL_REQUESTED, target, LocalDateTime.now()));
 	}
 
 	/** PG 취소가 확인된 뒤 결제·주문·품목 상태와 재고를 반영한다. 두 번 불려도 한 번만 반영된다. */
 	@Transactional
 	public void completeCancel(Long orderId, Long paymentId) {
-		orderRepository.finishCancel(orderId, LocalDateTime.now());
+		transition(Set.of(OrderStatus.CANCEL_REQUESTED), OrderStatus.CANCELED,
+				(from, to) -> orderRepository.finishCancel(orderId, from, to, LocalDateTime.now()));
 		if (orderRepository.isCanceled(orderId)) {
 			orderRepository.clearCancelRecoveryData(orderId);
 		}
@@ -233,5 +252,15 @@ public class OrderTxService {
 	private Order findOrder(Long orderId) {
 		return orderRepository.findById(orderId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+	}
+
+	/**
+	 * 상태 전이표(OrderStatus)에 있는 전이인지 확인한 뒤 상태 변경 쿼리를 실행한다.
+	 * 쿼리는 여기서 확인한 출발·도착 상태만 받으므로, 쿼리를 고쳐도 표와 어긋날 수 없다.
+	 */
+	private static int transition(Set<OrderStatus> from, OrderStatus to,
+			BiFunction<Set<OrderStatus>, OrderStatus, Integer> query) {
+		OrderStatus.requireTransitions(from, to);
+		return query.apply(from, to);
 	}
 }

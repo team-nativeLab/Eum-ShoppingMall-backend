@@ -408,6 +408,53 @@ class OrderPaymentTests {
 	}
 
 	@Test
+	void 승인을_기다리는_동안_보정_작업이_결제_전으로_되돌렸으면_늦게_온_승인을_다시_반영한다() throws Exception {
+		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenAnswer(invocation -> {
+			jdbcTemplate.update("update orders set status = 'PENDING' where order_no = ?", orderNo);
+			return pg(orderNo, PgStatus.DONE, 34700);
+		});
+
+		confirm(buyer, orderNo, 34700)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("PAID"))
+				.andExpect(jsonPath("$.data.payment.approvedAmount").value(34700));
+		verify(paymentGateway, never()).cancel(anyString(), anyString(), anyString());
+	}
+
+	@Test
+	void 승인을_기다리는_동안_주문이_만료됐으면_돈만_빠져나가지_않게_승인을_취소한다() throws Exception {
+		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenAnswer(invocation -> {
+			jdbcTemplate.update("update orders set status = 'EXPIRED' where order_no = ?", orderNo);
+			return pg(orderNo, PgStatus.DONE, 34700);
+		});
+		when(paymentGateway.cancel(PAYMENT_KEY, "주문에 결제를 반영하지 못함", "unapplied-" + orderNo))
+				.thenReturn(pg(orderNo, PgStatus.CANCELED, 34700));
+
+		confirm(buyer, orderNo, 34700)
+				.andExpect(status().isUnprocessableContent())
+				.andExpect(jsonPath("$.code").value("PAYMENT_FAILED"));
+		verify(paymentGateway).cancel(PAYMENT_KEY, "주문에 결제를 반영하지 못함", "unapplied-" + orderNo);
+		assertThat(statusOf(orderNo)).isEqualTo("EXPIRED");
+	}
+
+	@Test
+	void 반영하지_못한_승인을_취소하지도_못하면_확인_중으로_알린다() throws Exception {
+		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenAnswer(invocation -> {
+			jdbcTemplate.update("update orders set status = 'EXPIRED' where order_no = ?", orderNo);
+			return pg(orderNo, PgStatus.DONE, 34700);
+		});
+		when(paymentGateway.cancel(anyString(), anyString(), anyString()))
+				.thenThrow(new PgUnavailableException("timeout", null));
+
+		confirm(buyer, orderNo, 34700)
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.code").value("PAYMENT_PENDING_CONFIRMATION"));
+	}
+
+	@Test
 	void PG_결과를_알_수_없으면_확인_중으로_두었다가_보정_작업이_실제_상태에_맞춘다() throws Exception {
 		String paidOrder = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
 		String unpaidOrder = createOrder(other, insertProductWithSku("안전 조끼", 20000, true, 5), 1);

@@ -121,6 +121,13 @@ class CustomerApiTests {
 				.content("{\"password\":\"test-pass-1234\"}"))
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.code").value("ACCOUNT_HAS_ACTIVE_ORDERS"));
+
+		// PG 취소 결과를 기다리는 주문이 있어도 환불이 확정되기 전에는 탈퇴할 수 없다.
+		jdbcTemplate.update("update orders set status = 'CANCEL_REQUESTED' where order_no = 'ORD-ACTIVE-WITHDRAW'");
+		mockMvc.perform(delete("/api/v1/me").with(member(activeMemberId)).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"password\":\"test-pass-1234\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("ACCOUNT_HAS_ACTIVE_ORDERS"));
 	}
 
 	// ───────── 장바구니 ─────────

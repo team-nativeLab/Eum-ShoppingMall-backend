@@ -79,6 +79,9 @@ public class PaymentService {
 			throw new BusinessException(differentOrder ? ErrorCode.PAYMENT_FAILED : ErrorCode.PAYMENT_AMOUNT_MISMATCH);
 		}
 		if (!orderTxService.completePayment(order.getId(), pg)) {
+			if (pg.status() == PgStatus.DONE) {
+				return recoverUnappliedApproval(memberId, order, pg);
+			}
 			if (pg.status() == PgStatus.WAITING_FOR_DEPOSIT) {
 				log.error("주문 {} 가상계좌 승인 응답에 계좌 또는 입금 기한 정보가 없어 보정 대기로 둡니다.", order.getOrderNo());
 				throw new BusinessException(ErrorCode.PAYMENT_PENDING_CONFIRMATION);
@@ -188,6 +191,43 @@ public class PaymentService {
 		} catch (PgUnavailableException e) {
 			return Optional.empty();
 		}
+	}
+
+	/**
+	 * PG는 승인했는데 주문을 결제 완료로 바꾸지 못한 경우. 승인을 오래 기다리는 동안 결제 보정 작업이 주문을
+	 * 결제 전으로 되돌렸거나 같은 승인을 먼저 반영한 경우다.
+	 * 이미 반영됐으면 성공으로, 결제 전으로 돌아갔으면 다시 반영한다. 둘 다 아니면(만료·취소 등) 고객이 돈만 내고
+	 * 주문이 없는 일이 없도록 승인을 취소(환불)한다.
+	 */
+	private OrderDetailResponse recoverUnappliedApproval(Long memberId, Order order, PgPayment pg) {
+		boolean alreadyApplied = paymentRepository.findByPaymentKey(pg.paymentKey())
+				.filter(payment -> payment.getOrderId().equals(order.getId())
+						&& payment.getStatus() == PaymentStatus.DONE)
+				.isPresent();
+		if (alreadyApplied) {
+			return orderService.getMyOrder(memberId, order.getOrderNo());
+		}
+		if (orderTxService.startPayment(order.getId())) {
+			if (orderTxService.completePayment(order.getId(), pg)) {
+				return orderService.getMyOrder(memberId, order.getOrderNo());
+			}
+			// 결제 진행 중으로 남았으므로 결제 보정 작업이 PG 승인을 확인해 반영한다.
+			log.error("주문 {} PG 승인을 다시 반영하지 못했습니다. 결제 보정 작업이 처리합니다.", order.getOrderNo());
+			throw new BusinessException(ErrorCode.PAYMENT_PENDING_CONFIRMATION);
+		}
+		try {
+			PgPayment canceled = paymentGateway.cancel(pg.paymentKey(), "주문에 결제를 반영하지 못함",
+					"unapplied-" + order.getOrderNo());
+			if (canceled.status() == PgStatus.CANCELED) {
+				log.warn("주문 {} 상태가 바뀌어 반영하지 못한 PG 승인을 취소했습니다.", order.getOrderNo());
+				throw new BusinessException(ErrorCode.PAYMENT_FAILED);
+			}
+		} catch (PgRejectedException | PgUnavailableException e) {
+			log.error("주문 {} 반영하지 못한 PG 승인의 자동 취소 실패", order.getOrderNo(), e);
+		}
+		log.error("주문 {} PG 승인을 주문에 반영하지도 취소하지도 못했습니다. 수동 확인이 필요합니다: paymentKey={}",
+				order.getOrderNo(), pg.paymentKey());
+		throw new BusinessException(ErrorCode.PAYMENT_PENDING_CONFIRMATION);
 	}
 
 	private void cancelMismatchedPayment(Order order, PgPayment pg) {
