@@ -1,5 +1,7 @@
 package com.example.shopping.domain.support.dto.request;
 
+import com.example.shopping.global.validation.ValidationPatterns;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -19,7 +21,7 @@ public record InquiryCreateRequest(
 		@Size(max = 5000, message = "내용은 5000자 이하여야 합니다.")
 		String content,
 
-		@Pattern(regexp = "^\\d{2,3}-?\\d{3,4}-?\\d{4}$", message = "연락처 형식이 올바르지 않습니다.")
+		@Pattern(regexp = ValidationPatterns.PHONE, message = "연락처 형식이 올바르지 않습니다.")
 		String contactPhone,
 
 		@Email(message = "이메일 형식이 올바르지 않습니다.")

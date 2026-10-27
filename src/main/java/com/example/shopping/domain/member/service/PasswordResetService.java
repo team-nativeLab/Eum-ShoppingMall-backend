@@ -15,6 +15,7 @@ import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.mail.BackgroundEmailSender;
 import com.example.shopping.global.security.MemberTokenStateCache;
+import com.example.shopping.global.validation.ContactFormats;
 
 import lombok.RequiredArgsConstructor;
 
@@ -37,7 +38,7 @@ public class PasswordResetService {
 
 	/** 사용 중인 계정(ACTIVE)일 때만 인증번호를 보낸다. 1분 안에 다시 요청하면 보내지 않는다. 응답은 언제나 같다. */
 	public void requestReset(String rawEmail) {
-		String email = EmailVerificationService.normalize(rawEmail);
+		String email = ContactFormats.loginEmail(rawEmail);
 		String code = VerificationCodes.newCode();
 		boolean issued = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
 			if (findActive(email) == null) {
@@ -63,7 +64,7 @@ public class PasswordResetService {
 
 	/** 인증번호가 맞으면 비밀번호를 바꾼다. 비밀번호 해시 계산 동안에는 DB 커넥션을 잡지 않는다. */
 	public void resetPassword(String rawEmail, String code, String newPassword) {
-		String email = EmailVerificationService.normalize(rawEmail);
+		String email = ContactFormats.loginEmail(rawEmail);
 		String passwordHash = passwordEncoder.encode(newPassword);
 		BusinessException failure = transactionTemplate.execute(status -> {
 			try {

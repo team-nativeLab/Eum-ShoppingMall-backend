@@ -15,6 +15,7 @@ import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.security.MemberTokenStateCache;
+import com.example.shopping.global.validation.ContactFormats;
 
 import lombok.RequiredArgsConstructor;
 
@@ -38,7 +39,7 @@ public class MemberService {
 	public MeResponse updateProfile(Long memberId, ProfileUpdateRequest request) {
 		Member member = findActive(memberId);
 		String name = request.name() == null ? null : request.name().trim();
-		String phone = request.phone() == null ? null : request.phone().replace("-", "");
+		String phone = ContactFormats.phone(request.phone());
 		member.updateProfile(name, phone);
 		return MeResponse.from(memberRepository.save(member));
 	}
