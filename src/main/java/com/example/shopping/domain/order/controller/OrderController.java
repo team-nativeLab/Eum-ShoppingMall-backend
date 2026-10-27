@@ -16,8 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.shopping.domain.order.dto.response.AdminOrderDetailResponse.AddressResponse;
-import com.example.shopping.domain.order.dto.request.DeliveryRequest;
+import com.example.shopping.domain.order.dto.request.OrderCreateRequest;
 import com.example.shopping.domain.order.dto.response.OrderCreateResponse;
 import com.example.shopping.domain.order.dto.response.OrderDetailResponse;
 import com.example.shopping.domain.order.dto.response.OrderSummaryResponse;
@@ -42,26 +41,20 @@ public class OrderController {
 	private final OrderService orderService;
 	private final OrderCancelService orderCancelService;
 
-	/** WEB-015 배송지 저장 */
-	@PostMapping("/checkout/delivery")
-	public ApiResponse<AddressResponse> saveDelivery(@AuthenticationPrincipal Jwt jwt,
-			@Valid @RequestBody DeliveryRequest request) {
-		return ApiResponse.ok(orderService.saveDelivery(CurrentMember.id(jwt), request));
-	}
-
 	/**
-	 * WEB-016 주문 생성. 장바구니에서 선택한 품목과 저장해 둔 배송지로 만들며, 요청 본문은 없다 (금액은 서버가 계산한다).
+	 * WEB-015, 016 주문 생성. 주문할 옵션·수량과 배송지를 함께 보낸다 (금액은 서버가 계산한다).
 	 * 주문 버튼을 여러 번 눌러도 주문이 하나만 생기도록 Idempotency-Key 헤더에 주문 시도마다 새 UUID를 넣어 보낸다.
 	 */
 	@PostMapping("/orders")
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<OrderCreateResponse> createOrder(@AuthenticationPrincipal Jwt jwt,
-			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
+			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+			@Valid @RequestBody OrderCreateRequest request) {
 		if (idempotencyKey != null && idempotencyKey.length() > IDEMPOTENCY_KEY_MAX_LENGTH) {
 			throw new BusinessException(ErrorCode.INVALID_INPUT);
 		}
 		String key = StringUtils.hasText(idempotencyKey) ? idempotencyKey.trim() : null;
-		return ApiResponse.ok(orderService.createOrder(CurrentMember.id(jwt), key));
+		return ApiResponse.ok(orderService.createOrder(CurrentMember.id(jwt), key, request));
 	}
 
 	/** WEB-020 내 주문 목록 */

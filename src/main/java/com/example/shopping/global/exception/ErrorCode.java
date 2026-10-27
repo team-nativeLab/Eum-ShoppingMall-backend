@@ -50,6 +50,7 @@ public enum ErrorCode {
 	// 상품
 	PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
 	PRODUCT_NOT_ON_SALE(HttpStatus.CONFLICT, "판매 중인 상품이 아닙니다."),
+	PRICE_HIDDEN_PRODUCT(HttpStatus.CONFLICT, "금액 미표시 상품은 주문할 수 없습니다. 견적 문의를 이용해 주세요."),
 	OUT_OF_STOCK(HttpStatus.CONFLICT, "재고가 부족합니다."),
 	SKU_NOT_FOUND(HttpStatus.NOT_FOUND, "상품 옵션을 찾을 수 없습니다."),
 	STOCK_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "재고는 옵션당 10억 개를 넘을 수 없습니다."),
@@ -65,8 +66,6 @@ public enum ErrorCode {
 	ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
 	ORDER_EXPIRED(HttpStatus.GONE, "주문이 만료되었습니다."),
 	INVALID_ORDER_STATUS(HttpStatus.CONFLICT, "현재 주문 상태에서는 처리할 수 없습니다."),
-	DELIVERY_REQUIRED(HttpStatus.CONFLICT, "배송지를 먼저 입력해 주세요."),
-	NO_ORDERABLE_ITEMS(HttpStatus.CONFLICT, "주문할 수 있는 상품이 없습니다."),
 	ORDER_AMOUNT_INVALID(HttpStatus.CONFLICT, "결제할 금액이 없는 주문은 만들 수 없습니다."),
 	ORDER_AMOUNT_TOO_LARGE(HttpStatus.BAD_REQUEST, "한 번에 결제할 수 있는 금액을 넘었습니다. 나눠서 주문해 주세요."),
 

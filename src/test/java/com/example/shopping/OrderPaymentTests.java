@@ -44,6 +44,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -146,24 +147,20 @@ class OrderPaymentTests {
 	// ───────── 주문 생성 ─────────
 
 	@Test
-	void 선택한_품목_중_주문_가능한_것만_서버가_계산한_금액으로_주문하고_재고를_잡아_둔다() throws Exception {
+	void 요청에_담은_품목과_배송지로_서버가_계산한_금액의_주문을_만들고_재고를_잡아_둔다() throws Exception {
 		long helmetSku = insertProductWithSku("안전모", 30000, true, 5);
 		long hiddenSku = insertProductWithSku("견적 전용 장비", 987654, false, 5);
 		long vestSku = insertProductWithSku("안전 조끼", 20000, true, 5);
-		addToCart(buyer, helmetSku, 2);
-		addToCart(buyer, hiddenSku, 1);
+		// 장바구니에 무엇이 담겨 있든 주문은 요청에 담은 품목으로만 만든다.
 		addToCart(buyer, vestSku, 1);
-		// 조끼는 선택 해제
-		mockMvc.perform(patch("/api/v1/cart/items/{skuId}", vestSku).with(member(buyer))
-				.contentType(MediaType.APPLICATION_JSON).content("{\"selected\":false}"));
 
-		// 배송지를 입력하기 전에는 주문할 수 없다.
-		mockMvc.perform(post("/api/v1/orders").with(member(buyer)))
+		// 금액 미표시 상품이 섞여 있으면 주문 전체를 거절하고 재고도 잡지 않는다.
+		postOrder(buyer, null, items(helmetSku, 2, hiddenSku, 1))
 				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.code").value("DELIVERY_REQUIRED"));
-		saveDelivery(buyer);
+				.andExpect(jsonPath("$.code").value("PRICE_HIDDEN_PRODUCT"));
+		assertThat(stockOf(helmetSku)).isEqualTo(5);
 
-		String body = mockMvc.perform(post("/api/v1/orders").with(member(buyer)).header("Idempotency-Key", "key-1"))
+		String body = postOrder(buyer, "key-1", items(helmetSku, 2))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.amount").value(64400))
 				.andExpect(jsonPath("$.data.orderName").value("안전모"))
@@ -175,7 +172,7 @@ class OrderPaymentTests {
 		assertThat(stockOf(vestSku)).isEqualTo(5);
 
 		// 주문 버튼을 두 번 눌러도(같은 키) 주문은 하나이고 재고도 한 번만 줄어든다.
-		mockMvc.perform(post("/api/v1/orders").with(member(buyer)).header("Idempotency-Key", "key-1"))
+		postOrder(buyer, "key-1", items(helmetSku, 2))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.orderNo").value(orderNo));
 		assertThat(stockOf(helmetSku)).isEqualTo(3);
@@ -193,27 +190,36 @@ class OrderPaymentTests {
 	}
 
 	@Test
-	void 재고가_모자라거나_주문_가능한_품목이_없으면_주문을_거절한다() throws Exception {
+	void 재고가_모자라거나_판매하지_않거나_요청이_잘못되면_주문을_거절한다() throws Exception {
 		long scarceSku = insertProductWithSku("안전화", 50000, true, 1);
-		long hiddenSku = insertProductWithSku("견적 전용 장비", 500000, false, 5);
-		saveDelivery(buyer);
+		long hiddenProductSku = insertProductWithSku("비공개 장비", 50000, true, 5);
+		jdbcTemplate.update("update product set status = 'HIDDEN' where id = (select product_id from product_sku where id = ?)",
+				hiddenProductSku);
 
-		addToCart(buyer, hiddenSku, 1);
-		mockMvc.perform(post("/api/v1/orders").with(member(buyer)))
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.code").value("NO_ORDERABLE_ITEMS"));
-
-		addToCart(buyer, scarceSku, 2);
-		mockMvc.perform(post("/api/v1/orders").with(member(buyer)))
+		postOrder(buyer, null, items(scarceSku, 2))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.code").value("OUT_OF_STOCK"));
 		assertThat(stockOf(scarceSku)).isEqualTo(1);
+		postOrder(buyer, null, items(hiddenProductSku, 1))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("PRODUCT_NOT_ON_SALE"));
+		postOrder(buyer, null, items(999_999, 1))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("SKU_NOT_FOUND"));
 
-		mockMvc.perform(post("/api/v1/checkout/delivery").with(member(buyer)).contentType(MediaType.APPLICATION_JSON)
-						.content("""
-								{"recipient":"홍길동","recipientPhone":"전화","zipCode":"123","address":""}
-								"""))
+		// 같은 옵션 중복, 빈 품목, 배송지 없음·형식 오류
+		postOrder(buyer, null, items(scarceSku, 1, scarceSku, 1)).andExpect(status().isBadRequest());
+		postOrder(buyer, null, "[]").andExpect(status().isBadRequest());
+		mockMvc.perform(post("/api/v1/orders").with(member(buyer)).contentType(MediaType.APPLICATION_JSON)
+						.content("{\"items\":" + items(scarceSku, 1) + "}"))
 				.andExpect(status().isBadRequest());
+		mockMvc.perform(post("/api/v1/orders").with(member(buyer)).contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"items":%s,"delivery":{"recipient":"홍길동","recipientPhone":"전화","zipCode":"123","address":""}}
+								""".formatted(items(scarceSku, 1))))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(post("/api/v1/orders").with(member(buyer))).andExpect(status().isBadRequest());
+		assertThat(stockOf(scarceSku)).isEqualTo(1);
 	}
 
 	@Test
@@ -223,8 +229,8 @@ class OrderPaymentTests {
 		String first = createOrder(buyer, sku, 2);
 		assertThat(stockOf(sku)).isEqualTo(2);
 
-		// 장바구니는 그대로 둔 채 주문만 다시 만든다. (주문을 반복해 재고를 묶어 두려는 시도)
-		String body = mockMvc.perform(post("/api/v1/orders").with(member(buyer)))
+		// 결제하지 않고 주문만 다시 만든다. (주문을 반복해 재고를 묶어 두려는 시도)
+		String body = postOrder(buyer, null, items(sku, 2))
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		String second = JsonPath.read(body, "$.data.orderNo");
@@ -238,17 +244,15 @@ class OrderPaymentTests {
 	@Test
 	void 금액이_0원인_주문과_정지된_회원의_주문은_만들_수_없다() throws Exception {
 		long freeSku = insertProductWithSku("무료 샘플", 0, true, 5);
-		addToCart(buyer, freeSku, 1);
-		saveDelivery(buyer);
 
-		mockMvc.perform(post("/api/v1/orders").with(member(buyer)))
+		postOrder(buyer, null, items(freeSku, 1))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.code").value("ORDER_AMOUNT_INVALID"));
 		assertThat(stockOf(freeSku)).isEqualTo(5);
 
 		jdbcTemplate.update("update member set status = 'SUSPENDED' where id = ?", buyer);
 		entityManager.clear();
-		mockMvc.perform(post("/api/v1/orders").with(member(buyer)))
+		postOrder(buyer, null, items(freeSku, 1))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.code").value("ACCOUNT_SUSPENDED"));
 	}
@@ -267,10 +271,8 @@ class OrderPaymentTests {
 	@Test
 	void 결제_금액이_상한을_넘거나_계산이_long_범위를_넘으면_주문을_만들지_않는다() throws Exception {
 		long expensive = insertProductWithSku("고가 장비", Order.MAX_TOTAL_AMOUNT, true, 5);
-		addToCart(buyer, expensive, 2);
-		saveDelivery(buyer);
 
-		mockMvc.perform(post("/api/v1/orders").with(member(buyer)))
+		postOrder(buyer, null, items(expensive, 2))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("ORDER_AMOUNT_TOO_LARGE"));
 		assertThat(stockOf(expensive)).isEqualTo(5);
@@ -278,11 +280,10 @@ class OrderPaymentTests {
 		// 1조 원 × 10억 개는 long 범위를 넘는다. 장바구니 금액은 음수로 뒤집히지 않고, 주문은 거절된다.
 		long huge = insertProductWithSku("대량 재고 장비", Order.MAX_TOTAL_AMOUNT, true, ProductSku.MAX_STOCK);
 		addToCart(other, huge, ProductSku.MAX_STOCK);
-		saveDelivery(other);
 		mockMvc.perform(get("/api/v1/cart").with(member(other)))
 				.andExpect(jsonPath("$.data.items[0].amount").value(Long.MAX_VALUE))
 				.andExpect(jsonPath("$.data.totalAmount").value(Long.MAX_VALUE));
-		mockMvc.perform(post("/api/v1/orders").with(member(other)))
+		postOrder(other, null, items(huge, ProductSku.MAX_STOCK))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("ORDER_AMOUNT_TOO_LARGE"));
 		assertThat(stockOf(huge)).isEqualTo(ProductSku.MAX_STOCK);
@@ -972,20 +973,37 @@ class OrderPaymentTests {
 				.andExpect(status().isOk());
 	}
 
-	private void saveDelivery(long memberId) throws Exception {
-		mockMvc.perform(post("/api/v1/checkout/delivery").with(member(memberId))
-						.contentType(MediaType.APPLICATION_JSON).content("""
-								{"recipient":"홍길동","recipientPhone":"010-1234-5678","zipCode":"06236",
-								 "address":"서울시 강남구 테헤란로 1","addressDetail":"101호","deliveryRequest":"문 앞"}
-								"""))
-				.andExpect(status().isOk());
+	private static final String DELIVERY = """
+			{"recipient":"홍길동","recipientPhone":"010-1234-5678","zipCode":"06236",
+			 "address":"서울시 강남구 테헤란로 1","addressDetail":"101호","deliveryRequest":"문 앞"}
+			""";
+
+	/** [{"skuId":..,"quantity":..}, ...] 옵션 ID와 수량을 번갈아 넣는다. */
+	private String items(long... skuIdAndQuantity) {
+		StringBuilder json = new StringBuilder("[");
+		for (int i = 0; i < skuIdAndQuantity.length; i += 2) {
+			if (i > 0) {
+				json.append(',');
+			}
+			json.append("{\"skuId\":").append(skuIdAndQuantity[i]).append(",\"quantity\":")
+					.append(skuIdAndQuantity[i + 1]).append('}');
+		}
+		return json.append(']').toString();
 	}
 
-	/** 장바구니 담기 → 배송지 저장 → 주문 생성까지 하고 주문번호를 돌려준다. */
+	private ResultActions postOrder(long memberId, String idempotencyKey, String items) throws Exception {
+		var request = post("/api/v1/orders").with(member(memberId)).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"items\":" + items + ",\"delivery\":" + DELIVERY + "}");
+		if (idempotencyKey != null) {
+			request.header("Idempotency-Key", idempotencyKey);
+		}
+		return mockMvc.perform(request);
+	}
+
+	/** 장바구니에 담고, 담은 품목과 배송지로 주문을 만든 뒤 주문번호를 돌려준다. */
 	private String createOrder(long memberId, long skuId, int quantity) throws Exception {
 		addToCart(memberId, skuId, quantity);
-		saveDelivery(memberId);
-		String body = mockMvc.perform(post("/api/v1/orders").with(member(memberId)))
+		String body = postOrder(memberId, null, items(skuId, quantity))
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		return JsonPath.read(body, "$.data.orderNo");

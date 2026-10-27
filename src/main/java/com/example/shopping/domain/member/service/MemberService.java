@@ -10,7 +10,6 @@ import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberStatus;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.domain.cart.repository.CartItemRepository;
-import com.example.shopping.domain.order.repository.CheckoutDeliveryRepository;
 import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
@@ -28,7 +27,6 @@ public class MemberService {
 	private final PasswordEncoder passwordEncoder;
 	private final RefreshTokenService refreshTokenService;
 	private final CartItemRepository cartItemRepository;
-	private final CheckoutDeliveryRepository checkoutDeliveryRepository;
 	private final OrderRepository orderRepository;
 	private final MemberTokenStateCache memberTokenStateCache;
 
@@ -69,7 +67,6 @@ public class MemberService {
 			throw new BusinessException(ErrorCode.ACCOUNT_HAS_ACTIVE_ORDERS);
 		}
 		cartItemRepository.deleteAllByMemberId(memberId);
-		checkoutDeliveryRepository.deleteByMemberId(memberId);
 		member.withdraw();
 		memberRepository.save(member);
 		memberTokenStateCache.refresh(member);

@@ -1,8 +1,6 @@
 package com.example.shopping.domain.cart.entity;
 
-import com.example.shopping.domain.product.entity.Product;
 import com.example.shopping.domain.product.entity.ProductSku;
-import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 
@@ -80,22 +78,6 @@ public class CartItem {
 	}
 
 	public CartItemStatus orderStatus() {
-		Product product = sku.getProduct();
-		if (!sku.isActive()) {
-			return CartItemStatus.NOT_ON_SALE;
-		}
-		if (product.getStatus() == ProductStatus.SOLD_OUT) {
-			return CartItemStatus.OUT_OF_STOCK;
-		}
-		if (product.getStatus() != ProductStatus.ON_SALE) {
-			return CartItemStatus.NOT_ON_SALE;
-		}
-		if (!product.isPriceVisible()) {
-			return CartItemStatus.PRICE_HIDDEN;
-		}
-		if (sku.getStock() < quantity) {
-			return CartItemStatus.OUT_OF_STOCK;
-		}
-		return CartItemStatus.ORDERABLE;
+		return CartItemStatus.of(sku, quantity);
 	}
 }
