@@ -15,7 +15,7 @@ The `local` profile also uses Flyway and Hibernate validation. It baselines a pr
 
 ## Static content API
 
-Supported content codes are `company`, `terms`, and `privacy-policy`. Customers can read `GET /api/v1/contents/{code}`; `GET /api/v1/contents/company` remains an alias. Administrators can list and read saved content with `GET /api/v1/admin/contents` and `GET /api/v1/admin/contents/{code}`, and create or update it with `PUT /api/v1/admin/contents/{code}` using `{ "title": "...", "body": "..." }`. Bodies are plain text; HTML tag markup is rejected. No legal text is seeded by the server.
+Supported content codes are `company`, `terms`, and `privacy-policy`. Customers can read `GET /api/v1/contents/{code}` (for example `GET /api/v1/contents/company`). Administrators can list and read saved content with `GET /api/v1/admin/contents` and `GET /api/v1/admin/contents/{code}`, and create or update it with `PUT /api/v1/admin/contents/{code}` using `{ "title": "...", "body": "..." }`. Bodies are plain text; HTML tag markup is rejected. No legal text is seeded by the server.
 
 ## Image storage
 

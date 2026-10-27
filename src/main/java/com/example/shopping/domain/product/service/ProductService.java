@@ -47,7 +47,6 @@ import lombok.RequiredArgsConstructor;
 public class ProductService {
 	private static final TypeReference<List<CategoryResponse>> CATEGORY_LIST = new TypeReference<>() {};
 	private static final TypeReference<List<ProductSuggestionResponse>> SUGGESTION_LIST = new TypeReference<>() {};
-	private static final TypeReference<List<String>> BRAND_LIST = new TypeReference<>() {};
 	private static final TypeReference<PageResponse<ProductSummaryResponse>> SEARCH_PAGE = new TypeReference<>() {};
 
 	/** 검색창 자동 완성에 보여 줄 최대 개수 */
@@ -138,14 +137,6 @@ public class ProductService {
 		});
 	}
 
-	/** 브랜드 필터에 보여 줄 브랜드 목록(가나다순). 고객에게 보이는 상품이 있는 브랜드만 나온다. */
-	public List<String> getBrands(Long categoryId) {
-		return readCache.getOrLoad(new ReadKey("brands", categoryId, null), BRAND_LIST, () -> {
-			ProductSearchCondition condition = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE,
-					categoryScope(categoryId), null);
-			return productRepository.countByBrand(condition).keySet().stream().sorted().toList();
-		});
-	}
 
 	public ProductDetailResponse getDetail(Long productId) {
 		Product product = productRepository.findById(productId)
