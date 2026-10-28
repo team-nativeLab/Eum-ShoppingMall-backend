@@ -256,6 +256,57 @@ class AdminApiTests {
 	}
 
 	@Test
+	void 감사_로그는_경로_패턴으로_대상을_정하고_권한이_없어_거절된_시도도_남긴다() throws Exception {
+		long superAdminId = insertMember("target-super@example.com", "최고관리자", "SUPER_ADMIN");
+		long adminId = insertMember("target-admin@example.com", "관리자", "ADMIN");
+		long memberId = insertMember("target-member@example.com", "회원", "USER");
+		long skuId = insertSku();
+		long productId = jdbcTemplate.queryForObject("select product_id from product_sku where id = ?", Long.class, skuId);
+
+		byte[] png = { (byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4 };
+		mockMvc.perform(multipart("/api/v1/uploads").file(new MockMultipartFile("file", "a.png", "image/png", png))
+				.with(admin(adminId)))
+				.andExpect(status().isOk());
+		mockMvc.perform(post(stockAdjustmentUrl(productId, skuId)).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"delta":5,"reason":"입고"}
+						"""))
+				.andExpect(status().isOk());
+		// 최고 관리자 전용 기능을 시도해 거절된 기록은 남기고, 입력 오류는 남기지 않는다.
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"ADMIN"}
+						"""))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(post(stockAdjustmentUrl(productId, skuId)).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("{}"))
+				.andExpect(status().isBadRequest());
+
+		assertThat(jdbcTemplate.queryForList("""
+				select target_type, target_id, response_status from admin_audit_log
+				where actor_member_id = ? order by id
+				""", adminId))
+				.extracting(row -> row.get("target_type") + "/" + row.get("target_id") + "/" + row.get("response_status"))
+				.containsExactly("uploads/null/200", "skus/" + skuId + "/200", "users/" + memberId + "/403");
+
+		// 날짜만 보내면 toDate는 그날 끝까지 포함한다.
+		jdbcTemplate.update("update admin_audit_log set created_at = ? where actor_member_id = ? and target_type = 'uploads'",
+				LocalDateTime.of(2026, 10, 1, 23, 30), adminId);
+		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId))
+				.param("actorMemberId", String.valueOf(adminId)).param("targetType", "uploads")
+				.param("fromDate", "2026-10-01").param("toDate", "2026-10-01"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.totalElements").value(1));
+		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId))
+				.param("actorMemberId", String.valueOf(adminId)).param("targetType", "uploads")
+				.param("fromDate", "2026-10-02T00:00:00"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.totalElements").value(0));
+		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId)).param("fromDate", "2026-13-01"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
 	void 관리자가_회원_계정을_정지하고_해제한다() throws Exception {
 		long adminId = insertMember("status-admin@example.com", "운영자", "ADMIN");
 		long memberId = insertMember("status-target@example.com", "대상", "USER");

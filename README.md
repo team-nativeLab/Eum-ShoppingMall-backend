@@ -33,7 +33,7 @@ Every response includes `X-Request-Id`. A safe incoming value (1–64 letters, n
 
 ## Admin audit log
 
-Successful administrator `POST`, `PUT`, `PATCH`, and `DELETE` requests (including image uploads) are recorded with the acting member, server-observed client IP, action, target type/identifier, route summary, and response status. Request bodies are not stored. `GET /api/v1/admin/audit-logs` supports actor, target type, and time filters and is restricted to `SUPER_ADMIN`; the log API has no update or delete operations. The optional administrator 2FA and member PII-read audit remain separate follow-up work.
+Administrator `POST`, `PUT`, `PATCH`, and `DELETE` requests (including image uploads) are recorded when they succeed or are rejected for lack of permission (403); other failures such as validation errors are not recorded. Each entry has the acting member, server-observed client IP, HTTP method, target type/identifier, route summary, response status, and the JSON request body with sensitive fields (`password`, `secret`, `token`, `card`) masked and truncated to 2,000 characters. The target is the innermost `name/{id}` of the matched route: `/api/v1/admin/products/{productId}/skus/{skuId}/stock-adjustments` records `skus` and the SKU id, and image uploads record `uploads`. `GET /api/v1/admin/audit-logs` supports actor, target type, and time filters and is restricted to `SUPER_ADMIN`; `fromDate`/`toDate` accept `2026-10-01` or `2026-10-01T09:00:00`, and a date-only `toDate` includes that whole day. The log API has no update or delete operations. The optional administrator 2FA and member PII-read audit remain separate follow-up work.
 
 ## Email verification limits
 
