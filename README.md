@@ -46,3 +46,7 @@ Email verification codes (sign-up and password reset) can be sent at most 5 time
 ## Shipping policy
 
 Orders have no discount; the shipping fee is the only amount added to the item total. Administrators set it with `GET`/`PUT /api/v1/admin/shipping-policy` (`{"shippingFee":3000,"freeShippingThreshold":50000}`): items totaling at least `freeShippingThreshold` ship free, omitting `freeShippingThreshold` always charges the fee, and `shippingFee` 0 makes shipping free. Until an administrator saves a policy, the fee is 5,000 KRW below 100,000 KRW. Cart estimates and new orders use the current policy; each order stores the fee it was created with, so policy changes do not alter existing orders. `GET /api/v1/shipping-policy` returns the policy without login for storefront notices. The cart response no longer has `discountAmount`; order responses keep it for orders created before the change, and new orders record 0.
+
+## Product read cache
+
+Public product reads (home, categories, list/search, facets, suggestions) are cached in Redis for `PRODUCT_READ_CACHE_TTL_SECONDS` (default 60). Only administrator catalog changes clear the whole cache; stock and sales-count changes from orders show up within the TTL, while product detail, cart, and order checks always read the database. `product.read.cache{result=hit|miss|unavailable}` counts lookups.
