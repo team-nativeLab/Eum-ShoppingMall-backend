@@ -83,6 +83,9 @@ public class PaymentService {
 				log.error("주문 {} 가상계좌 승인 응답에 계좌 또는 입금 기한 정보가 없어 보정 대기로 둡니다.", order.getOrderNo());
 				throw new BusinessException(ErrorCode.PAYMENT_PENDING_CONFIRMATION);
 			}
+			if (pg.status() == PgStatus.DONE) {
+				return recoverUnappliedApproval(memberId, order, pg);
+			}
 			throw new BusinessException(ErrorCode.PAYMENT_FAILED);
 		}
 		return orderService.getMyOrder(memberId, order.getOrderNo());
@@ -188,6 +191,76 @@ public class PaymentService {
 		} catch (PgUnavailableException e) {
 			return Optional.empty();
 		}
+	}
+
+	/** PG 승인은 됐지만 주문 상태가 먼저 바뀐 경우, 자동 보정 또는 환불이 가능하도록 처리한다. */
+	private OrderDetailResponse recoverUnappliedApproval(Long memberId, Order order, PgPayment pg) {
+		Optional<Payment> processed = paymentRepository.findByPaymentKey(pg.paymentKey());
+		if (processed.isPresent()) {
+			Payment payment = processed.get();
+			if (!payment.getOrderId().equals(order.getId())) {
+				throw new BusinessException(ErrorCode.PAYMENT_FAILED);
+			}
+			if (payment.getStatus() == PaymentStatus.WAITING_DEPOSIT) {
+				if (orderTxService.completeVirtualAccountDeposit(order.getId(), payment.getId(), pg)) {
+					return orderService.getMyOrder(memberId, order.getOrderNo());
+				}
+				Optional<Payment> latest = paymentRepository.findByPaymentKey(pg.paymentKey());
+				if (latest.isPresent() && latest.get().getStatus() == PaymentStatus.DONE) {
+					return orderService.getMyOrder(memberId, order.getOrderNo());
+				}
+				log.error("주문 {} 가상계좌 입금 반영이 경합으로 지연되어 보정 작업을 기다립니다.", order.getOrderNo());
+				throw new BusinessException(ErrorCode.PAYMENT_PENDING_CONFIRMATION);
+			}
+			if (payment.getStatus() == PaymentStatus.DONE) {
+				return orderService.getMyOrder(memberId, order.getOrderNo());
+			}
+			if (cancelUnappliedApproval(order, pg)) {
+				log.warn("주문 {}의 기존 결제 기록과 PG 승인 결과가 충돌해 PG 승인을 취소했습니다.", order.getOrderNo());
+				throw new BusinessException(ErrorCode.PAYMENT_FAILED);
+			}
+			log.error("주문 {}의 기존 결제 기록과 PG 승인 결과가 충돌합니다. 수동 확인이 필요합니다.", order.getOrderNo());
+			throw new BusinessException(ErrorCode.PAYMENT_PENDING_CONFIRMATION);
+		}
+
+		// 승인 응답이 늦는 동안 보정 스케줄러가 주문을 PENDING으로 돌렸다면 즉시 다시 반영한다.
+		if (orderTxService.startPayment(order.getId())) {
+			if (orderTxService.completePayment(order.getId(), pg)) {
+				return orderService.getMyOrder(memberId, order.getOrderNo());
+			}
+			log.error("주문 {} PG 승인은 완료됐지만 재시도 중 주문 상태가 다시 바뀌었습니다.", order.getOrderNo());
+		}
+
+		Order current = orderRepository.findById(order.getId()).orElseThrow();
+		if (current.getStatus() == OrderStatus.PAYMENT_PROCESSING
+				|| current.getStatus() == OrderStatus.CANCEL_REQUESTED
+				|| current.getStatus() == OrderStatus.WAITING_DEPOSIT) {
+			log.error("주문 {} PG 승인 결과와 현재 주문 상태({})가 충돌해 보정 작업을 기다립니다.",
+					order.getOrderNo(), current.getStatus());
+			throw new BusinessException(ErrorCode.PAYMENT_PENDING_CONFIRMATION);
+		}
+
+		if (cancelUnappliedApproval(order, pg)) {
+			log.warn("주문 {} 상태가 결제 완료를 허용하지 않아 PG 승인을 취소했습니다.", order.getOrderNo());
+			throw new BusinessException(ErrorCode.PAYMENT_FAILED);
+		}
+		log.error("주문 {} PG 승인 취소 및 DB 반영을 확인하지 못했습니다. 수동 확인이 필요합니다.", order.getOrderNo());
+		throw new BusinessException(ErrorCode.PAYMENT_PENDING_CONFIRMATION);
+	}
+
+	private boolean cancelUnappliedApproval(Order order, PgPayment pg) {
+		try {
+			PgPayment canceled = paymentGateway.cancel(pg.paymentKey(), "주문 상태 변경 실패",
+					"unapplied-" + order.getOrderNo());
+			if (canceled.status() == PgStatus.CANCELED) {
+				return true;
+			}
+		} catch (PgRejectedException | PgUnavailableException e) {
+			log.error("주문 {} PG 승인 자동 취소 요청이 실패했습니다.", order.getOrderNo(), e);
+		}
+		return findAtPg(order.getOrderNo())
+				.filter(actual -> pg.paymentKey().equals(actual.paymentKey()) && actual.status() == PgStatus.CANCELED)
+				.isPresent();
 	}
 
 	private void cancelMismatchedPayment(Order order, PgPayment pg) {

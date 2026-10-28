@@ -274,7 +274,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 				com.example.shopping.domain.order.entity.OrderStatus.WAITING_DEPOSIT,
 				com.example.shopping.domain.order.entity.OrderStatus.PAID,
 				com.example.shopping.domain.order.entity.OrderStatus.PREPARING,
-				com.example.shopping.domain.order.entity.OrderStatus.SHIPPED)
+				com.example.shopping.domain.order.entity.OrderStatus.SHIPPED,
+				com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED)
 			""")
 	long countOrdersBlockingWithdrawal(@Param("memberId") Long memberId);
 

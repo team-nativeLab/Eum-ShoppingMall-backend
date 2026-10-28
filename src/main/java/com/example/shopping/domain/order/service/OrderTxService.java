@@ -54,17 +54,18 @@ public class OrderTxService {
 	/**
 	 * PG 승인 결과를 반영한다. 결제가 끝난 품목은 장바구니에서 뺀다.
 	 *
-	 * @return PG 상태가 결제 완료·입금 대기가 아니어서 주문을 결제 전으로 되돌렸으면 false
+	 * @return 결제 완료 또는 입금 대기 상태를 주문에 반영했으면 true, 그 외에는 false
 	 */
 	@Transactional
 	public boolean completePayment(Long orderId, PgPayment pg) {
 		LocalDateTime now = LocalDateTime.now();
 		if (pg.status() == PgStatus.DONE) {
-			if (orderRepository.markPaid(orderId, now) == 1) {
-				paymentRepository.save(Payment.of(orderId, pg, PaymentStatus.DONE));
-				addSalesCount(orderId, 1);
-				removeOrderedItemsFromCart(orderId);
+			if (orderRepository.markPaid(orderId, now) != 1) {
+				return false;
 			}
+			paymentRepository.save(Payment.of(orderId, pg, PaymentStatus.DONE));
+			addSalesCount(orderId, 1);
+			removeOrderedItemsFromCart(orderId);
 			return true;
 		}
 		if (pg.status() == PgStatus.WAITING_FOR_DEPOSIT) {
