@@ -21,7 +21,7 @@ import com.example.shopping.domain.notification.entity.NotificationMessage;
 import com.example.shopping.domain.notification.entity.NotificationStatus;
 import com.example.shopping.domain.notification.repository.NotificationMessageRepository;
 import com.example.shopping.domain.notification.sender.AlimtalkSender;
-import com.example.shopping.global.scheduling.SchedulerLockService;
+import com.example.shopping.global.scheduling.ScheduledJobRunner;
 
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.core.type.TypeReference;
@@ -45,15 +45,15 @@ public class NotificationService implements DisposableBean {
 	private final NotificationMessageRepository repository;
 	private final AlimtalkSender alimtalkSender;
 	private final TransactionTemplate transactionTemplate;
-	private final SchedulerLockService schedulerLockService;
+	private final ScheduledJobRunner jobRunner;
 	private final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
 	public NotificationService(NotificationMessageRepository repository, AlimtalkSender alimtalkSender,
-			TransactionTemplate transactionTemplate, SchedulerLockService schedulerLockService) {
+			TransactionTemplate transactionTemplate, ScheduledJobRunner jobRunner) {
 		this.repository = repository;
 		this.alimtalkSender = alimtalkSender;
 		this.transactionTemplate = transactionTemplate;
-		this.schedulerLockService = schedulerLockService;
+		this.jobRunner = jobRunner;
 		executor.setThreadNamePrefix("notification-");
 		executor.setCorePoolSize(2);
 		executor.setMaxPoolSize(4);
@@ -93,20 +93,7 @@ public class NotificationService implements DisposableBean {
 	/** 보낼 차례가 된 알림(실패 후 다시 보낼 알림 포함)을 보낸다. */
 	@Scheduled(fixedDelay = 60_000)
 	public void retryDueNotifications() {
-		Optional<String> owner = schedulerLockService.tryAcquire(RETRY_JOB, RETRY_LOCK);
-		if (owner.isEmpty()) {
-			return;
-		}
-		try {
-			int processed = dispatchDue(LocalDateTime.now());
-			if (processed > 0) {
-				log.info("정기 작업 {} 완료: 처리 {}", RETRY_JOB, processed);
-			}
-		} catch (RuntimeException e) {
-			log.error("정기 작업 {} 실행 실패", RETRY_JOB, e);
-		} finally {
-			schedulerLockService.release(RETRY_JOB, owner.get());
-		}
+		jobRunner.run(RETRY_JOB, RETRY_LOCK, (stats, owner) -> stats.processed(dispatchDue(LocalDateTime.now())));
 	}
 
 	/** @return 보내려고 시도한 알림 수 */
