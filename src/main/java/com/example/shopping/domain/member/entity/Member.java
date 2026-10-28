@@ -57,18 +57,10 @@ public class Member extends BaseTimeEntity {
 	@Column(length = 200)
 	private String suspensionReason;
 
-	// 기존 DB 스키마 호환을 위해 유지한다. 로그인 실패 제한에는 사용하지 않는다.
-	@ColumnDefault("0")
-	@Column(nullable = false)
-	private int failedLoginCount;
-
 	/** Persisted generation used to invalidate access and refresh tokens after credential changes. */
 	@ColumnDefault("0")
 	@Column(name = "access_token_version", nullable = false)
 	private long accessTokenVersion;
-
-	// 기존 DB 스키마 호환을 위해 유지한다. 로그인 실패 제한에는 사용하지 않는다.
-	private LocalDateTime lockedUntil;
 
 	/** 가입할 때 이메일 인증을 마친 시각. 인증 없이 가입한 계정(기능 도입 전 가입 등)은 비어 있다. */
 	private LocalDateTime emailVerifiedAt;

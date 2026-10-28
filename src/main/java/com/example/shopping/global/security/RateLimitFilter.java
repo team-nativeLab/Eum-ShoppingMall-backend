@@ -66,7 +66,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
 			// 자동 완성은 글자를 칠 때마다 부르므로 한 묶음으로 세면 한 사무실(같은 공인 IP) 직원 몇 명만으로도 막힌다.
 			publicRead("/api/v1/products/suggestions", "GET /api/v1/products/suggestions", Limit.AUTOCOMPLETE),
 			publicRead("/api/v1/products/facets", "GET /api/v1/products/facets", Limit.PUBLIC_READ),
-			publicRead("/api/v1/products/brands", "GET /api/v1/products/brands", Limit.PUBLIC_READ),
 			publicRead("/api/v1/products", "GET /api/v1/products", Limit.PUBLIC_READ),
 			publicRead("/api/v1/products/**", "GET /api/v1/products/{productId}", Limit.PUBLIC_READ));
 

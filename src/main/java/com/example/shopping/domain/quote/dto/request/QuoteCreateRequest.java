@@ -1,5 +1,7 @@
 package com.example.shopping.domain.quote.dto.request;
 
+import com.example.shopping.global.validation.ValidationPatterns;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -20,7 +22,7 @@ public record QuoteCreateRequest(
 		String managerName,
 
 		@NotBlank(message = "연락처를 입력해 주세요.")
-		@Pattern(regexp = "^\\d{2,3}-?\\d{3,4}-?\\d{4}$", message = "연락처 형식이 올바르지 않습니다.")
+		@Pattern(regexp = ValidationPatterns.PHONE, message = "연락처 형식이 올바르지 않습니다.")
 		String phone,
 
 		@Email(message = "이메일 형식이 올바르지 않습니다.")

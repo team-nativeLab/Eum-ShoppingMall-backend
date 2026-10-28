@@ -15,7 +15,7 @@ The `local` profile also uses Flyway and Hibernate validation. It baselines a pr
 
 ## Static content API
 
-Supported content codes are `company`, `terms`, and `privacy-policy`. Customers can read `GET /api/v1/contents/{code}`; `GET /api/v1/contents/company` remains an alias. Administrators can list and read saved content with `GET /api/v1/admin/contents` and `GET /api/v1/admin/contents/{code}`, and create or update it with `PUT /api/v1/admin/contents/{code}` using `{ "title": "...", "body": "..." }`. Bodies are plain text; HTML tag markup is rejected. No legal text is seeded by the server.
+Supported content codes are `company`, `terms`, and `privacy-policy`. Customers can read `GET /api/v1/contents/{code}` (for example `GET /api/v1/contents/company`). Administrators can list and read saved content with `GET /api/v1/admin/contents` and `GET /api/v1/admin/contents/{code}`, and create or update it with `PUT /api/v1/admin/contents/{code}` using `{ "title": "...", "body": "..." }`. Bodies are plain text; HTML tag markup is rejected. No legal text is seeded by the server.
 
 ## Image storage
 
@@ -29,7 +29,7 @@ Uploads use local disk by default (`UPLOAD_STORAGE=local`). To use S3, set `UPLO
 Every response includes `X-Request-Id`. A safe incoming value (1–64 letters, numbers, dots, underscores, or hyphens) is echoed; otherwise the server generates a UUID. The same value is included in application log lines. Actuator `health` and `metrics` are enabled; only health probes are public, while the remaining actuator routes require an administrator token. A metrics backend and alert delivery destination still need to be selected before operational alerts can be enabled.
 ## Member withdrawal and suspension
 
-`DELETE /api/v1/me` requires `{"password":"..."}`. Withdrawal is rejected while the member has a pending, processing, waiting-for-deposit, paid, preparing, or shipped order. On success, the account is marked `WITHDRAWN`, its login credentials and profile identifiers are anonymized, and refresh tokens, cart items, and the saved checkout address are removed. Historical orders remain. Administrators can suspend or reactivate another account with `PATCH /api/v1/admin/users/{userId}/status`; suspending requires a reason and revokes refresh tokens.
+`DELETE /api/v1/me` requires `{"password":"..."}`. Withdrawal is rejected while the member has a pending, processing, waiting-for-deposit, paid, preparing, shipped, or cancel-requested (refund not yet confirmed) order (`OrderStatus.IN_PROGRESS`). On success, the account is marked `WITHDRAWN`, its login credentials and profile identifiers are anonymized, and refresh tokens and cart items are removed. Historical orders remain. Administrators can suspend or reactivate another account with `PATCH /api/v1/admin/users/{userId}/status`; suspending requires a reason and revokes refresh tokens.
 
 ## Admin audit log
 

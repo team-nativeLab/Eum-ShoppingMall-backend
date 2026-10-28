@@ -12,6 +12,12 @@ public final class ValidationPatterns {
 	/** URL_OR_PATH와 같지만 빈 문자열도 허용한다. 수정 요청에서 빈 문자열은 값을 지운다는 뜻이다. */
 	public static final String URL_OR_PATH_OR_EMPTY = "^$|" + URL_OR_PATH;
 
+	/** 연락처. 숫자 사이 하이픈은 있어도 되고 없어도 된다 (예: 010-1234-5678, 0212345678). 저장할 때는 ContactFormats.phone으로 뺀다. */
+	public static final String PHONE = "^\\d{2,3}-?\\d{3,4}-?\\d{4}$";
+
+	/** PHONE과 같지만 빈 문자열도 허용한다. 수정 요청에서 빈 문자열은 값을 지운다는 뜻이다. */
+	public static final String PHONE_OR_EMPTY = "^$|" + PHONE;
+
 	/** 주소에 쓰는 영문 이름. 영문 소문자·숫자를 하이픈으로 이은 형태 (예: head-protection) */
 	public static final String SLUG = "^[a-z0-9]+(-[a-z0-9]+)*$";
 

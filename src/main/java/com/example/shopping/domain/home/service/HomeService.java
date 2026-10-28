@@ -37,10 +37,6 @@ public class HomeService {
 						.toList()));
 	}
 
-	public ContentResponse getCompany() {
-		return getContent(SiteContent.COMPANY);
-	}
-
 	public ContentResponse getContent(String code) {
 		if (!SiteContent.ALLOWED_CODES.contains(code)) {
 			throw new BusinessException(ErrorCode.INVALID_INPUT);

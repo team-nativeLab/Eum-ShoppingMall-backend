@@ -107,7 +107,7 @@ security:
   rate-limit:
     # 로그인·회원가입·문의 접수·주문·결제 등에 적용하는 IP별 분당 요청 한도
     requests-per-minute: ${RATE_LIMIT_PER_MINUTE:10}
-    # 공개 상품 조회의 IP별 분당 한도. 목록·필터 개수·브랜드·상세를 각각 따로 세고, 자동 완성은 이 값의 두 배다.
+    # 공개 상품 조회의 IP별 분당 한도. 목록·필터 개수(브랜드 포함)·상세를 각각 따로 세고, 자동 완성은 이 값의 두 배다.
     # 한 사무실 직원들이 같은 공인 IP로 접속하므로 넉넉하게 둔다. 크롤링 같은 대량 요청은 프록시·WAF에서 막는다.
     public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:300}
   request:

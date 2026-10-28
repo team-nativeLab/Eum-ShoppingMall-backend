@@ -17,10 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.shopping.domain.product.dto.response.AdminProductDetailResponse;
 import com.example.shopping.domain.product.dto.response.AdminProductSummaryResponse;
-import com.example.shopping.domain.product.dto.request.PriceVisibilityRequest;
 import com.example.shopping.domain.product.dto.request.ProductCreateRequest;
 import com.example.shopping.domain.product.dto.request.ProductUpdateRequest;
-import com.example.shopping.domain.product.dto.request.StockReceiveRequest;
+import com.example.shopping.domain.product.dto.request.StockAdjustmentRequest;
 import com.example.shopping.domain.product.dto.request.SkuCreateRequest;
 import com.example.shopping.domain.product.dto.request.SkuUpdateRequest;
 import com.example.shopping.domain.product.entity.ProductStatus;
@@ -61,7 +60,7 @@ public class AdminProductController {
 		return ApiResponse.ok(adminProductService.create(request));
 	}
 
-	/** ADM-004 상품 정보·판매 상태 변경. 옵션은 SKU 전용 API에서 관리한다. */
+	/** ADM-004, 005 상품 정보·판매 상태·금액 표시 여부 변경. 옵션과 재고는 옵션 전용 API에서 관리한다. */
 	@PatchMapping("/{productId}")
 	public ApiResponse<AdminProductDetailResponse> updateProduct(@PathVariable Long productId,
 			@Valid @RequestBody ProductUpdateRequest request) {
@@ -97,17 +96,13 @@ public class AdminProductController {
 		return ApiResponse.ok(null);
 	}
 
-	/** 옵션(SKU) 입고. 현재 재고에 입고 수량을 더한다. 재고를 줄이거나 특정 수량으로 맞출 때는 상품 수정을 쓴다. */
-	@PostMapping("/{productId}/skus/{skuId}/stock-in")
-	public ApiResponse<AdminProductDetailResponse> receiveStock(@PathVariable Long productId,
-			@PathVariable Long skuId, @Valid @RequestBody StockReceiveRequest request) {
-		return ApiResponse.ok(adminProductService.receiveStock(productId, skuId, request.quantity()));
-	}
-
-	/** ADM-005 금액 표시 여부 전환 */
-	@PatchMapping("/{productId}/visibility")
-	public ApiResponse<AdminProductDetailResponse> changePriceVisibility(@PathVariable Long productId,
-			@Valid @RequestBody PriceVisibilityRequest request) {
-		return ApiResponse.ok(adminProductService.changePriceVisibility(productId, request.priceVisible()));
+	/**
+	 * 옵션(SKU) 재고 조정. 입고는 양수, 파손·분실·실사 차이는 음수로 현재 재고에 더한다.
+	 * 0 아래로 내려가면 409(OUT_OF_STOCK), 상한(10억 개)을 넘으면 400(STOCK_LIMIT_EXCEEDED)
+	 */
+	@PostMapping("/{productId}/skus/{skuId}/stock-adjustments")
+	public ApiResponse<AdminProductDetailResponse> adjustStock(@PathVariable Long productId,
+			@PathVariable Long skuId, @Valid @RequestBody StockAdjustmentRequest request) {
+		return ApiResponse.ok(adminProductService.adjustStock(productId, skuId, request.delta()));
 	}
 }

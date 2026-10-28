@@ -406,7 +406,7 @@ class AdminApiTests {
 				.andExpect(content().string(not(containsString("35000"))))
 				.andExpect(content().string(not(containsString("36000"))));
 
-		patchJson("/api/v1/admin/products/" + productId + "/visibility", """
+		patchJson("/api/v1/admin/products/" + productId, """
 				{"priceVisible":true}
 				""").andExpect(status().isOk());
 		mockMvc.perform(get("/api/v1/products/{id}", productId))
@@ -426,10 +426,8 @@ class AdminApiTests {
 		entityManager.clear();
 
 		patchJson("/api/v1/admin/products/" + productId, """
-				{"name":"경량 안전모","status":"HIDDEN","description":"",
-				 "skus":[{"id":%d,"optionName":"흰색","price":40000,"stock":5},
-				         {"optionName":"파랑","price":41000,"stock":3}]}
-				""".formatted(skuId))
+				{"name":"경량 안전모","status":"HIDDEN","description":""}
+				""")
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.name").value("경량 안전모"))
 				.andExpect(jsonPath("$.data.status").value("HIDDEN"))
@@ -492,7 +490,7 @@ class AdminApiTests {
 	}
 
 	@Test
-	void 입고하면_현재_재고에_수량이_더해지고_그사이_주문으로_줄어든_재고를_덮어쓰지_않는다() throws Exception {
+	void 재고를_조정하면_현재_재고에_더해지고_그사이_주문으로_줄어든_재고를_덮어쓰지_않는다() throws Exception {
 		String created = postJson("/api/v1/admin/products", """
 				{"name":"산업용 안전모","basePrice":30000,
 				 "skus":[{"optionName":"흰색","price":30000,"stock":10},{"optionName":"노랑","price":30000,"stock":0}]}
@@ -501,8 +499,8 @@ class AdminApiTests {
 		long whiteSku = ((Number) JsonPath.read(created, "$.data.skus[0].id")).longValue();
 		long yellowSku = ((Number) JsonPath.read(created, "$.data.skus[1].id")).longValue();
 
-		postJson(stockInUrl(productId, yellowSku), """
-				{"quantity":5}
+		postJson(stockAdjustmentUrl(productId, yellowSku), """
+				{"delta":5,"reason":"입고"}
 				""")
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.skus[0].stock").value(10))
@@ -511,13 +509,24 @@ class AdminApiTests {
 		// 관리자가 화면을 띄워 둔 사이 주문이 들어와 흰색 재고가 10 → 7로 줄어든 상황
 		jdbcTemplate.update("update product_sku set stock = 7, version = version + 1 where id = ?", whiteSku);
 
-		postJson(stockInUrl(productId, whiteSku), """
-				{"quantity":5}
+		postJson(stockAdjustmentUrl(productId, whiteSku), """
+				{"delta":5}
 				""")
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.skus[0].stock").value(12));
+		// 파손·분실은 음수로 줄인다. 현재 재고보다 많이 줄일 수는 없다.
+		postJson(stockAdjustmentUrl(productId, whiteSku), """
+				{"delta":-3,"reason":"파손"}
+				""")
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.skus[0].stock").value(9));
+		postJson(stockAdjustmentUrl(productId, whiteSku), """
+				{"delta":-10}
+				""")
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("OUT_OF_STOCK"));
 		mockMvc.perform(get("/api/v1/admin/products/{id}", productId))
-				.andExpect(jsonPath("$.data.skus[0].stock").value(12))
+				.andExpect(jsonPath("$.data.skus[0].stock").value(9))
 				.andExpect(jsonPath("$.data.skus[1].stock").value(5));
 		// 품절이던 옵션은 재고가 들어오면 고객 화면에서 품절이 풀린다.
 		mockMvc.perform(get("/api/v1/products/{id}", productId))
@@ -525,7 +534,7 @@ class AdminApiTests {
 	}
 
 	@Test
-	void 잘못된_입고_요청은_거부한다() throws Exception {
+	void 잘못된_재고_조정_요청은_거부한다() throws Exception {
 		String first = postJson("/api/v1/admin/products", """
 				{"name":"안전모","basePrice":30000,"skus":[{"optionName":"흰색","price":30000,"stock":10}]}
 				""").andReturn().getResponse().getContentAsString();
@@ -536,31 +545,31 @@ class AdminApiTests {
 		long skuId = ((Number) JsonPath.read(first, "$.data.skus[0].id")).longValue();
 		long otherProductSku = ((Number) JsonPath.read(second, "$.data.skus[0].id")).longValue();
 
-		for (String body : new String[] { "{\"quantity\":0}", "{\"quantity\":-3}", "{\"quantity\":1000001}", "{}" }) {
-			postJson(stockInUrl(productId, skuId), body)
+		for (String body : new String[] { "{\"delta\":0}", "{\"delta\":1000001}", "{\"delta\":-1000001}", "{}" }) {
+			postJson(stockAdjustmentUrl(productId, skuId), body)
 					.andExpect(status().isBadRequest())
 					.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 		}
 		// 다른 상품의 옵션, 없는 상품
-		postJson(stockInUrl(productId, otherProductSku), "{\"quantity\":1}")
+		postJson(stockAdjustmentUrl(productId, otherProductSku), "{\"delta\":1}")
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("SKU_NOT_FOUND"));
-		postJson(stockInUrl(999_999, skuId), "{\"quantity\":1}")
+		postJson(stockAdjustmentUrl(999_999, skuId), "{\"delta\":1}")
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
 
-		// 재고 상한(10억 개)을 넘는 입고는 받지 않고 재고도 그대로 둔다.
+		// 재고 상한(10억 개)을 넘는 조정은 받지 않고 재고도 그대로 둔다.
 		jdbcTemplate.update("update product_sku set stock = 999999999 where id = ?", skuId);
-		postJson(stockInUrl(productId, skuId), "{\"quantity\":2}")
+		postJson(stockAdjustmentUrl(productId, skuId), "{\"delta\":2}")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("STOCK_LIMIT_EXCEEDED"));
 		assertThat(jdbcTemplate.queryForObject("select stock from product_sku where id = ?", Integer.class, skuId))
 				.isEqualTo(999_999_999);
-		postJson(stockInUrl(productId, skuId), "{\"quantity\":1}").andExpect(status().isOk());
+		postJson(stockAdjustmentUrl(productId, skuId), "{\"delta\":1}").andExpect(status().isOk());
 
-		// 삭제된 상품에는 입고할 수 없다.
+		// 삭제된 상품의 재고는 조정할 수 없다.
 		mockMvc.perform(delete("/api/v1/admin/products/{id}", productId)).andExpect(status().isOk());
-		postJson(stockInUrl(productId, skuId), "{\"quantity\":1}").andExpect(status().isNotFound());
+		postJson(stockAdjustmentUrl(productId, skuId), "{\"delta\":1}").andExpect(status().isNotFound());
 	}
 
 	@Test
@@ -1041,8 +1050,8 @@ class AdminApiTests {
 		return mockMvc.perform(patch(url).contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 
-	private String stockInUrl(long productId, long skuId) {
-		return "/api/v1/admin/products/" + productId + "/skus/" + skuId + "/stock-in";
+	private String stockAdjustmentUrl(long productId, long skuId) {
+		return "/api/v1/admin/products/" + productId + "/skus/" + skuId + "/stock-adjustments";
 	}
 
 	private long idOf(ResultActions result) throws Exception {

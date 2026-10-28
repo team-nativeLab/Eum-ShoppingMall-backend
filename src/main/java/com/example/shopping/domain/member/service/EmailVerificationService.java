@@ -2,7 +2,6 @@ package com.example.shopping.domain.member.service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -19,6 +18,7 @@ import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.mail.EmailSender;
 import com.example.shopping.global.mail.EmailSender.EmailSendException;
+import com.example.shopping.global.validation.ContactFormats;
 
 /**
  * 이메일 인증번호. 메일로 보낸 인증번호(10분 유효)를 확인한다.
@@ -50,7 +50,7 @@ public class EmailVerificationService {
 
 	/** 이미 가입된 이메일이면 409. 메일 서버가 받지 않으면 503이고, 이때는 바로 다시 요청할 수 있다. */
 	public EmailVerificationSendResponse sendSignupCode(String rawEmail) {
-		String email = normalize(rawEmail);
+		String email = ContactFormats.loginEmail(rawEmail);
 		if (memberRepository.existsByEmail(email)) {
 			throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
 		}
@@ -75,7 +75,7 @@ public class EmailVerificationService {
 	/** 인증번호가 맞으면 가입 요청(emailVerificationToken)에 넣을 확인 토큰을 준다. 틀린 횟수는 롤백하지 않는다. */
 	@Transactional(noRollbackFor = BusinessException.class)
 	public EmailVerificationConfirmResponse confirmSignupCode(String rawEmail, String code) {
-		EmailVerification verification = verifyCode(normalize(rawEmail), VerificationPurpose.SIGNUP, code);
+		EmailVerification verification = verifyCode(ContactFormats.loginEmail(rawEmail), VerificationPurpose.SIGNUP, code);
 		String token = VerificationCodes.newToken();
 		LocalDateTime tokenExpiresAt = LocalDateTime.now().plus(TOKEN_TTL);
 		verification.issueToken(VerificationCodes.hash(token), tokenExpiresAt);
@@ -133,9 +133,5 @@ public class EmailVerificationService {
 
 	String subject(String title) {
 		return "[" + serviceName + "] " + title;
-	}
-
-	static String normalize(String email) {
-		return email.trim().toLowerCase(Locale.ROOT);
 	}
 }

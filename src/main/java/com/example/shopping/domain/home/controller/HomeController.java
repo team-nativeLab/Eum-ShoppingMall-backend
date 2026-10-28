@@ -29,13 +29,7 @@ public class HomeController {
 		return ApiResponse.ok(homeService.getHome());
 	}
 
-	/** WEB-025 회사소개. 내용은 site_content 테이블의 code = 'company' 행에서 읽는다. */
-	@GetMapping("/contents/company")
-	public ApiResponse<ContentResponse> company() {
-		return ApiResponse.ok(homeService.getCompany());
-	}
-
-	/** 회사소개·약관 등 서버가 허용한 고정 콘텐츠. */
+	/** WEB-025 회사소개(company)·이용약관(terms)·개인정보처리방침(privacy-policy) 등 서버가 허용한 고정 콘텐츠. */
 	@GetMapping("/contents/{code}")
 	public ApiResponse<ContentResponse> content(@PathVariable String code) {
 		return ApiResponse.ok(homeService.getContent(code));

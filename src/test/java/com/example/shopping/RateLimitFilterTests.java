@@ -127,7 +127,6 @@ class RateLimitFilterTests {
 		for (int i = 0; i < 5; i++) {
 			assertThat(call(searchFilter, "GET", "/api/v1/products", "10.0.0.12")).isEqualTo(200);
 			assertThat(call(searchFilter, "GET", "/api/v1/products/facets", "10.0.0.12")).isEqualTo(200);
-			assertThat(call(searchFilter, "GET", "/api/v1/products/brands", "10.0.0.12")).isEqualTo(200);
 			assertThat(call(searchFilter, "GET", "/api/v1/products/" + (i + 1), "10.0.0.12")).isEqualTo(200);
 		}
 		for (int i = 0; i < 10; i++) {
@@ -136,7 +135,6 @@ class RateLimitFilterTests {
 
 		assertThat(call(searchFilter, "GET", "/api/v1/products", "10.0.0.12")).isEqualTo(429);
 		assertThat(call(searchFilter, "GET", "/api/v1/products/facets", "10.0.0.12")).isEqualTo(429);
-		assertThat(call(searchFilter, "GET", "/api/v1/products/brands", "10.0.0.12")).isEqualTo(429);
 		// 상세는 상품 번호가 달라도 한 묶음으로 센다.
 		assertThat(call(searchFilter, "GET", "/api/v1/products/99", "10.0.0.12")).isEqualTo(429);
 		assertThat(call(searchFilter, "GET", "/api/v1/products/suggestions", "10.0.0.12")).isEqualTo(429);

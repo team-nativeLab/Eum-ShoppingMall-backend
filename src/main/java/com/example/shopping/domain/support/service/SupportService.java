@@ -21,6 +21,7 @@ import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.validation.SortValidator;
+import com.example.shopping.global.validation.ContactFormats;
 
 import lombok.RequiredArgsConstructor;
 
@@ -55,7 +56,7 @@ public class SupportService {
 	/** @param memberId 로그인한 회원의 ID. 비회원이면 null */
 	@Transactional
 	public InquiryResponse createInquiry(Long memberId, InquiryCreateRequest request) {
-		String phone = StringUtils.hasText(request.contactPhone()) ? request.contactPhone().replace("-", "") : null;
+		String phone = StringUtils.hasText(request.contactPhone()) ? ContactFormats.phone(request.contactPhone()) : null;
 		String email = StringUtils.hasText(request.contactEmail()) ? request.contactEmail().trim() : null;
 		if (memberId == null && phone == null && email == null) {
 			// 비회원은 로그인해서 답변을 확인할 수 없으므로 연락처가 없으면 답변을 전달할 방법이 없다.

@@ -11,6 +11,6 @@ public record ProfileUpdateRequest(
 		@Size(max = 50, message = "이름은 50자 이하여야 합니다.")
 		String name,
 
-		@Pattern(regexp = "^$|^\\d{2,3}-?\\d{3,4}-?\\d{4}$", message = "연락처 형식이 올바르지 않습니다.")
+		@Pattern(regexp = ValidationPatterns.PHONE_OR_EMPTY, message = "연락처 형식이 올바르지 않습니다.")
 		String phone) {
 }

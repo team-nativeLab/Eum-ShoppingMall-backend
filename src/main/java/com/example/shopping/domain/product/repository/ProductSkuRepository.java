@@ -28,18 +28,15 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long> {
 	int decreaseStock(@Param("id") Long id, @Param("quantity") int quantity);
 
 	/**
-	 * 입고. 현재 수량을 읽어서 덮어쓰지 않고 DB에서 바로 더하므로, 그사이 주문이 들어와 재고가 줄어도 서로 덮어쓰지 않는다.
-	 * 더한 뒤의 재고가 상한을 넘으면 더하지 않고 0을 돌려준다.
-	 *
-	 * @param maxStockBefore 입고 전 재고가 이 값 이하여야 한다 (재고 상한 - 입고 수량)
+	 * 재고를 현재 값에서 늘리거나 줄인다(입고·파손·실사 차이). 최종 수량으로 덮어쓰지 않으므로 그사이 들어온 주문 차감을 지우지 않는다.
+	 * 0 아래나 상한 위가 되면 바꾸지 않고 0을 돌려준다.
 	 */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
-			update ProductSku s set s.stock = s.stock + :quantity, s.version = s.version + 1
-			where s.id = :id and s.stock <= :maxStockBefore
+			update ProductSku s set s.stock = s.stock + :delta, s.version = s.version + 1
+			where s.id = :id and s.stock + :delta >= 0 and s.stock + :delta <= :maxStock
 			""")
-	int receiveStock(@Param("id") Long id, @Param("quantity") int quantity,
-			@Param("maxStockBefore") int maxStockBefore);
+	int adjustStock(@Param("id") Long id, @Param("delta") int delta, @Param("maxStock") int maxStock);
 
 	/** 주문 만료·취소로 재고를 되돌린다. */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)

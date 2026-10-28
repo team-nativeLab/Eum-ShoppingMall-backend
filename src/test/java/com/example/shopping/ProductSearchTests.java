@@ -386,11 +386,12 @@ class ProductSearchTests {
 		insert(product("비공개").brand("숨김브랜드").status("HIDDEN"));
 		insert(product("삭제됨").brand("삭제브랜드").status("DELETED"));
 
-		mockMvc.perform(get("/api/v1/products/brands"))
+		// 브랜드 필터 목록은 필터별 상품 수 API가 함께 준다.
+		mockMvc.perform(get("/api/v1/products/facets"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data").value(contains("3M", "코오롱", "허니웰")));
-		mockMvc.perform(get("/api/v1/products/brands").param("categoryId", String.valueOf(ppe)))
-				.andExpect(jsonPath("$.data").value(contains("3M", "허니웰")));
+				.andExpect(jsonPath("$.data.brands[*].value").value(containsInAnyOrder("3M", "코오롱", "허니웰")));
+		mockMvc.perform(get("/api/v1/products/facets").param("categoryId", String.valueOf(ppe)))
+				.andExpect(jsonPath("$.data.brands[*].value").value(containsInAnyOrder("3M", "허니웰")));
 	}
 
 	// ───────── 관리자 입력 ─────────
@@ -439,7 +440,7 @@ class ProductSearchTests {
 				.andExpect(jsonPath("$.data.brand").doesNotExist())
 				.andExpect(jsonPath("$.data.listPrice").doesNotExist())
 				.andExpect(jsonPath("$.data.certifications.length()").value(0));
-		mockMvc.perform(get("/api/v1/products/brands")).andExpect(jsonPath("$.data.length()").value(0));
+		mockMvc.perform(get("/api/v1/products/facets")).andExpect(jsonPath("$.data.brands.length()").value(0));
 		mockMvc.perform(get("/api/v1/products").param("certified", "true"))
 				.andExpect(jsonPath("$.data.totalElements").value(0));
 

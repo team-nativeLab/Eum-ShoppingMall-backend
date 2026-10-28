@@ -1,7 +1,6 @@
 package com.example.shopping.domain.member.service;
 
 import java.time.LocalDateTime;
-import java.util.Locale;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +23,7 @@ import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.security.JwtTokenProvider;
+import com.example.shopping.global.validation.ContactFormats;
 
 /**
  * 비밀번호 해시 계산이 느리므로 그동안 DB 커넥션을 잡고 있지 않도록
@@ -70,7 +70,7 @@ public class AuthService {
 	 * 토큰 사용과 가입 저장은 한 트랜잭션이라 가입이 실패하면 토큰을 다시 쓸 수 있다.
 	 */
 	public SignupResponse signup(SignupRequest request) {
-		String email = normalizeEmail(request.email());
+		String email = ContactFormats.loginEmail(request.email());
 		if (memberRepository.existsByEmail(email)) {
 			throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
 		}
@@ -79,7 +79,7 @@ public class AuthService {
 			throw new BusinessException(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
 		}
 
-		String phone = request.phone() == null ? null : request.phone().replace("-", "");
+		String phone = ContactFormats.phone(request.phone());
 		Member member = Member.create(email, passwordEncoder.encode(request.password()), request.name().trim(), phone);
 		try {
 			return transactionTemplate.execute(status -> {
@@ -121,7 +121,7 @@ public class AuthService {
 
 	private void recordAdminLogin(Long memberId, String clientIp, String email, int status) {
 		try {
-			auditLogService.recordAdminLogin(memberId, clientIp, email == null ? null : normalizeEmail(email), status);
+			auditLogService.recordAdminLogin(memberId, clientIp, email == null ? null : ContactFormats.loginEmail(email), status);
 		} catch (RuntimeException e) {
 			log.error("관리자 로그인 감사 로그 저장 실패: member={}, ip={}, status={}", memberId, clientIp, status, e);
 		}
@@ -146,7 +146,7 @@ public class AuthService {
 	}
 
 	private Member authenticate(LoginRequest request) {
-		Member member = memberRepository.findByEmail(normalizeEmail(request.email())).orElse(null);
+		Member member = memberRepository.findByEmail(ContactFormats.loginEmail(request.email())).orElse(null);
 
 		String passwordHash = member == null ? dummyPasswordHash : member.getPasswordHash();
 		boolean passwordMatches = passwordEncoder.matches(request.password(), passwordHash);
@@ -172,7 +172,4 @@ public class AuthService {
 		return new AuthTokens(accessToken, jwtTokenProvider.accessTokenExpiry(), refreshToken);
 	}
 
-	private String normalizeEmail(String email) {
-		return email.trim().toLowerCase(Locale.ROOT);
-	}
 }

@@ -65,12 +65,6 @@ public class ProductController {
 		return ApiResponse.ok(productService.suggest(query));
 	}
 
-	/** 브랜드 필터에 보여 줄 브랜드 목록. categoryId를 주면 그 카테고리(하위 포함)에 상품이 있는 브랜드만 나온다. */
-	@GetMapping("/products/brands")
-	public ApiResponse<List<String>> brands(@RequestParam(required = false) Long categoryId) {
-		return ApiResponse.ok(productService.getBrands(categoryId));
-	}
-
 	/** WEB-005, 006 상품 상세 */
 	@GetMapping("/products/{productId}")
 	public ApiResponse<ProductDetailResponse> product(@PathVariable Long productId) {
