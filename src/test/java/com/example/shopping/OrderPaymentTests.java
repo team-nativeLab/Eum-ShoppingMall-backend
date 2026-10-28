@@ -13,10 +13,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -126,11 +128,10 @@ class OrderPaymentTests {
 	}
 
 	@Test
-	void 배송비와_할인은_상품합계_기준으로_계산되어_주문상세에_저장된다() throws Exception {
+	void 배송비는_상품합계_기준으로_계산되어_주문상세에_저장되고_할인은_없다() throws Exception {
 		long[] prices = {99999, 100000, 100001};
-		long[] discounts = {999, 1000, 1000};
 		long[] shippingFees = {5000, 0, 0};
-		long[] totals = {104000, 99000, 99001};
+		long[] totals = {104999, 100000, 100001};
 		for (int i = 0; i < prices.length; i++) {
 			jdbcTemplate.update("delete from cart_item where member_id = ?", buyer);
 			String orderNo = createOrder(buyer,
@@ -138,10 +139,73 @@ class OrderPaymentTests {
 			mockMvc.perform(get("/api/v1/orders/{orderNo}", orderNo).with(member(buyer)))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data.itemAmount").value(prices[i]))
-					.andExpect(jsonPath("$.data.discountAmount").value(discounts[i]))
+					.andExpect(jsonPath("$.data.discountAmount").value(0))
 					.andExpect(jsonPath("$.data.shippingFee").value(shippingFees[i]))
 					.andExpect(jsonPath("$.data.totalAmount").value(totals[i]));
 		}
+	}
+
+	@Test
+	void 관리자가_바꾼_배송비_정책은_장바구니와_새_주문에만_적용된다() throws Exception {
+		long adminId = 900L;
+		long helmetSku = insertProductWithSku("안전모", 30000, true, 10);
+		String before = createOrder(buyer, helmetSku, 2);
+
+		// 아직 정하지 않았으면 기본값(10만 원 미만 배송비 5,000원)을 보여 준다. 고객 화면용 조회는 로그인 없이 된다.
+		mockMvc.perform(get("/api/v1/admin/shipping-policy").with(admin(adminId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.shippingFee").value(5000))
+				.andExpect(jsonPath("$.data.freeShippingThreshold").value(100000))
+				.andExpect(jsonPath("$.data.updatedAt").doesNotExist());
+
+		mockMvc.perform(put("/api/v1/admin/shipping-policy").with(admin(adminId))
+						.contentType(MediaType.APPLICATION_JSON).content("""
+								{"shippingFee":3000,"freeShippingThreshold":50000}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.shippingFee").value(3000))
+				.andExpect(jsonPath("$.data.freeShippingThreshold").value(50000));
+		mockMvc.perform(get("/api/v1/shipping-policy").with(anonymous()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.shippingFee").value(3000))
+				.andExpect(jsonPath("$.data.freeShippingThreshold").value(50000));
+
+		// 장바구니 예상 금액과 새 주문은 바뀐 정책을 따른다. (30,000원 1개는 배송비, 2개는 무료배송)
+		jdbcTemplate.update("delete from cart_item where member_id = ?", buyer);
+		addToCart(buyer, helmetSku, 1);
+		mockMvc.perform(get("/api/v1/cart").with(member(buyer)))
+				.andExpect(jsonPath("$.data.shippingFee").value(3000))
+				.andExpect(jsonPath("$.data.paymentAmount").value(33000));
+		String after = createOrder(buyer, helmetSku, 2);
+		mockMvc.perform(get("/api/v1/orders/{orderNo}", after).with(member(buyer)))
+				.andExpect(jsonPath("$.data.shippingFee").value(0))
+				.andExpect(jsonPath("$.data.totalAmount").value(60000));
+		// 이미 만든 주문의 금액은 그대로다.
+		mockMvc.perform(get("/api/v1/orders/{orderNo}", before).with(member(buyer)))
+				.andExpect(jsonPath("$.data.shippingFee").value(5000))
+				.andExpect(jsonPath("$.data.totalAmount").value(65000));
+
+		// 무료배송 기준을 비우면 금액과 관계없이 배송비를 받는다.
+		mockMvc.perform(put("/api/v1/admin/shipping-policy").with(admin(adminId))
+						.contentType(MediaType.APPLICATION_JSON).content("{\"shippingFee\":3000}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.freeShippingThreshold").doesNotExist());
+		jdbcTemplate.update("delete from cart_item where member_id = ?", buyer);
+		addToCart(buyer, helmetSku, 5);
+		mockMvc.perform(get("/api/v1/cart").with(member(buyer)))
+				.andExpect(jsonPath("$.data.shippingFee").value(3000))
+				.andExpect(jsonPath("$.data.paymentAmount").value(153000));
+
+		// 잘못된 값과 일반 회원의 변경은 거절한다.
+		for (String body : new String[] { "{\"shippingFee\":-1}", "{}", "{\"shippingFee\":3000,\"freeShippingThreshold\":0}",
+				"{\"shippingFee\":1000001}" }) {
+			mockMvc.perform(put("/api/v1/admin/shipping-policy").with(admin(adminId))
+							.contentType(MediaType.APPLICATION_JSON).content(body))
+					.andExpect(status().isBadRequest());
+		}
+		mockMvc.perform(put("/api/v1/admin/shipping-policy").with(member(buyer))
+						.contentType(MediaType.APPLICATION_JSON).content("{\"shippingFee\":0}"))
+				.andExpect(status().isForbidden());
 	}
 
 	// ───────── 주문 생성 ─────────
@@ -162,7 +226,7 @@ class OrderPaymentTests {
 
 		String body = postOrder(buyer, "key-1", items(helmetSku, 2))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.data.amount").value(64400))
+				.andExpect(jsonPath("$.data.amount").value(65000))
 				.andExpect(jsonPath("$.data.orderName").value("안전모"))
 				.andReturn().getResponse().getContentAsString();
 		String orderNo = JsonPath.read(body, "$.data.orderNo");
@@ -264,7 +328,7 @@ class OrderPaymentTests {
 		String orderNo = createOrder(buyer, sku, 300);
 
 		assertThat(jdbcTemplate.queryForObject("select total_amount from orders where order_no = ?", Long.class,
-				orderNo)).isEqualTo(445_500);
+				orderNo)).isEqualTo(450_000);
 		assertThat(stockOf(sku)).isEqualTo(200);
 	}
 
@@ -296,7 +360,7 @@ class OrderPaymentTests {
 		mockMvc.perform(get("/api/v1/orders/{orderNo}", orderNo).with(member(other)))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
-		confirm(other, orderNo, 34700)
+		confirm(other, orderNo, 35000)
 				.andExpect(status().isNotFound());
 		mockMvc.perform(post("/api/v1/orders/{orderNo}/cancel", orderNo).with(member(other)))
 				.andExpect(status().isNotFound());
@@ -313,13 +377,13 @@ class OrderPaymentTests {
 		long hiddenSku = insertProductWithSku("견적 전용 장비", 500000, false, 5);
 		addToCart(buyer, hiddenSku, 1);
 		String orderNo = createOrder(buyer, helmetSku, 2);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 64400)).thenReturn(pg(orderNo, PgStatus.DONE, 64400));
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 65000)).thenReturn(pg(orderNo, PgStatus.DONE, 65000));
 
-		confirm(buyer, orderNo, 64400)
+		confirm(buyer, orderNo, 65000)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PAID"))
 				.andExpect(jsonPath("$.data.payment.method").value("CARD"))
-				.andExpect(jsonPath("$.data.payment.approvedAmount").value(64400))
+				.andExpect(jsonPath("$.data.payment.approvedAmount").value(65000))
 				.andExpect(jsonPath("$.data.paidAt").isNotEmpty());
 
 		// 결제한 수량만큼 누적 판매 수량(인기순 기준)이 오른다.
@@ -332,7 +396,7 @@ class OrderPaymentTests {
 				.andExpect(jsonPath("$.data.items[0].status").value("PRICE_HIDDEN"));
 
 		// 결제 완료 화면 새로고침
-		confirm(buyer, orderNo, 64400)
+		confirm(buyer, orderNo, 65000)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PAID"));
 		verify(paymentGateway, times(1)).confirm(anyString(), anyString(), anyLong());
@@ -353,9 +417,9 @@ class OrderPaymentTests {
 	@Test
 	void PG가_승인한_금액이_주문_금액과_다르면_바로_환불하고_실패_처리한다() throws Exception {
 		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 2);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 64400)).thenReturn(pg(orderNo, PgStatus.DONE, 100));
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 65000)).thenReturn(pg(orderNo, PgStatus.DONE, 100));
 
-		confirm(buyer, orderNo, 64400)
+		confirm(buyer, orderNo, 65000)
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("PAYMENT_AMOUNT_MISMATCH"));
 
@@ -367,10 +431,10 @@ class OrderPaymentTests {
 	@Test
 	void PG가_다른_주문의_결제를_승인했다고_응답하면_환불하고_실패_처리한다() throws Exception {
 		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700))
-				.thenReturn(pg("SOME-OTHER-ORDER", PgStatus.DONE, 34700));
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 35000))
+				.thenReturn(pg("SOME-OTHER-ORDER", PgStatus.DONE, 35000));
 
-		confirm(buyer, orderNo, 34700)
+		confirm(buyer, orderNo, 35000)
 				.andExpect(status().is(422))
 				.andExpect(jsonPath("$.code").value("PAYMENT_FAILED"));
 
@@ -382,17 +446,17 @@ class OrderPaymentTests {
 	@Test
 	void PG가_거절하면_실패로_응답하고_다시_결제할_수_있다() throws Exception {
 		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700))
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 35000))
 				.thenThrow(new PgRejectedException("REJECT_CARD_COMPANY", null))
-				.thenReturn(pg(orderNo, PgStatus.DONE, 34700));
+				.thenReturn(pg(orderNo, PgStatus.DONE, 35000));
 		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.empty());
 
-		confirm(buyer, orderNo, 34700)
+		confirm(buyer, orderNo, 35000)
 				.andExpect(status().is(422))
 				.andExpect(jsonPath("$.code").value("PAYMENT_FAILED"));
 		assertThat(statusOf(orderNo)).isEqualTo("PENDING");
 
-		confirm(buyer, orderNo, 34700)
+		confirm(buyer, orderNo, 35000)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PAID"));
 	}
@@ -400,10 +464,10 @@ class OrderPaymentTests {
 	@Test
 	void PG_응답을_못_받았어도_실제로_승인됐으면_결제완료로_처리한다() throws Exception {
 		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenThrow(new PgUnavailableException("timeout", null));
-		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(pg(orderNo, PgStatus.DONE, 34700)));
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 35000)).thenThrow(new PgUnavailableException("timeout", null));
+		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(pg(orderNo, PgStatus.DONE, 35000)));
 
-		confirm(buyer, orderNo, 34700)
+		confirm(buyer, orderNo, 35000)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PAID"));
 	}
@@ -411,29 +475,29 @@ class OrderPaymentTests {
 	@Test
 	void 승인을_기다리는_동안_보정_작업이_결제_전으로_되돌렸으면_늦게_온_승인을_다시_반영한다() throws Exception {
 		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenAnswer(invocation -> {
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 35000)).thenAnswer(invocation -> {
 			jdbcTemplate.update("update orders set status = 'PENDING' where order_no = ?", orderNo);
-			return pg(orderNo, PgStatus.DONE, 34700);
+			return pg(orderNo, PgStatus.DONE, 35000);
 		});
 
-		confirm(buyer, orderNo, 34700)
+		confirm(buyer, orderNo, 35000)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PAID"))
-				.andExpect(jsonPath("$.data.payment.approvedAmount").value(34700));
+				.andExpect(jsonPath("$.data.payment.approvedAmount").value(35000));
 		verify(paymentGateway, never()).cancel(anyString(), anyString(), anyString());
 	}
 
 	@Test
 	void 승인을_기다리는_동안_주문이_만료됐으면_돈만_빠져나가지_않게_승인을_취소한다() throws Exception {
 		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenAnswer(invocation -> {
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 35000)).thenAnswer(invocation -> {
 			jdbcTemplate.update("update orders set status = 'EXPIRED' where order_no = ?", orderNo);
-			return pg(orderNo, PgStatus.DONE, 34700);
+			return pg(orderNo, PgStatus.DONE, 35000);
 		});
 		when(paymentGateway.cancel(PAYMENT_KEY, "주문에 결제를 반영하지 못함", "unapplied-" + orderNo))
-				.thenReturn(pg(orderNo, PgStatus.CANCELED, 34700));
+				.thenReturn(pg(orderNo, PgStatus.CANCELED, 35000));
 
-		confirm(buyer, orderNo, 34700)
+		confirm(buyer, orderNo, 35000)
 				.andExpect(status().isUnprocessableContent())
 				.andExpect(jsonPath("$.code").value("PAYMENT_FAILED"));
 		verify(paymentGateway).cancel(PAYMENT_KEY, "주문에 결제를 반영하지 못함", "unapplied-" + orderNo);
@@ -443,14 +507,14 @@ class OrderPaymentTests {
 	@Test
 	void 반영하지_못한_승인을_취소하지도_못하면_확인_중으로_알린다() throws Exception {
 		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenAnswer(invocation -> {
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 35000)).thenAnswer(invocation -> {
 			jdbcTemplate.update("update orders set status = 'EXPIRED' where order_no = ?", orderNo);
-			return pg(orderNo, PgStatus.DONE, 34700);
+			return pg(orderNo, PgStatus.DONE, 35000);
 		});
 		when(paymentGateway.cancel(anyString(), anyString(), anyString()))
 				.thenThrow(new PgUnavailableException("timeout", null));
 
-		confirm(buyer, orderNo, 34700)
+		confirm(buyer, orderNo, 35000)
 				.andExpect(status().isAccepted())
 				.andExpect(jsonPath("$.code").value("PAYMENT_PENDING_CONFIRMATION"));
 	}
@@ -463,15 +527,15 @@ class OrderPaymentTests {
 				.thenThrow(new PgUnavailableException("timeout", null));
 		when(paymentGateway.findByOrderNo(anyString())).thenThrow(new PgUnavailableException("timeout", null));
 
-		confirm(buyer, paidOrder, 34700)
+		confirm(buyer, paidOrder, 35000)
 				.andExpect(status().isAccepted())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.code").value("PAYMENT_PENDING_CONFIRMATION"));
-		confirm(other, unpaidOrder, 24800).andExpect(status().isAccepted());
+		confirm(other, unpaidOrder, 25000).andExpect(status().isAccepted());
 		assertThat(statusOf(paidOrder)).isEqualTo("PAYMENT_PROCESSING");
 
 		// 확인 중인 주문에 또 승인을 요청하면 거절한다.
-		confirm(buyer, paidOrder, 34700)
+		confirm(buyer, paidOrder, 35000)
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.code").value("PAYMENT_IN_PROGRESS"));
 
@@ -487,7 +551,7 @@ class OrderPaymentTests {
 		assertThat(statusOf(paidOrder)).isEqualTo("PAYMENT_PROCESSING");
 
 		// PG 확인 결과: 한 건은 실제로 결제됐고, 한 건은 결제 기록이 없다.
-		doReturn(Optional.of(pg(paidOrder, PgStatus.DONE, 34700))).when(paymentGateway).findByOrderNo(paidOrder);
+		doReturn(Optional.of(pg(paidOrder, PgStatus.DONE, 35000))).when(paymentGateway).findByOrderNo(paidOrder);
 		doReturn(Optional.empty()).when(paymentGateway).findByOrderNo(unpaidOrder);
 		scheduler.reconcileStuckPayments();
 
@@ -516,7 +580,7 @@ class OrderPaymentTests {
 		assertThat(statusOf(freshOrder)).isEqualTo("PENDING");
 		assertThat(stockOf(sku)).isEqualTo(4);
 
-		confirm(buyer, expiredOrder, 64400)
+		confirm(buyer, expiredOrder, 65000)
 				.andExpect(status().isGone())
 				.andExpect(jsonPath("$.code").value("ORDER_EXPIRED"));
 		verify(paymentGateway, never()).confirm(anyString(), anyString(), anyLong());
@@ -546,10 +610,10 @@ class OrderPaymentTests {
 		long sku = insertProductWithSku("안전모", 30000, true, 5);
 		String orderNo = createOrder(buyer, sku, 1);
 		LocalDateTime dueDate = LocalDateTime.now().plusDays(1);
-		PgPayment waiting = virtualAccountPg(orderNo, PgStatus.WAITING_FOR_DEPOSIT, 34700, dueDate);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenReturn(waiting);
+		PgPayment waiting = virtualAccountPg(orderNo, PgStatus.WAITING_FOR_DEPOSIT, 35000, dueDate);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 35000)).thenReturn(waiting);
 
-		confirm(buyer, orderNo, 34700)
+		confirm(buyer, orderNo, 35000)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("WAITING_DEPOSIT"))
 				.andExpect(jsonPath("$.data.payment.virtualAccount.bankCode").value("004"))
@@ -564,7 +628,7 @@ class OrderPaymentTests {
 				"select expires_at from orders where order_no = ?", LocalDateTime.class, orderNo);
 		assertThat(Duration.between(storedDueDate, dueDate).abs()).isLessThan(Duration.ofMinutes(1));
 
-		PgPayment deposited = virtualAccountPg(orderNo, PgStatus.DONE, 34700, dueDate);
+		PgPayment deposited = virtualAccountPg(orderNo, PgStatus.DONE, 35000, dueDate);
 		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(deposited));
 		String webhook = """
 				{"eventType":"DEPOSIT_CALLBACK","createdAt":"2026-10-18T12:00:00.000000",
@@ -587,9 +651,9 @@ class OrderPaymentTests {
 	void 가상계좌_웹훅의_secret이_다르면_입금_상태를_바꾸지_않는다() throws Exception {
 		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
 		LocalDateTime dueDate = LocalDateTime.now().plusDays(1);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700))
-				.thenReturn(virtualAccountPg(orderNo, PgStatus.WAITING_FOR_DEPOSIT, 34700, dueDate));
-		confirm(buyer, orderNo, 34700).andExpect(status().isOk());
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 35000))
+				.thenReturn(virtualAccountPg(orderNo, PgStatus.WAITING_FOR_DEPOSIT, 35000, dueDate));
+		confirm(buyer, orderNo, 35000).andExpect(status().isOk());
 
 		mockMvc.perform(post("/api/v1/payments/webhook").contentType(MediaType.APPLICATION_JSON).content("""
 				{"eventType":"DEPOSIT_CALLBACK","data":{"secret":"wrong-secret","status":"DONE","orderId":"%s"}}
@@ -605,9 +669,9 @@ class OrderPaymentTests {
 		long sku = insertProductWithSku("안전모", 30000, true, 5);
 		String orderNo = createOrder(buyer, sku, 1);
 		LocalDateTime dueDate = LocalDateTime.now().minusMinutes(1);
-		PgPayment waiting = virtualAccountPg(orderNo, PgStatus.WAITING_FOR_DEPOSIT, 34700, dueDate);
-		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 34700)).thenReturn(waiting);
-		confirm(buyer, orderNo, 34700).andExpect(status().isOk());
+		PgPayment waiting = virtualAccountPg(orderNo, PgStatus.WAITING_FOR_DEPOSIT, 35000, dueDate);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 35000)).thenReturn(waiting);
+		confirm(buyer, orderNo, 35000).andExpect(status().isOk());
 		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(waiting));
 
 		scheduler.reconcileExpiredDeposits();
@@ -623,7 +687,7 @@ class OrderPaymentTests {
 		jdbcTemplate.update("update orders set expires_at = ?", LocalDateTime.now().minusSeconds(1));
 		entityManager.clear();
 
-		confirm(buyer, orderNo, 34700).andExpect(status().isGone());
+		confirm(buyer, orderNo, 35000).andExpect(status().isGone());
 		verify(paymentGateway, never()).confirm(anyString(), anyString(), anyLong());
 	}
 
@@ -723,7 +787,7 @@ class OrderPaymentTests {
 		assertThat(stockOf(sku)).isEqualTo(3);
 		assertThat(salesCountOf(sku)).isEqualTo(2);
 		when(paymentGateway.cancel(eq(PAYMENT_KEY), anyString(), anyString()))
-				.thenReturn(pg(orderNo, PgStatus.CANCELED, 64400));
+				.thenReturn(pg(orderNo, PgStatus.CANCELED, 65000));
 
 		mockMvc.perform(post("/api/v1/orders/{orderNo}/cancel", orderNo).with(member(buyer)))
 				.andExpect(status().isOk())
@@ -747,7 +811,7 @@ class OrderPaymentTests {
 		String orderNo = payOrder(buyer, sku, 2);
 		when(paymentGateway.cancel(anyString(), anyString(), anyString()))
 				.thenThrow(new PgUnavailableException("timeout", null));
-		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(pg(orderNo, PgStatus.DONE, 64400)));
+		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(pg(orderNo, PgStatus.DONE, 65000)));
 
 		mockMvc.perform(post("/api/v1/orders/{orderNo}/cancel", orderNo).with(member(buyer)))
 				.andExpect(status().isAccepted())
@@ -764,8 +828,8 @@ class OrderPaymentTests {
 		String orderNo = payOrder(buyer, sku, 2);
 		when(paymentGateway.cancel(anyString(), anyString(), anyString()))
 				.thenThrow(new PgUnavailableException("timeout", null))
-				.thenReturn(pg(orderNo, PgStatus.CANCELED, 64400));
-		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(pg(orderNo, PgStatus.DONE, 64400)));
+				.thenReturn(pg(orderNo, PgStatus.CANCELED, 65000));
+		when(paymentGateway.findByOrderNo(orderNo)).thenReturn(Optional.of(pg(orderNo, PgStatus.DONE, 65000)));
 
 		mockMvc.perform(post("/api/v1/orders/{orderNo}/cancel", orderNo).with(member(buyer)))
 				.andExpect(status().isAccepted());
@@ -775,7 +839,7 @@ class OrderPaymentTests {
 		jdbcTemplate.update("update orders set updated_at = ? where order_no = ?",
 				LocalDateTime.now().minusMinutes(10), orderNo);
 		entityManager.clear();
-		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 64400))).when(paymentGateway).findByOrderNo(orderNo);
+		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 65000))).when(paymentGateway).findByOrderNo(orderNo);
 
 		scheduler.reconcileStuckCancellations();
 		scheduler.reconcileStuckCancellations();
@@ -796,7 +860,7 @@ class OrderPaymentTests {
 		jdbcTemplate.update("update orders set status = 'CANCELED', updated_at = ? where order_no = ?",
 				LocalDateTime.now().minusMinutes(10), orderNo);
 		entityManager.clear();
-		doReturn(Optional.of(pg(orderNo, PgStatus.CANCELED, 64400))).when(paymentGateway).findByOrderNo(orderNo);
+		doReturn(Optional.of(pg(orderNo, PgStatus.CANCELED, 65000))).when(paymentGateway).findByOrderNo(orderNo);
 
 		scheduler.reconcileStuckCancellations();
 
@@ -813,9 +877,9 @@ class OrderPaymentTests {
 		jdbcTemplate.update("update orders set status = 'CANCELED', updated_at = ? where order_no = ?",
 				LocalDateTime.now().minusMinutes(10), orderNo);
 		entityManager.clear();
-		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 64400))).when(paymentGateway).findByOrderNo(orderNo);
+		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 65000))).when(paymentGateway).findByOrderNo(orderNo);
 		when(paymentGateway.cancel(PAYMENT_KEY, "고객 주문 취소", "cancel-" + orderNo))
-				.thenReturn(pg(orderNo, PgStatus.CANCELED, 64400));
+				.thenReturn(pg(orderNo, PgStatus.CANCELED, 65000));
 
 		scheduler.reconcileStuckCancellations();
 
@@ -833,7 +897,7 @@ class OrderPaymentTests {
 		jdbcTemplate.update("update orders set status = 'CANCELED', updated_at = ? where order_no = ?",
 				LocalDateTime.now().minusDays(20), orderNo);
 		entityManager.clear();
-		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 64400))).when(paymentGateway).findByOrderNo(orderNo);
+		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 65000))).when(paymentGateway).findByOrderNo(orderNo);
 
 		scheduler.reconcileStuckCancellations();
 

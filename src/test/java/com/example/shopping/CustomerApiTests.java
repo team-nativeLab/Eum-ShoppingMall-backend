@@ -218,11 +218,10 @@ class CustomerApiTests {
 	}
 
 	@Test
-	void 장바구니_결제예정금액은_무료배송_경계와_주문_계산을_따른다() throws Exception {
+	void 장바구니_결제예정금액은_무료배송_경계와_주문_계산을_따르고_할인은_없다() throws Exception {
 		long[] itemAmounts = { 99_999, 100_000, 100_001 };
-		long[] discounts = { 999, 1_000, 1_000 };
 		long[] shippingFees = { 5_000, 0, 0 };
-		long[] paymentAmounts = { 104_000, 99_000, 99_001 };
+		long[] paymentAmounts = { 104_999, 100_000, 100_001 };
 		RequestPostProcessor me = member(1);
 
 		for (int i = 0; i < itemAmounts.length; i++) {
@@ -233,7 +232,7 @@ class CustomerApiTests {
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data.itemAmount").value(itemAmounts[i]))
 					.andExpect(jsonPath("$.data.totalAmount").value(itemAmounts[i]))
-					.andExpect(jsonPath("$.data.discountAmount").value(discounts[i]))
+					.andExpect(jsonPath("$.data.discountAmount").doesNotExist())
 					.andExpect(jsonPath("$.data.shippingFee").value(shippingFees[i]))
 					.andExpect(jsonPath("$.data.paymentAmount").value(paymentAmounts[i]));
 		}
@@ -258,7 +257,6 @@ class CustomerApiTests {
 				.andExpect(jsonPath("$.data.items[2].status").value("OUT_OF_STOCK"))
 				.andExpect(jsonPath("$.data.orderableCount").value(0))
 				.andExpect(jsonPath("$.data.totalAmount").value(0))
-				.andExpect(jsonPath("$.data.discountAmount").value(0))
 				.andExpect(jsonPath("$.data.shippingFee").value(0))
 				.andExpect(jsonPath("$.data.paymentAmount").value(0))
 				.andExpect(content().string(not(containsString("987654"))));

@@ -42,3 +42,7 @@ Administrator `POST`, `PUT`, `PATCH`, and `DELETE` requests (including image upl
 ## Email verification limits
 
 Email verification codes (sign-up and password reset) can be sent at most 5 times per email and purpose in 24 hours, and at most 10 wrong codes are accepted in total in that period (`429 VERIFICATION_DAILY_LIMIT_EXCEEDED`). Password-reset requests over the limit still get the same success response, but no mail is sent.
+
+## Shipping policy
+
+Orders have no discount; the shipping fee is the only amount added to the item total. Administrators set it with `GET`/`PUT /api/v1/admin/shipping-policy` (`{"shippingFee":3000,"freeShippingThreshold":50000}`): items totaling at least `freeShippingThreshold` ship free, omitting `freeShippingThreshold` always charges the fee, and `shippingFee` 0 makes shipping free. Until an administrator saves a policy, the fee is 5,000 KRW below 100,000 KRW. Cart estimates and new orders use the current policy; each order stores the fee it was created with, so policy changes do not alter existing orders. `GET /api/v1/shipping-policy` returns the policy without login for storefront notices. The cart response no longer has `discountAmount`; order responses keep it for orders created before the change, and new orders record 0.

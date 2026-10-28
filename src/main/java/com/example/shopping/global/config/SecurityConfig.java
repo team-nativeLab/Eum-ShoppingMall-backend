@@ -74,11 +74,12 @@ public class SecurityConfig {
 			"/api/v1/admin/auth/login",
 	};
 
-	// 로그인 없이 조회 가능한 공개 데이터 (메인, 카테고리, 상품, 공지, FAQ, 회사소개, 앱 설정, 업로드된 이미지)
+	// 로그인 없이 조회 가능한 공개 데이터 (메인, 카테고리, 상품, 공지, FAQ, 회사소개, 앱 설정, 배송비 정책, 업로드된 이미지)
 	private static final String[] PUBLIC_GET = {
 			"/files/**",
 			"/api/v1/home",
 			"/api/v1/app/config",
+			"/api/v1/shipping-policy",
 			"/api/v1/contents/**",
 			"/api/v1/categories/**",
 			"/api/v1/products/**",
