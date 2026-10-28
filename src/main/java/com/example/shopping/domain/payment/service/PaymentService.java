@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 
 import com.example.shopping.domain.order.dto.response.OrderDetailResponse;
 import com.example.shopping.domain.order.entity.Order;
-import com.example.shopping.domain.order.entity.OrderStatus;
 import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.domain.order.service.OrderService;
 import com.example.shopping.domain.order.service.OrderTxService;
@@ -23,6 +22,7 @@ import com.example.shopping.domain.payment.gateway.PgUnavailableException;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
+import com.example.shopping.global.monitoring.ManualCheckAlerts;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +41,8 @@ public class PaymentService {
 	private final OrderTxService orderTxService;
 	private final PaymentRepository paymentRepository;
 	private final PaymentGateway paymentGateway;
+	private final VirtualAccountReconciler virtualAccountReconciler;
+	private final ManualCheckAlerts alerts;
 
 	public OrderDetailResponse confirm(Long memberId, PaymentConfirmRequest request) {
 		Order order = orderService.findOwned(memberId, request.orderId());
@@ -91,77 +93,41 @@ public class PaymentService {
 		return orderService.getMyOrder(memberId, order.getOrderNo());
 	}
 
-	/** Toss 웹훅은 신호로만 사용한다. 실제 결제 상태는 로컬 비밀값과 PG 조회 결과로 확인한다. */
+	/** Toss 웹훅은 신호로만 사용한다. 실제 결제 상태는 저장한 비밀값과 PG 조회 결과로 확인한다. */
 	public void handleWebhook(PaymentWebhookRequest request) {
-		if (!"DEPOSIT_CALLBACK".equals(request.eventType())
-				&& !"PAYMENT_STATUS_CHANGED".equals(request.eventType())) {
-			return;
-		}
 		boolean depositCallback = "DEPOSIT_CALLBACK".equals(request.eventType());
-		PaymentWebhookRequest.Data data = request.data();
-		if (data == null || !data.hasVerificationFields()) {
+		if (!depositCallback && !"PAYMENT_STATUS_CHANGED".equals(request.eventType())) {
+			return;
+		}
+		Optional<VirtualAccountPayment> verified = findVerifiedVirtualAccount(request.data());
+		if (verified.isEmpty()) {
+			// 입금 콜백은 발급 때 받은 비밀값을 담아 오므로 확인되지 않으면 거절한다. 상태 변경 알림은 다른 결제의 것일 수 있어 무시한다.
 			if (depositCallback) {
 				throw new BusinessException(ErrorCode.PAYMENT_WEBHOOK_UNAUTHORIZED);
 			}
 			return;
 		}
-		Optional<Order> orderResult = orderRepository.findByOrderNo(data.orderId());
-		if (orderResult.isEmpty()) {
-			if (depositCallback) {
-				throw new BusinessException(ErrorCode.PAYMENT_WEBHOOK_UNAUTHORIZED);
-			}
-			return;
-		}
-		Order order = orderResult.get();
-		Optional<Payment> paymentResult = paymentRepository.findFirstByOrderIdOrderByIdDesc(order.getId());
-		if (paymentResult.isEmpty() || !"가상계좌".equals(paymentResult.get().getMethod())) {
-			if (depositCallback) {
-				throw new BusinessException(ErrorCode.PAYMENT_WEBHOOK_UNAUTHORIZED);
-			}
-			return;
-		}
-		Payment payment = paymentResult.get();
-		if (!payment.matchesWebhookSecret(data.secret())
-				|| (data.paymentKey() != null && !payment.getPaymentKey().equals(data.paymentKey()))) {
-			if (depositCallback) {
-				throw new BusinessException(ErrorCode.PAYMENT_WEBHOOK_UNAUTHORIZED);
-			}
-			return;
-		}
-
+		Order order = verified.get().order();
 		Optional<PgPayment> actual = paymentGateway.findByOrderNo(order.getOrderNo());
-		if (actual.isEmpty() || !matchesVirtualAccount(order, payment, actual.get())) {
-			log.error("주문 {} 가상계좌 웹훅과 PG 조회 결과가 일치하지 않습니다. 수동 확인이 필요합니다.", order.getOrderNo());
+		if (actual.isEmpty()) {
+			alerts.raise("virtual_account_not_found", "주문 {} 가상계좌 웹훅을 받았으나 PG에서 결제를 찾지 못했습니다.",
+					order.getOrderNo());
 			return;
 		}
-		PgPayment pg = actual.get();
-		if (pg.status() == PgStatus.DONE && payment.getStatus() == PaymentStatus.WAITING_DEPOSIT
-				&& order.getStatus() == OrderStatus.WAITING_DEPOSIT) {
-			orderTxService.completeVirtualAccountDeposit(order.getId(), payment.getId(), pg);
-			return;
+		virtualAccountReconciler.reconcile(order, verified.get().payment(), actual.get());
+	}
+
+	/** 웹훅이 가리키는 주문의 최근 결제가 가상계좌이고 웹훅의 비밀값·결제 키가 맞을 때만 돌려준다. */
+	private Optional<VirtualAccountPayment> findVerifiedVirtualAccount(PaymentWebhookRequest.Data data) {
+		if (data == null || !data.hasVerificationFields()) {
+			return Optional.empty();
 		}
-		if (pg.status() == PgStatus.DONE && payment.getStatus() == PaymentStatus.DONE
-				&& (order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.PREPARING
-						|| order.getStatus() == OrderStatus.SHIPPED || order.getStatus() == OrderStatus.DELIVERED)) {
-			return;
-		}
-		if (pg.status() == PgStatus.WAITING_FOR_DEPOSIT && payment.getStatus() == PaymentStatus.DONE) {
-			if (!orderTxService.revertVirtualAccountDeposit(order.getId(), payment.getId(), pg)) {
-				log.error("주문 {} 입금 상태가 다시 대기로 바뀌었으나 이미 배송 단계여서 자동 복구하지 못했습니다.",
-						order.getOrderNo());
-			}
-			return;
-		}
-		if (pg.status() == PgStatus.CANCELED && payment.getStatus() == PaymentStatus.WAITING_DEPOSIT
-				&& order.getStatus() == OrderStatus.WAITING_DEPOSIT
-				&& payment.getVirtualAccountDueAt() != null
-				&& !payment.getVirtualAccountDueAt().isAfter(LocalDateTime.now())) {
-			orderTxService.expireVirtualAccount(order.getId(), payment.getId());
-			return;
-		}
-		if (pg.status() == PgStatus.DONE) {
-			log.error("주문 {} 입금 완료가 주문 만료 또는 다른 상태와 충돌합니다. 운영자 확인이 필요합니다.", order.getOrderNo());
-		}
+		return orderRepository.findByOrderNo(data.orderId())
+				.flatMap(order -> paymentRepository.findFirstByOrderIdOrderByIdDesc(order.getId())
+						.filter(Payment::isVirtualAccount)
+						.filter(payment -> payment.matchesWebhookSecret(data.secret()))
+						.filter(payment -> data.paymentKey() == null || payment.getPaymentKey().equals(data.paymentKey()))
+						.map(payment -> new VirtualAccountPayment(order, payment)));
 	}
 
 	private PgPayment approve(Order order, String paymentKey) {
@@ -225,7 +191,7 @@ public class PaymentService {
 		} catch (PgRejectedException | PgUnavailableException e) {
 			log.error("주문 {} 반영하지 못한 PG 승인의 자동 취소 실패", order.getOrderNo(), e);
 		}
-		log.error("주문 {} PG 승인을 주문에 반영하지도 취소하지도 못했습니다. 수동 확인이 필요합니다: paymentKey={}",
+		alerts.raise("unapplied_approval", "주문 {} PG 승인을 주문에 반영하지도 취소하지도 못했습니다: paymentKey={}",
 				order.getOrderNo(), pg.paymentKey());
 		throw new BusinessException(ErrorCode.PAYMENT_PENDING_CONFIRMATION);
 	}
@@ -234,15 +200,10 @@ public class PaymentService {
 		try {
 			paymentGateway.cancel(pg.paymentKey(), "결제 금액 불일치", "mismatch-" + order.getOrderNo());
 		} catch (PgRejectedException | PgUnavailableException e) {
-			log.error("금액 불일치 결제 {}의 자동 환불 실패. 수동 환불이 필요합니다.", pg.paymentKey(), e);
+			alerts.raise("refund_failed", "금액 불일치 결제 {}를 자동 환불하지 못해 수동 환불이 필요합니다.", pg.paymentKey(), e);
 		}
 	}
 
-	private boolean matchesVirtualAccount(Order order, Payment payment, PgPayment pg) {
-		return "가상계좌".equals(pg.method())
-				&& order.getOrderNo().equals(pg.orderNo())
-				&& payment.getPaymentKey().equals(pg.paymentKey())
-				&& pg.totalAmount() == order.getTotalAmount()
-				&& payment.matchesWebhookSecret(pg.secret());
+	private record VirtualAccountPayment(Order order, Payment payment) {
 	}
 }
