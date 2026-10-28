@@ -452,7 +452,7 @@ resource "aws_ecs_task_definition" "api" {
       { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
       { name = "TRUSTED_PROXY_CIDRS", value = join(",", var.public_subnet_cidrs) },
       { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
-      { name = "REFRESH_COOKIE_SAME_SITE", value = "Strict" },
+      { name = "REFRESH_COOKIE_SAME_SITE", value = var.refresh_cookie_same_site },
       { name = "UPLOAD_DIR", value = "/app/uploads" },
       { name = "UPLOAD_STORAGE", value = var.upload_storage },
       { name = "UPLOAD_S3_BUCKET", value = aws_s3_bucket.uploads.bucket },

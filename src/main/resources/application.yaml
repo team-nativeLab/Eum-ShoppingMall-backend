@@ -110,6 +110,9 @@ security:
     # 공개 상품 조회의 IP별 분당 한도. 목록·필터 개수(브랜드 포함)·상세를 각각 따로 세고, 자동 완성은 이 값의 두 배다.
     # 한 사무실 직원들이 같은 공인 IP로 접속하므로 넉넉하게 둔다. 크롤링 같은 대량 요청은 프록시·WAF에서 막는다.
     public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:300}
+  login-lock:
+    # 한 이메일이 첫 실패부터 10분 안에 이만큼 틀리면 그 10분 동안 로그인을 막는다. IP를 바꿔 가며 비밀번호를 넣어 보는 공격 대비.
+    max-failures: ${LOGIN_LOCK_MAX_FAILURES:10}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
     max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}

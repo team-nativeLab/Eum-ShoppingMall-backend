@@ -36,6 +36,7 @@ public enum ErrorCode {
 	// 회원
 	EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
 	LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
+	LOGIN_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "로그인 시도가 많아 잠시 제한되었습니다. 10분 후 다시 시도해 주세요."),
 	ACCOUNT_SUSPENDED(HttpStatus.FORBIDDEN, "이용이 제한된 계정입니다."),
 	MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "회원을 찾을 수 없습니다."),
 	CURRENT_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "현재 비밀번호가 올바르지 않습니다."),
@@ -45,6 +46,7 @@ public enum ErrorCode {
 	VERIFICATION_CODE_INVALID(HttpStatus.BAD_REQUEST, "인증번호가 올바르지 않거나 만료되었습니다."),
 	VERIFICATION_ATTEMPTS_EXCEEDED(HttpStatus.BAD_REQUEST, "인증번호를 여러 번 틀렸습니다. 인증번호를 다시 받아 주세요."),
 	VERIFICATION_RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "인증번호는 1분에 한 번만 받을 수 있습니다. 잠시 후 다시 시도해 주세요."),
+	VERIFICATION_DAILY_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "인증번호 요청·입력 횟수가 하루 한도를 넘었습니다. 24시간 뒤에 다시 시도해 주세요."),
 	EMAIL_SEND_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요."),
 
 	// 상품

@@ -4,6 +4,9 @@ certificate_arn      = "arn:aws:acm:ap-northeast-2:123456789012:certificate/repl
 api_domain           = "api.example.com"
 cors_allowed_origins = "https://shop.example.com"
 image_tag            = "replace-with-immutable-git-sha"
+# The web frontend must share the API's registrable domain (shop.example.com + api.example.com) for login refresh to work.
+# A *.vercel.app frontend is a different site from any API domain; see docs/deployment-proxy.md.
+refresh_cookie_same_site = "Strict"
 
 # Create these values in AWS Secrets Manager first; enter ARNs, never secret values.
 application_secret_arns = {

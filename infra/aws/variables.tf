@@ -66,6 +66,17 @@ variable "cors_allowed_origins" {
   type        = string
 }
 
+variable "refresh_cookie_same_site" {
+  description = "SameSite of the refresh-token cookie. Keep Strict when the web frontend shares the API's registrable domain (shop.example.com and api.example.com). See docs/deployment-proxy.md before using None."
+  type        = string
+  default     = "Strict"
+
+  validation {
+    condition     = contains(["Strict", "Lax", "None"], var.refresh_cookie_same_site)
+    error_message = "refresh_cookie_same_site must be Strict, Lax, or None."
+  }
+}
+
 variable "application_secret_arns" {
   description = "Map of application environment variable names to Secrets Manager secret ARNs; must include JWT_SECRET."
   type        = map(string)

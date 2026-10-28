@@ -91,8 +91,10 @@ public class Member extends BaseTimeEntity {
 		this.emailVerifiedAt = verifiedAt;
 	}
 
+	/** 이전 권한이 담긴 Access 토큰을 더 쓸 수 없게 토큰 버전도 올린다. */
 	public void changeRole(MemberRole role) {
 		this.role = role;
+		this.accessTokenVersion++;
 	}
 
 	/** null인 항목은 바꾸지 않는다. 연락처는 빈 문자열을 주면 지운다. */

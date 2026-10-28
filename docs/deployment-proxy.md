@@ -7,9 +7,19 @@ AWS ECS Fargate와 ALB 예시 구성은 [AWS 배포 구성](deployment-aws.md)�
 ## 애플리케이션 환경 변수
 
 - `TRUSTED_PROXY_CIDRS`: 전달 헤더를 신뢰할 프록시의 정확한 CIDR 목록. 여러 대역은 쉼표로 구분합니다. 예: `10.20.1.0/24,2001:db8:1234::/64`. 실제 프록시 대역으로 교체하고 `0.0.0.0/0`, `::/0` 또는 모든 사설망을 넣지 않습니다.
-- `REFRESH_COOKIE_SAME_SITE`: 기본값은 `Strict`입니다. 웹 프론트와 API가 서로 다른 사이트일 때만 `None`으로 바꾸고, HTTPS와 `Secure` 쿠키를 유지합니다. `None`과 `Secure=false` 조합은 애플리케이션 시작 시 거부됩니다.
+- `REFRESH_COOKIE_SAME_SITE`: 기본값은 `Strict`입니다. Terraform에서는 `refresh_cookie_same_site` 변수로 정합니다. 아래 "웹 프론트 도메인"을 먼저 확인합니다. `None`과 `Secure=false` 조합은 애플리케이션 시작 시 거부됩니다.
 - `CORS_ALLOWED_ORIGINS`: 쿠키 자격 증명을 쓰는 CORS 허용 프론트엔드 주소를 정확히 지정합니다. 와일드카드 대신 실제 origin 목록을 사용합니다. Refresh/logout 요청은 이 목록에 없는 `Origin`에서 오면 거부합니다.
 - Redis 연결 환경 변수는 공유 가능한 운영 Redis를 가리켜야 합니다. 로컬 단일 인스턴스용 주소를 운영에 그대로 쓰지 않습니다.
+
+## 웹 프론트 도메인
+
+로그인 유지(Refresh 토큰)는 HttpOnly 쿠키로 합니다. 브라우저는 웹 프론트와 API가 같은 사이트(등록 도메인이 같음)일 때만 이 쿠키를 문제없이 저장하고 보냅니다.
+
+- **권장:** 웹 프론트와 API를 같은 등록 도메인 아래에 둡니다. 예: `shop.example.com`(웹), `api.example.com`(API). 이때는 `Strict`를 그대로 씁니다.
+- **`*.vercel.app` 주소:** `vercel.app`은 공개 접미사 목록에 있어 `eum-shopping-mall-frontend.vercel.app` 하나가 별도 사이트입니다. 어떤 API 도메인과도 같은 사이트가 될 수 없습니다.
+  - `Strict`·`Lax` 쿠키는 이런 다른 사이트의 `fetch` 응답으로 저장되지 않고, 다른 사이트에서 보낸 요청에 실리지도 않습니다. 그래서 Access 토큰이 끝나는 15분마다 다시 로그인해야 합니다.
+  - `None`으로 바꿔도 다른 사이트 쿠키를 기본으로 막는 Safari(iPhone의 모든 브라우저 포함)에서는 같은 문제가 남습니다. 운영에서는 자체 도메인을 연결합니다.
+- **프론트 서버가 API를 대신 호출하는 구성(Vercel rewrites 등):** API가 받는 클라이언트 IP가 모두 프론트 서버의 IP가 됩니다. 그러면 IP별 요청 제한과 감사 로그의 IP가 의미를 잃습니다. 이 구성을 쓰려면 프론트 서버 대역을 `TRUSTED_PROXY_CIDRS`에 넣을 수 있는지 먼저 확인합니다.
 
 ## 네트워크와 프록시
 
