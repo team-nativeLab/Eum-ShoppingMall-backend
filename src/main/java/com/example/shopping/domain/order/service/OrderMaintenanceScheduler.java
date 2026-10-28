@@ -4,13 +4,11 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.BiConsumer;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.example.shopping.domain.member.service.RefreshTokenService;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.domain.payment.entity.Payment;
@@ -20,6 +18,9 @@ import com.example.shopping.domain.payment.gateway.PgPayment;
 import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.gateway.PgUnavailableException;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
+import com.example.shopping.domain.payment.service.VirtualAccountReconciler;
+import com.example.shopping.global.monitoring.ManualCheckAlerts;
+import com.example.shopping.global.scheduling.ScheduledJobRunner;
 import com.example.shopping.global.scheduling.SchedulerLockService;
 
 import lombok.RequiredArgsConstructor;
@@ -43,8 +44,10 @@ public class OrderMaintenanceScheduler {
 	private final OrderCancelService orderCancelService;
 	private final PaymentRepository paymentRepository;
 	private final PaymentGateway paymentGateway;
-	private final RefreshTokenService refreshTokenService;
 	private final SchedulerLockService schedulerLockService;
+	private final ScheduledJobRunner jobRunner;
+	private final VirtualAccountReconciler virtualAccountReconciler;
+	private final ManualCheckAlerts alerts;
 
 	/**
 	 * 결제 기한이 지난 결제 대기 주문을 만료시키고 잡아 둔 재고를 되돌린다.
@@ -52,11 +55,11 @@ public class OrderMaintenanceScheduler {
 	 */
 	@Scheduled(fixedDelay = 60_000)
 	public void expireUnpaidOrders() {
-		runLocked("expireUnpaidOrders", (stats, owner) -> {
+		jobRunner.run("expireUnpaidOrders", LOCK_DURATION, (stats, owner) -> {
 			List<Long> pendingIds = orderRepository.findExpiredPendingIds(LocalDateTime.now(),
 					PageRequest.of(0, DB_BATCH_SIZE));
 			for (Long orderId : pendingIds) {
-				if (stats.timeLimitReached()) {
+				if (stats.timeLimitReached(JOB_TIME_LIMIT)) {
 					break;
 				}
 				process(stats, "주문 만료 처리", orderId, () -> orderTxService.expire(orderId));
@@ -70,11 +73,11 @@ public class OrderMaintenanceScheduler {
 	 */
 	@Scheduled(fixedDelay = 60_000)
 	public void reconcileExpiredDeposits() {
-		runLocked("reconcileExpiredDeposits", "reconcileWaitingDeposits", (stats, owner) -> {
+		jobRunner.run("reconcileExpiredDeposits", "reconcileWaitingDeposits", LOCK_DURATION, (stats, owner) -> {
 			List<Long> expiredDepositIds = orderRepository.findExpiredWaitingDepositIds(LocalDateTime.now(),
 					PageRequest.of(0, PG_BATCH_SIZE));
 			for (Long orderId : expiredDepositIds) {
-				if (stats.timeLimitReached()) {
+				if (stats.timeLimitReached(JOB_TIME_LIMIT)) {
 					break;
 				}
 				process(stats, "가상계좌 만료 보정", orderId, () -> reconcileVirtualAccount(orderId));
@@ -85,11 +88,11 @@ public class OrderMaintenanceScheduler {
 	/** 결제 승인 도중 응답을 못 받은 주문을 PG의 실제 상태에 맞춘다. */
 	@Scheduled(fixedDelay = 300_000)
 	public void reconcileStuckPayments() {
-		runLocked("reconcileStuckPayments", (stats, owner) -> {
+		jobRunner.run("reconcileStuckPayments", LOCK_DURATION, (stats, owner) -> {
 			LocalDateTime before = LocalDateTime.now().minusMinutes(STUCK_AFTER_MINUTES);
 			List<Long> orderIds = orderRepository.findStuckProcessingIds(before, PageRequest.of(0, PG_BATCH_SIZE));
 			for (Long orderId : orderIds) {
-				if (stats.timeLimitReached()) {
+				if (stats.timeLimitReached(JOB_TIME_LIMIT)) {
 					break;
 				}
 				process(stats, "결제 상태 보정", orderId, () -> reconcile(orderId));
@@ -100,22 +103,16 @@ public class OrderMaintenanceScheduler {
 	/** PG 응답 누락으로 멈춘 취소와 과거 CANCELED/DONE 불일치를 복구한다. */
 	@Scheduled(fixedDelay = 300_000)
 	public void reconcileStuckCancellations() {
-		runLocked("reconcileStuckCancellations", (stats, owner) -> {
+		jobRunner.run("reconcileStuckCancellations", LOCK_DURATION, (stats, owner) -> {
 			LocalDateTime before = LocalDateTime.now().minusMinutes(STUCK_AFTER_MINUTES);
 			List<Long> orderIds = orderRepository.findStuckCancellationIds(before, PageRequest.of(0, PG_BATCH_SIZE));
 			for (Long orderId : orderIds) {
-				if (stats.timeLimitReached()) {
+				if (stats.timeLimitReached(JOB_TIME_LIMIT)) {
 					break;
 				}
 				process(stats, "취소 상태 보정", orderId, () -> orderCancelService.reconcileCancellation(orderId));
 			}
 		});
-	}
-
-	// Drain bounded cleanup batches frequently instead of issuing one large daily DELETE.
-	@Scheduled(fixedDelay = 60_000)
-	public void purgeExpiredRefreshTokens() {
-		runLocked("purgeExpiredRefreshTokens", (stats, owner) -> stats.processed = refreshTokenService.purgeExpired());
 	}
 
 	private void reconcile(Long orderId) {
@@ -128,23 +125,24 @@ public class OrderMaintenanceScheduler {
 		}
 		if (actual.get().totalAmount() != order.getTotalAmount()) {
 			// 자동으로 판단하지 않고 사람이 확인하도록 남겨 둔다.
-			log.error("주문 {} PG 승인 금액 불일치(서버 {} / PG {}). 수동 확인이 필요합니다.", order.getOrderNo(),
+			alerts.raise("pg_amount_mismatch", "주문 {} PG 승인 금액이 주문과 다릅니다(서버 {} / PG {}).", order.getOrderNo(),
 					order.getTotalAmount(), actual.get().totalAmount());
 			return;
 		}
 		if (!orderTxService.completePayment(orderId, actual.get())
 				&& actual.get().status() == PgStatus.WAITING_FOR_DEPOSIT) {
-			log.error("주문 {} 가상계좌 정보가 부족해 승인 보정을 보류합니다.", order.getOrderNo());
+			alerts.raise("virtual_account_info_missing", "주문 {} PG 응답에 가상계좌 정보가 없어 승인 보정을 보류합니다.",
+					order.getOrderNo());
 		}
 	}
 
 	/** Each instance resumes from a shared cursor so a capped batch does not starve later deposits. */
 	@Scheduled(fixedDelay = 300_000)
 	public void reconcileWaitingDeposits() {
-		runLocked("reconcileWaitingDeposits", "reconcileWaitingDeposits", this::reconcileWaitingDepositBatch);
+		jobRunner.run("reconcileWaitingDeposits", LOCK_DURATION, this::reconcileWaitingDepositBatch);
 	}
 
-	private void reconcileWaitingDepositBatch(JobStats stats, String owner) {
+	private void reconcileWaitingDepositBatch(ScheduledJobRunner.JobStats stats, String owner) {
 		String jobName = "reconcileWaitingDeposits";
 		long cursor = schedulerLockService.getCursor(jobName, owner);
 		List<Long> orderIds = orderRepository.findWaitingDepositIdsAfter(cursor, PageRequest.of(0, PG_BATCH_SIZE));
@@ -155,9 +153,9 @@ public class OrderMaintenanceScheduler {
 			return;
 		}
 
-		int processedBeforeBatch = stats.processed;
+		int processedBeforeBatch = stats.processedCount();
 		for (Long orderId : orderIds) {
-			if (stats.timeLimitReached()) {
+			if (stats.timeLimitReached(JOB_TIME_LIMIT)) {
 				break;
 			}
 			process(stats, "가상계좌 상태 보정", orderId, () -> reconcileVirtualAccount(orderId));
@@ -166,49 +164,20 @@ public class OrderMaintenanceScheduler {
 				throw new IllegalStateException("Scheduler lease lost while advancing " + jobName);
 			}
 		}
-		if (stats.processed - processedBeforeBatch == orderIds.size() && orderIds.size() < PG_BATCH_SIZE) {
+		if (stats.processedCount() - processedBeforeBatch == orderIds.size() && orderIds.size() < PG_BATCH_SIZE) {
 			schedulerLockService.advanceCursor(jobName, owner, 0);
 		}
 	}
 
-	private void runLocked(String jobName, BiConsumer<JobStats, String> action) {
-		runLocked(jobName, jobName, action);
-	}
-
-	private void runLocked(String jobName, String lockName, BiConsumer<JobStats, String> action) {
-		Optional<String> owner = schedulerLockService.tryAcquire(lockName, LOCK_DURATION);
-		if (owner.isEmpty()) {
-			log.debug("정기 작업 {} 생략: 다른 서버가 실행 중입니다.", jobName);
-			return;
-		}
-
-		JobStats stats = new JobStats();
-		long startedAt = System.nanoTime();
-		try {
-			action.accept(stats, owner.get());
-		} catch (RuntimeException e) {
-			stats.failed++;
-			log.error("정기 작업 {} 실행 실패", jobName, e);
-		} finally {
-			long elapsedMs = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
-			boolean released = schedulerLockService.release(lockName, owner.get());
-			if (!released) {
-				log.error("정기 작업 {} 잠금이 만료되었거나 소유권을 잃었습니다.", jobName);
-			}
-			log.info("정기 작업 {} 완료: 처리 {}, 실패 {}, 소요 {}ms", jobName, stats.processed, stats.failed,
-					elapsedMs);
-		}
-	}
-
-	private void process(JobStats stats, String operation, Long orderId, Runnable action) {
+	private void process(ScheduledJobRunner.JobStats stats, String operation, Long orderId, Runnable action) {
 		try {
 			action.run();
-			stats.processed++;
+			stats.processed();
 		} catch (PgUnavailableException e) {
-			stats.failed++;
+			stats.failed();
 			log.warn("주문 {} {} 실패. 다음 주기에 다시 시도합니다: {}", orderId, operation, e.getMessage());
 		} catch (RuntimeException e) {
-			stats.failed++;
+			stats.failed();
 			log.error("주문 {} {} 실패", orderId, operation, e);
 		}
 	}
@@ -221,41 +190,9 @@ public class OrderMaintenanceScheduler {
 		if (order == null || payment == null) {
 			return;
 		}
-
-		Optional<PgPayment> actual = paymentGateway.findByOrderNo(order.getOrderNo());
-		if (actual.isEmpty() || !matchesVirtualAccount(order, payment, actual.get())) {
-			log.error("주문 {} 가상계좌 PG 정보 불일치. 수동 확인이 필요합니다.", order.getOrderNo());
-			return;
-		}
-
-		PgPayment pg = actual.get();
-		if (pg.status() == PgStatus.DONE) {
-			orderTxService.completeVirtualAccountDeposit(orderId, payment.getId(), pg);
-			return;
-		}
-		if ((pg.status() == PgStatus.WAITING_FOR_DEPOSIT || pg.status() == PgStatus.CANCELED)
-				&& !payment.getVirtualAccountDueAt().isAfter(LocalDateTime.now())) {
-			orderTxService.expireVirtualAccount(orderId, payment.getId());
-		}
-	}
-
-	private boolean matchesVirtualAccount(Order order, Payment payment, PgPayment pg) {
-		return "가상계좌".equals(payment.getMethod())
-				&& payment.getVirtualAccountDueAt() != null
-				&& payment.getVirtualAccountNumber() != null
-				&& order.getOrderNo().equals(pg.orderNo())
-				&& payment.getPaymentKey().equals(pg.paymentKey())
-				&& pg.totalAmount() == order.getTotalAmount()
-				&& payment.matchesWebhookSecret(pg.secret());
-	}
-
-	private static final class JobStats {
-		private final long startedAtNanos = System.nanoTime();
-		private int processed;
-		private int failed;
-
-		private boolean timeLimitReached() {
-			return System.nanoTime() - startedAtNanos >= JOB_TIME_LIMIT.toNanos();
-		}
+		paymentGateway.findByOrderNo(order.getOrderNo()).ifPresentOrElse(
+				pg -> virtualAccountReconciler.reconcile(order, payment, pg),
+				() -> alerts.raise("virtual_account_not_found", "주문 {} 입금 대기 중인 가상계좌를 PG에서 찾지 못했습니다.",
+						order.getOrderNo()));
 	}
 }

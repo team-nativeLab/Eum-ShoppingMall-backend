@@ -27,7 +27,6 @@ import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
 import com.example.shopping.domain.product.entity.ProductSku;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
-import com.example.shopping.domain.product.service.ProductReadCache;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.response.PageResponse;
@@ -48,7 +47,6 @@ public class OrderService {
 
 	private final OrderRepository orderRepository;
 	private final ProductSkuRepository productSkuRepository;
-	private final ProductReadCache productReadCache;
 	private final PaymentRepository paymentRepository;
 	private final MemberRepository memberRepository;
 	private final OrderTxService orderTxService;
@@ -99,7 +97,6 @@ public class OrderService {
 				throw new BusinessException(ErrorCode.OUT_OF_STOCK);
 			}
 		}
-		productReadCache.invalidateAfterCommit();
 		return OrderCreateResponse.from(orderRepository.save(order));
 	}
 
