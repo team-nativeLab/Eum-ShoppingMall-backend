@@ -24,6 +24,8 @@ import com.example.shopping.global.validation.ContactFormats;
  * 이메일 인증번호. 메일로 보낸 인증번호(10분 유효)를 확인한다.
  * 회원가입은 맞히면 가입 요청에 넣을 확인 토큰(30분 유효)을 준다. 비밀번호 재설정은 PasswordResetService가 쓴다.
  * 인증번호는 5번 틀리면 다시 받아야 하고, 1분에 한 번만 다시 보낼 수 있다.
+ * 같은 이메일·용도로는 24시간 동안 5번까지 보내고, 그동안 틀린 횟수는 모두 합쳐 10번까지 받는다.
+ * IP 하나로도 1분마다 새 번호를 받아 하루 수천 번 넣어 보거나, 한 사람에게 메일을 끝없이 보내는 것을 막는다.
  */
 @Service
 public class EmailVerificationService {
@@ -31,6 +33,9 @@ public class EmailVerificationService {
 	static final Duration CODE_TTL = Duration.ofMinutes(10);
 	static final Duration TOKEN_TTL = Duration.ofMinutes(30);
 	static final Duration RESEND_INTERVAL = Duration.ofMinutes(1);
+	static final Duration DAILY_WINDOW = Duration.ofDays(1);
+	static final int DAILY_SEND_LIMIT = 5;
+	static final int DAILY_FAILURE_LIMIT = 10;
 
 	private final EmailVerificationRepository verificationRepository;
 	private final MemberRepository memberRepository;
@@ -95,7 +100,10 @@ public class EmailVerificationService {
 		verification.consume(now);
 	}
 
-	/** 같은 이메일·용도의 이전 인증번호는 더 쓸 수 없게 하고 새 인증번호를 저장한다. 1분 안에 다시 요청하면 429. */
+	/**
+	 * 같은 이메일·용도의 이전 인증번호는 더 쓸 수 없게 하고 새 인증번호를 저장한다.
+	 * 1분 안에 다시 요청하면 429(VERIFICATION_RESEND_TOO_SOON), 24시간 동안 5번을 넘으면 429(VERIFICATION_DAILY_LIMIT_EXCEEDED).
+	 */
 	EmailVerification issue(String email, VerificationPurpose purpose, String code) {
 		LocalDateTime now = LocalDateTime.now();
 		verificationRepository.findFirstByEmailAndPurposeOrderByIdDesc(email, purpose)
@@ -103,6 +111,10 @@ public class EmailVerificationService {
 				.ifPresent(latest -> {
 					throw new BusinessException(ErrorCode.VERIFICATION_RESEND_TOO_SOON);
 				});
+		if (verificationRepository.countByEmailAndPurposeAndCreatedAtAfter(email, purpose,
+				now.minus(DAILY_WINDOW)) >= DAILY_SEND_LIMIT) {
+			throw new BusinessException(ErrorCode.VERIFICATION_DAILY_LIMIT_EXCEEDED);
+		}
 		verificationRepository.consumeAll(email, purpose, now);
 		return verificationRepository.save(EmailVerification.create(email, purpose,
 				VerificationCodes.hash(purpose.name(), email, code), now.plus(CODE_TTL)));
@@ -110,6 +122,7 @@ public class EmailVerificationService {
 
 	/**
 	 * 가장 최근에 보낸 인증번호와 비교한다. 틀리면 횟수를 올리고, 5번 틀리면 다시 받아야 한다.
+	 * 24시간 동안 틀린 횟수가 모두 합쳐 10번이면 맞는 번호도 받지 않는다(429).
 	 * 인증번호가 없는 경우와 만료된 경우, 틀린 경우를 구분해 알려 주지 않는다.
 	 */
 	EmailVerification verifyCode(String email, VerificationPurpose purpose, String code) {
@@ -119,7 +132,11 @@ public class EmailVerificationService {
 		if (verification.isAttemptsExceeded()) {
 			throw new BusinessException(ErrorCode.VERIFICATION_ATTEMPTS_EXCEEDED);
 		}
-		if (!verification.isCodeUsable(LocalDateTime.now())) {
+		LocalDateTime now = LocalDateTime.now();
+		if (verificationRepository.sumAttemptsSince(email, purpose, now.minus(DAILY_WINDOW)) >= DAILY_FAILURE_LIMIT) {
+			throw new BusinessException(ErrorCode.VERIFICATION_DAILY_LIMIT_EXCEEDED);
+		}
+		if (!verification.isCodeUsable(now)) {
 			throw new BusinessException(ErrorCode.VERIFICATION_CODE_INVALID);
 		}
 		String actual = VerificationCodes.hash(purpose.name(), email, code);

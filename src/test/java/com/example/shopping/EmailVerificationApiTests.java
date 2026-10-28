@@ -140,6 +140,53 @@ class EmailVerificationApiTests {
 	}
 
 	@Test
+	void 같은_이메일로는_24시간_동안_인증번호를_5번까지만_보낸다() throws Exception {
+		for (int i = 0; i < 5; i++) {
+			postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}").andExpect(status().isOk());
+			pretendResendIntervalPassed(EMAIL);
+		}
+		postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}")
+				.andExpect(status().isTooManyRequests())
+				.andExpect(jsonPath("$.code").value("VERIFICATION_DAILY_LIMIT_EXCEEDED"));
+		assertThat(mailbox.sentTo(EMAIL)).hasSize(5);
+
+		// 비밀번호 재설정은 가입 여부가 드러나지 않게 똑같이 성공으로 응답하고 인증번호만 만들지 않는다.
+		insertMember("reset-limit@example.com");
+		for (int i = 0; i < 6; i++) {
+			postJson("/api/v1/auth/password-reset", "{\"email\":\"reset-limit@example.com\"}").andExpect(status().isOk());
+			pretendResendIntervalPassed("reset-limit@example.com");
+		}
+		assertThat(jdbcTemplate.queryForObject(
+				"select count(*) from email_verification where email = 'reset-limit@example.com'", Integer.class))
+				.isEqualTo(5);
+		// 재설정 메일은 응답과 따로 보내므로 다 나갈 때까지 기다린다.
+		await().atMost(Duration.ofSeconds(5)).until(() -> mailbox.sentTo("reset-limit@example.com").size() == 5);
+
+		// 24시간이 지나면 다시 받을 수 있다.
+		jdbcTemplate.update("update email_verification set created_at = ? where email = ?",
+				LocalDateTime.now().minusHours(25), EMAIL);
+		entityManager.clear();
+		postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}").andExpect(status().isOk());
+	}
+
+	@Test
+	void 인증번호를_새로_받아도_24시간_동안_모두_합쳐_10번_틀리면_맞는_번호도_받지_않는다() throws Exception {
+		for (int round = 0; round < 2; round++) {
+			postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}").andExpect(status().isOk());
+			String code = mailbox.lastTo(EMAIL).code();
+			for (int i = 0; i < 5; i++) {
+				confirm(EMAIL, wrong(code)).andExpect(status().isBadRequest());
+			}
+			pretendResendIntervalPassed(EMAIL);
+		}
+
+		postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}").andExpect(status().isOk());
+		confirm(EMAIL, mailbox.lastTo(EMAIL).code())
+				.andExpect(status().isTooManyRequests())
+				.andExpect(jsonPath("$.code").value("VERIFICATION_DAILY_LIMIT_EXCEEDED"));
+	}
+
+	@Test
 	void 만료된_인증번호는_받지_않는다() throws Exception {
 		postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}").andExpect(status().isOk());
 		jdbcTemplate.update("update email_verification set expires_at = ? where email = ?",
@@ -256,6 +303,14 @@ class EmailVerificationApiTests {
 				insert into member (email, password_hash, name, role, status, created_at, updated_at)
 				values (?, ?, '홍길동', 'USER', 'ACTIVE', now(), now())
 				""", email, passwordEncoder.encode(PASSWORD));
+	}
+
+	/** 1분이 지나 다시 받을 수 있는 것처럼 이 이메일의 발송 시각을 2분 전으로 옮긴다. */
+	private void pretendResendIntervalPassed(String email) {
+		entityManager.flush();
+		jdbcTemplate.update("update email_verification set created_at = ? where email = ?",
+				LocalDateTime.now().minusMinutes(2), email);
+		entityManager.clear();
 	}
 
 	/** 맞는 인증번호와 다른 6자리 숫자 */

@@ -36,7 +36,10 @@ public class PasswordResetService {
 	private final BackgroundEmailSender backgroundEmailSender;
 	private final TransactionTemplate transactionTemplate;
 
-	/** 사용 중인 계정(ACTIVE)일 때만 인증번호를 보낸다. 1분 안에 다시 요청하면 보내지 않는다. 응답은 언제나 같다. */
+	/**
+	 * 사용 중인 계정(ACTIVE)일 때만 인증번호를 보낸다. 1분 안에 다시 요청하거나 24시간 동안 5통을 넘으면 보내지 않는다.
+	 * 응답은 언제나 같다.
+	 */
 	public void requestReset(String rawEmail) {
 		String email = ContactFormats.loginEmail(rawEmail);
 		String code = VerificationCodes.newCode();
@@ -47,7 +50,7 @@ public class PasswordResetService {
 			try {
 				verificationService.issue(email, VerificationPurpose.PASSWORD_RESET, code);
 				return true;
-			} catch (BusinessException resendTooSoon) {
+			} catch (BusinessException sendLimited) {
 				return false;
 			}
 		}));

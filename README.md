@@ -34,3 +34,7 @@ Every response includes `X-Request-Id`. A safe incoming value (1–64 letters, n
 ## Admin audit log
 
 Successful administrator `POST`, `PUT`, `PATCH`, and `DELETE` requests (including image uploads) are recorded with the acting member, server-observed client IP, action, target type/identifier, route summary, and response status. Request bodies are not stored. `GET /api/v1/admin/audit-logs` supports actor, target type, and time filters and is restricted to `SUPER_ADMIN`; the log API has no update or delete operations. The optional administrator 2FA and member PII-read audit remain separate follow-up work.
+
+## Email verification limits
+
+Email verification codes (sign-up and password reset) can be sent at most 5 times per email and purpose in 24 hours, and at most 10 wrong codes are accepted in total in that period (`429 VERIFICATION_DAILY_LIMIT_EXCEEDED`). Password-reset requests over the limit still get the same success response, but no mail is sent.
