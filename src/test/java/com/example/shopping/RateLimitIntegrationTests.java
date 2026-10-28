@@ -26,6 +26,7 @@ class RateLimitIntegrationTests {
 
 	@Test
 	void 로그인을_분당_한도보다_많이_시도하면_429를_받는다() throws Exception {
+		avoidMinuteBoundary();
 		String body = """
 				{"email":"nobody@example.com","password":"wrong-pass-1234"}
 				""";
@@ -44,6 +45,7 @@ class RateLimitIntegrationTests {
 
 	@Test
 	void 회원과_관리자_로그인_한도를_우회하려_경로를_바꿔도_같은_IP는_429를_받는다() throws Exception {
+		avoidMinuteBoundary();
 		String body = """
 				{"email":"nobody@example.com","password":"wrong-pass-1234"}
 				""";
@@ -66,5 +68,13 @@ class RateLimitIntegrationTests {
 		}).contentType(MediaType.APPLICATION_JSON).content(body))
 				.andExpect(status().isTooManyRequests())
 				.andExpect(jsonPath("$.code").value("TOO_MANY_REQUESTS"));
+	}
+
+	/** 요청 제한은 분 단위로 센다. 요청들이 분 경계에 걸치면 횟수가 0부터 다시 세어지므로, 경계 직전이면 다음 분까지 기다린다. */
+	private static void avoidMinuteBoundary() throws InterruptedException {
+		long millisIntoMinute = System.currentTimeMillis() % 60_000;
+		if (millisIntoMinute > 50_000) {
+			Thread.sleep(60_000 - millisIntoMinute + 100);
+		}
 	}
 }

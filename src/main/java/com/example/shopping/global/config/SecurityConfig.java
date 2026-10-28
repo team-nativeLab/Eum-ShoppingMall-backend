@@ -2,7 +2,6 @@ package com.example.shopping.global.config;
 
 import java.time.Clock;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
@@ -45,6 +44,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import com.example.shopping.global.redis.RedisCircuitBreaker;
 import com.example.shopping.global.security.AccessTokenValidator;
+import com.example.shopping.global.security.ApiPolicy;
 import com.example.shopping.global.security.JwtProperties;
 import com.example.shopping.global.security.JwtTokenProvider;
 import com.example.shopping.global.security.RateLimitFilter;
@@ -56,38 +56,6 @@ import com.example.shopping.global.security.SecurityErrorHandler;
 @EnableWebSecurity
 @EnableConfigurationProperties(JwtProperties.class)
 public class SecurityConfig {
-
-	/*
-	 * 로그아웃도 여기에 둔다. 로그아웃은 쿠키에 담긴 Refresh 토큰을 폐기할 뿐이라 Access 토큰이 필요 없고,
-	 * Access 토큰이 만료된 뒤(15분)에 누른 로그아웃이 401로 막히면 Refresh 토큰이 남아 다른 사람이 그 브라우저로
-	 * 로그인 상태를 되살릴 수 있다.
-	 */
-	private static final String[] PUBLIC_AUTH = {
-			"/api/v1/auth/signup",
-			"/api/v1/auth/login",
-			"/api/v1/auth/refresh",
-			"/api/v1/auth/logout",
-			"/api/v1/auth/email-verifications",
-			"/api/v1/auth/email-verifications/confirm",
-			"/api/v1/auth/password-reset",
-			"/api/v1/auth/password-reset/confirm",
-			"/api/v1/admin/auth/login",
-	};
-
-	// 로그인 없이 조회 가능한 공개 데이터 (메인, 카테고리, 상품, 공지, FAQ, 회사소개, 앱 설정, 배송비 정책, 업로드된 이미지)
-	private static final String[] PUBLIC_GET = {
-			"/files/**",
-			"/api/v1/home",
-			"/api/v1/app/config",
-			"/api/v1/shipping-policy",
-			"/api/v1/contents/**",
-			"/api/v1/categories/**",
-			"/api/v1/products/**",
-			"/api/v1/notices/**",
-			"/api/v1/faqs/**",
-	};
-
-	private static final String[] API_DOCS = { "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**" };
 
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity http, SecurityErrorHandler errorHandler,
@@ -103,18 +71,14 @@ public class SecurityConfig {
 				.formLogin(AbstractHttpConfigurer::disable)
 				.httpBasic(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				// 경로별 공개 여부는 ApiPolicy 한 곳에 둔다. 표에 없는 API는 로그인한 회원만 부를 수 있다.
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers(PUBLIC_AUTH).permitAll()
-						.requestMatchers("/error").permitAll()
-						.requestMatchers(HttpMethod.GET, PUBLIC_GET).permitAll()
-						// 견적 문의·1:1 문의 접수는 비회원도 가능하다. 같은 경로의 GET(내 내역 조회)은 로그인이 필요하다.
-						.requestMatchers(HttpMethod.POST, "/api/v1/quotes", "/api/v1/support/inquiries",
-								"/api/v1/payments/webhook").permitAll()
-						.requestMatchers(API_DOCS).permitAll()
-						.requestMatchers("/actuator/health/**").permitAll()
-						// 헬스 체크 외의 운영 엔드포인트는 켜더라도 관리자만 볼 수 있다.
-						.requestMatchers("/api/v1/admin/**", "/api/v1/uploads", "/api/v1/uploads/**", "/actuator/**")
-								.hasRole("ADMIN")
+						.requestMatchers(paths(ApiPolicy.PUBLIC_AUTH)).permitAll()
+						.requestMatchers(HttpMethod.GET, paths(ApiPolicy.PUBLIC_GET)).permitAll()
+						.requestMatchers(HttpMethod.POST, paths(ApiPolicy.PUBLIC_POST)).permitAll()
+						.requestMatchers(paths(ApiPolicy.PUBLIC_OPERATIONS)).permitAll()
+						.requestMatchers(paths(ApiPolicy.ADMIN_API)).hasRole("ADMIN")
+						.requestMatchers(paths(ApiPolicy.ADMIN_OPERATIONS)).hasRole("ADMIN")
 						.anyRequest().authenticated())
 				// Authorization: Bearer 헤더의 Access 토큰을 검증해 로그인 회원으로 인증한다.
 				.oauth2ResourceServer(oauth2 -> oauth2
@@ -141,7 +105,7 @@ public class SecurityConfig {
 	 */
 	private BearerTokenResolver bearerTokenResolver() {
 		PathPatternRequestMatcher.Builder path = PathPatternRequestMatcher.withDefaults();
-		RequestMatcher publicAuth = new OrRequestMatcher(Arrays.stream(PUBLIC_AUTH)
+		RequestMatcher publicAuth = new OrRequestMatcher(ApiPolicy.PUBLIC_AUTH.stream()
 				.<RequestMatcher>map(path::matcher)
 				.toList());
 		DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
@@ -149,6 +113,10 @@ public class SecurityConfig {
 	}
 
 	/** 최고 관리자는 관리자 API 전체 권한과 최고 관리자 전용 권한을 모두 받는다. */
+	private static String[] paths(List<String> patterns) {
+		return patterns.toArray(String[]::new);
+	}
+
 	private JwtAuthenticationConverter jwtAuthenticationConverter() {
 		JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
 		authorities.setAuthoritiesClaimName(JwtTokenProvider.ROLE_CLAIM);

@@ -17,6 +17,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.shopping.domain.product.repository.CategoryRepository;
 import com.example.shopping.domain.product.service.DefaultCategoryInitializer;
 import com.jayway.jsonpath.JsonPath;
+
+import jakarta.persistence.EntityManagerFactory;
 
 /** 고객용 상품 목록·검색: 필터(카테고리, 브랜드, 가격대, 인증, 품절), 정렬, 페이지, 필터별 개수, 자동 완성 */
 @SpringBootTest
@@ -47,6 +52,9 @@ class ProductSearchTests {
 
 	@Autowired
 	private CategoryRepository categoryRepository;
+
+	@Autowired
+	private EntityManagerFactory entityManagerFactory;
 
 	// ───────── 페이지 ─────────
 
@@ -348,6 +356,24 @@ class ProductSearchTests {
 				.andExpect(jsonPath("$.data.keywordTotalCount").value(3))
 				.andExpect(jsonPath("$.data.categories[*].count").value(contains(2)))
 				.andExpect(jsonPath("$.data.brands[*].count").value(contains(3)));
+	}
+
+	@Test
+	void 필터별_개수는_요청마다_상품을_두_번만_읽는다() throws Exception {
+		long ppe = insertCategory("개인보호장비");
+		long helmets = insertCategory("안전모", ppe);
+		insert(product("경량 안전모").category(helmets).brand("세이프가드").certifications("KCS"));
+		insert(product("카테고리 없는 안전화").brand("파이어킵"));
+		Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+
+		statistics.clear();
+		mockMvc.perform(get("/api/v1/products/facets").param("categoryId", String.valueOf(ppe)).param("query", "안전"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.totalCount").value(1))
+				.andExpect(jsonPath("$.data.keywordTotalCount").value(2));
+
+		// 카테고리 목록 1번, (카테고리, 브랜드)별 개수 1번, 인증별 개수 1번
+		assertThat(statistics.getPrepareStatementCount()).isEqualTo(3);
 	}
 
 	// ───────── 자동 완성 ─────────
