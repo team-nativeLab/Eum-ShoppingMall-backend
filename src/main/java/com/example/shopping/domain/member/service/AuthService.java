@@ -43,6 +43,7 @@ public class AuthService {
 	private final RefreshTokenService refreshTokenService;
 	private final AccessTokenService accessTokenService;
 	private final AdminAuditLogService auditLogService;
+	private final LoginAttemptLimiter loginAttemptLimiter;
 
 	// 없는 이메일로 로그인해도 해시 비교를 한 번 수행해, 응답 시간으로 가입 여부를 추측하지 못하게 한다.
 	private final String dummyPasswordHash;
@@ -52,7 +53,8 @@ public class AuthService {
 			boolean signupEmailVerificationRequired,
 			MemberRepository memberRepository, PasswordEncoder passwordEncoder,
 			JwtTokenProvider jwtTokenProvider, RefreshTokenService refreshTokenService,
-			AccessTokenService accessTokenService, AdminAuditLogService auditLogService) {
+			AccessTokenService accessTokenService, AdminAuditLogService auditLogService,
+			LoginAttemptLimiter loginAttemptLimiter) {
 		this.memberRepository = memberRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.emailVerificationService = emailVerificationService;
@@ -62,6 +64,7 @@ public class AuthService {
 		this.refreshTokenService = refreshTokenService;
 		this.accessTokenService = accessTokenService;
 		this.auditLogService = auditLogService;
+		this.loginAttemptLimiter = loginAttemptLimiter;
 		this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-timing");
 	}
 
@@ -146,18 +149,19 @@ public class AuthService {
 	}
 
 	private Member authenticate(LoginRequest request) {
-		Member member = memberRepository.findByEmail(ContactFormats.loginEmail(request.email())).orElse(null);
+		String email = ContactFormats.loginEmail(request.email());
+		loginAttemptLimiter.checkAllowed(email);
+		Member member = memberRepository.findByEmail(email).orElse(null);
 
 		String passwordHash = member == null ? dummyPasswordHash : member.getPasswordHash();
 		boolean passwordMatches = passwordEncoder.matches(request.password(), passwordHash);
 
-		// 이메일이 없는 경우와 비밀번호가 틀린 경우를 구분해서 알려주지 않는다.
-		if (member == null || member.getStatus() == MemberStatus.WITHDRAWN) {
+		// 이메일이 없는 경우와 비밀번호가 틀린 경우를 구분해서 알려주지 않고, 둘 다 실패 횟수를 센다.
+		if (member == null || member.getStatus() == MemberStatus.WITHDRAWN || !passwordMatches) {
+			loginAttemptLimiter.recordFailure(email);
 			throw new BusinessException(ErrorCode.LOGIN_FAILED);
 		}
-		if (!passwordMatches) {
-			throw new BusinessException(ErrorCode.LOGIN_FAILED);
-		}
+		loginAttemptLimiter.reset(email);
 		// 계정 상태는 본인 확인(비밀번호 일치)이 끝난 뒤에만 알려준다.
 		if (member.getStatus() == MemberStatus.SUSPENDED) {
 			throw new BusinessException(ErrorCode.ACCOUNT_SUSPENDED);

@@ -31,6 +31,9 @@ security:
   rate-limit:
     # 테스트는 한 IP에서 로그인을 수없이 반복하므로 사실상 끈다. 제한 동작은 RateLimitFilterTests에서 따로 검증한다.
     requests-per-minute: 100000
+  login-lock:
+    # 테스트는 같은 이메일로 로그인 실패를 여러 번 반복하므로 사실상 끈다. 잠금 동작은 LoginLockTests에서 따로 검증한다.
+    max-failures: 100000
 
 upload:
   dir: build/test-uploads

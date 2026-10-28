@@ -33,6 +33,7 @@ public class PasswordResetService {
 	private final PasswordEncoder passwordEncoder;
 	private final RefreshTokenService refreshTokenService;
 	private final MemberTokenStateCache memberTokenStateCache;
+	private final LoginAttemptLimiter loginAttemptLimiter;
 	private final BackgroundEmailSender backgroundEmailSender;
 	private final TransactionTemplate transactionTemplate;
 
@@ -90,6 +91,8 @@ public class PasswordResetService {
 		if (failure != null) {
 			throw failure;
 		}
+		// 본인이 비밀번호를 새로 정했으므로 로그인 실패로 막힌 상태도 푼다.
+		loginAttemptLimiter.reset(email);
 	}
 
 	private Member findActive(String email) {
