@@ -37,6 +37,9 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      # Redis가 응답을 멈춰도 요청이 오래 묶이지 않게 짧게 둔다. 넘기면 각 기능의 대체 동작(DB 조회 등)으로 넘어간다.
+      timeout: ${REDIS_COMMAND_TIMEOUT:500ms}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
     web:
       pageable:
         # ?size=에 큰 값을 넣어 한 번에 대량 조회하는 것을 막는다.
@@ -75,8 +78,9 @@ management:
         enabled: true
       group:
         readiness:
-          # Redis backs request limits and access-token revocation/version checks.
-          include: readinessState,redis
+          # Redis는 넣지 않는다. Redis가 멈추면 로드밸런서가 모든 서버를 내려 Redis와 상관없는 기능까지 멈추기 때문이다.
+          # Redis를 쓰는 기능은 장애 때 대체 동작으로 계속 응답하고, Redis 상태는 /actuator/health(관리자)와 지표로 본다.
+          include: readinessState
   health:
     redis:
       enabled: true
@@ -103,8 +107,12 @@ security:
   rate-limit:
     # 로그인·회원가입·문의 접수·주문·결제 등에 적용하는 IP별 분당 요청 한도
     requests-per-minute: ${RATE_LIMIT_PER_MINUTE:10}
-    # 자동완성을 포함한 공개 상품 조회의 IP별 분당 한도
-    public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:120}
+    # 공개 상품 조회의 IP별 분당 한도. 목록·필터 개수(브랜드 포함)·상세를 각각 따로 세고, 자동 완성은 이 값의 두 배다.
+    # 한 사무실 직원들이 같은 공인 IP로 접속하므로 넉넉하게 둔다. 크롤링 같은 대량 요청은 프록시·WAF에서 막는다.
+    public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:300}
+  login-lock:
+    # 한 이메일이 첫 실패부터 10분 안에 이만큼 틀리면 그 10분 동안 로그인을 막는다. IP를 바꿔 가며 비밀번호를 넣어 보는 공격 대비.
+    max-failures: ${LOGIN_LOCK_MAX_FAILURES:10}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
     max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}
@@ -128,11 +136,39 @@ upload:
     bucket: ${UPLOAD_S3_BUCKET:}
     region: ${AWS_REGION:}
     cdn-base-url: ${UPLOAD_CDN_BASE_URL:}
+    # 업로드 전용 IAM 사용자의 액세스 키. 값은 서버 환경변수로만 넣는다.
+    access-key: ${UPLOAD_S3_ACCESS_KEY:}
+    secret-key: ${UPLOAD_S3_SECRET_KEY:}
+    # 직접 업로드 주소(Presigned URL)가 유효한 시간(분, 3~60)
+    presigned-url-expiration-minutes: ${UPLOAD_PRESIGNED_URL_EXPIRATION_MINUTES:10}
+  cleanup:
+    # 상품·배너가 쓰지 않는 업로드 이미지를 지우는 시각. 올린 지 min-age-hours가 지난 파일만 지운다.
+    cron: ${UPLOAD_CLEANUP_CRON:0 30 4 * * *}
+    min-age-hours: ${UPLOAD_CLEANUP_MIN_AGE_HOURS:24}
+    # 설정·데이터 오류로 쓰는 파일까지 지우는 사고를 줄이려고 한 번에 지우는 수를 제한한다.
+    max-deletes-per-run: ${UPLOAD_CLEANUP_MAX_DELETES_PER_RUN:1000}
 
 app:
+  auth:
+    # true면 회원가입에 이메일 인증 토큰이 필요하다. 프론트가 인증 화면을 붙이고 메일 서버(MAIL_HOST)를 설정한 뒤 켠다.
+    signup-email-verification-required: ${SIGNUP_EMAIL_VERIFICATION_REQUIRED:false}
+  mail:
+    # 인증번호 메일을 보낼 SMTP 서버 (AWS SES SMTP, 사내 메일 서버 등). 비어 있으면 보내지 않고 로그만 남긴다.
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    # 계정을 주면 SMTP 인증과 STARTTLS를 켠다.
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    # 보내는 사람 주소. MAIL_HOST를 설정하면 필수다. (예: no-reply@example.com 또는 "이음 쇼핑몰 <no-reply@example.com>")
+    from: ${MAIL_FROM:}
+    # 메일 제목 앞에 붙는 이름
+    service-name: ${MAIL_SERVICE_NAME:이음 쇼핑몰}
   cache:
     # 공개 상품 조회의 공유 Redis 캐시 TTL (초)
     product-ttl-seconds: ${PRODUCT_READ_CACHE_TTL_SECONDS:60}
+    # Access 토큰 검증용 회원 상태(계정 상태·토큰 버전)의 Redis 캐시 TTL (초). 0이면 요청마다 DB에서 읽는다.
+    # 앱을 거치지 않고 DB에서 직접 회원을 정지하면 이 시간이 지나야 반영된다.
+    member-token-state-ttl-seconds: ${MEMBER_TOKEN_STATE_CACHE_TTL_SECONDS:300}
   seed:
     # 카테고리가 하나도 없으면 기본 카테고리(안전모, 보안경, 안전장갑, 방진마스크, 안전화, 귀마개)를 만든다.
     default-categories: ${SEED_DEFAULT_CATEGORIES:true}
@@ -142,3 +178,8 @@ app:
     latest-version: ${APP_LATEST_VERSION:1.0.0}
     maintenance: ${APP_MAINTENANCE:false}
     maintenance-message: ${APP_MAINTENANCE_MESSAGE:}
+  notification:
+    alimtalk:
+      # 문의 답변 알림톡 템플릿 코드. 알림톡 대행사 콘솔에서 승인받은 코드를 넣는다.
+      # 템플릿 변수: #{문의제목}, #{답변}. 대행사가 정해지기 전에는 알림을 보내지 않고 SKIPPED로 기록한다.
+      inquiry-answer-template: ${ALIMTALK_INQUIRY_ANSWER_TEMPLATE:INQUIRY_ANSWER}

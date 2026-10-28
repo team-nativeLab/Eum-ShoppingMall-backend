@@ -57,18 +57,13 @@ public class Member extends BaseTimeEntity {
 	@Column(length = 200)
 	private String suspensionReason;
 
-	// 기존 DB 스키마 호환을 위해 유지한다. 로그인 실패 제한에는 사용하지 않는다.
-	@ColumnDefault("0")
-	@Column(nullable = false)
-	private int failedLoginCount;
-
 	/** Persisted generation used to invalidate access and refresh tokens after credential changes. */
 	@ColumnDefault("0")
 	@Column(name = "access_token_version", nullable = false)
 	private long accessTokenVersion;
 
-	// 기존 DB 스키마 호환을 위해 유지한다. 로그인 실패 제한에는 사용하지 않는다.
-	private LocalDateTime lockedUntil;
+	/** 가입할 때 이메일 인증을 마친 시각. 인증 없이 가입한 계정(기능 도입 전 가입 등)은 비어 있다. */
+	private LocalDateTime emailVerifiedAt;
 
 	/** 일반 회원(USER, ACTIVE)으로 생성한다. */
 	public static Member create(String email, String passwordHash, String name, String phone) {
@@ -92,8 +87,14 @@ public class Member extends BaseTimeEntity {
 		return member;
 	}
 
+	public void markEmailVerified(LocalDateTime verifiedAt) {
+		this.emailVerifiedAt = verifiedAt;
+	}
+
+	/** 이전 권한이 담긴 Access 토큰을 더 쓸 수 없게 토큰 버전도 올린다. */
 	public void changeRole(MemberRole role) {
 		this.role = role;
+		this.accessTokenVersion++;
 	}
 
 	/** null인 항목은 바꾸지 않는다. 연락처는 빈 문자열을 주면 지운다. */

@@ -121,13 +121,24 @@ class RateLimitFilterTests {
 	}
 
 	@Test
-	void 공개_상품_조회는_별도_설정한_IP별_한도를_공유한다() throws Exception {
+	void 공개_상품_조회는_화면_기능별로_따로_세고_자동_완성은_두_배까지_받는다() throws Exception {
 		RateLimitFilter searchFilter = new RateLimitFilter(10, 5, resolver, clock, redisTemplate);
+		// 검색 한 번에 목록과 필터 개수를 함께 불러도 서로의 한도를 쓰지 않는다.
 		for (int i = 0; i < 5; i++) {
-			assertThat(call(searchFilter, "GET", "/api/v1/products/suggestions", "10.0.0.12"))
-					.isEqualTo(200);
+			assertThat(call(searchFilter, "GET", "/api/v1/products", "10.0.0.12")).isEqualTo(200);
+			assertThat(call(searchFilter, "GET", "/api/v1/products/facets", "10.0.0.12")).isEqualTo(200);
+			assertThat(call(searchFilter, "GET", "/api/v1/products/" + (i + 1), "10.0.0.12")).isEqualTo(200);
 		}
+		for (int i = 0; i < 10; i++) {
+			assertThat(call(searchFilter, "GET", "/api/v1/products/suggestions", "10.0.0.12")).isEqualTo(200);
+		}
+
+		assertThat(call(searchFilter, "GET", "/api/v1/products", "10.0.0.12")).isEqualTo(429);
 		assertThat(call(searchFilter, "GET", "/api/v1/products/facets", "10.0.0.12")).isEqualTo(429);
+		// 상세는 상품 번호가 달라도 한 묶음으로 센다.
+		assertThat(call(searchFilter, "GET", "/api/v1/products/99", "10.0.0.12")).isEqualTo(429);
+		assertThat(call(searchFilter, "GET", "/api/v1/products/suggestions", "10.0.0.12")).isEqualTo(429);
+		// 다른 IP는 영향이 없다.
 		assertThat(call(searchFilter, "GET", "/api/v1/products", "10.0.0.13")).isEqualTo(200);
 	}
 

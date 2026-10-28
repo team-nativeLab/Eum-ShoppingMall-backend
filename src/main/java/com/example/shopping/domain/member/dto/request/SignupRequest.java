@@ -1,5 +1,7 @@
 package com.example.shopping.domain.member.dto.request;
 
+import com.example.shopping.global.validation.ValidationPatterns;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -21,12 +23,18 @@ public record SignupRequest(
 		String name,
 
 		// 선택 입력
-		@Pattern(regexp = "^\\d{2,3}-?\\d{3,4}-?\\d{4}$", message = "연락처 형식이 올바르지 않습니다.")
-		String phone) {
+		@Pattern(regexp = ValidationPatterns.PHONE, message = "연락처 형식이 올바르지 않습니다.")
+		String phone,
+
+		// 이메일 인증(POST /api/v1/auth/email-verifications/confirm)으로 받은 토큰.
+		// SIGNUP_EMAIL_VERIFICATION_REQUIRED=true면 필수다.
+		@Size(max = 100, message = "이메일 인증 토큰이 올바르지 않습니다.")
+		String emailVerificationToken) {
 
 	/** 요청 객체가 로그에 찍히더라도 비밀번호는 남지 않게 한다. */
 	@Override
 	public String toString() {
-		return "SignupRequest[email=" + email + ", password=****, name=" + name + ", phone=" + phone + "]";
+		return "SignupRequest[email=" + email + ", password=****, name=" + name + ", phone=" + phone
+				+ ", emailVerificationToken=" + (emailVerificationToken == null ? null : "****") + "]";
 	}
 }

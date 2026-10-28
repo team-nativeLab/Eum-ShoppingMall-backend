@@ -1,5 +1,6 @@
 package com.example.shopping.domain.product.service;
 
+import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.data.domain.Pageable;
@@ -20,6 +21,7 @@ import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.CategoryRepository;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
+import com.example.shopping.domain.upload.service.UploadService;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.response.PageResponse;
@@ -36,6 +38,7 @@ public class AdminProductService {
 	private final ProductSkuRepository productSkuRepository;
 	private final CategoryRepository categoryRepository;
 	private final ProductReadCache readCache;
+	private final UploadService uploadService;
 
 	/** 상태를 지정하지 않으면 삭제된 상품을 뺀 전체(판매중·품절·비공개)를 조회한다. */
 	public PageResponse<AdminProductSummaryResponse> search(ProductStatus status, Long categoryId, String keyword,
@@ -54,6 +57,7 @@ public class AdminProductService {
 	@Transactional
 	public AdminProductDetailResponse create(ProductCreateRequest request) {
 		ProductStatus status = request.status() == null ? ProductStatus.ON_SALE : requireManageable(request.status());
+		uploadService.requireUploadedImageUrl(request.imageUrl());
 		boolean priceVisible = request.priceVisible() == null || request.priceVisible();
 		Product product = Product.create(findCategory(request.categoryId()), request.name().trim(),
 				request.description(), request.imageUrl(), request.basePrice(), request.listPrice(), priceVisible,
@@ -72,10 +76,17 @@ public class AdminProductService {
 	public AdminProductDetailResponse update(Long productId, ProductUpdateRequest request) {
 		Product product = find(productId);
 		ProductStatus status = request.status() == null ? null : requireManageable(request.status());
+		// 수정 화면이 기존 값을 그대로 다시 보내도 통과시킨다. 제한 전에 저장한 외부 주소일 수 있다.
+		if (!Objects.equals(request.imageUrl(), product.getImageUrl())) {
+			uploadService.requireUploadedImageUrl(request.imageUrl());
+		}
 		String name = request.name() == null ? null : request.name().trim();
 		product.update(findCategory(request.categoryId()), name, request.description(), request.imageUrl(),
 				request.basePrice(), request.listPrice(), status);
 		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
+		if (request.priceVisible() != null) {
+			product.changePriceVisibility(request.priceVisible());
+		}
 
 		validateVisibleProductHasSku(product);
 		// 새로 추가된 옵션의 ID와 갱신된 수정 시각을 응답에 싣기 위해 먼저 DB에 반영한다.
@@ -118,26 +129,21 @@ public class AdminProductService {
 	}
 
 	/**
-	 * 입고: 옵션의 재고에 수량을 더한다. 상품 수정처럼 최종 수량을 통째로 덮어쓰는 방식이 아니라서
-	 * 입고 처리 중에 주문이 들어와도 충돌하지 않는다. 상품의 판매 상태(품절 등)는 바꾸지 않는다.
+	 * 재고 조정: 옵션 재고에 delta를 더한다(입고는 양수, 파손·분실·실사 차이는 음수).
+	 * 최종 수량을 통째로 덮어쓰는 방식이 아니라서 조정 중에 주문이 들어와도 충돌하지 않는다. 상품의 판매 상태(품절 등)는 바꾸지 않는다.
 	 */
 	@Transactional
-	public AdminProductDetailResponse receiveStock(Long productId, Long skuId, int quantity) {
+	public AdminProductDetailResponse adjustStock(Long productId, Long skuId, int delta) {
 		findSku(find(productId), skuId);
-		if (productSkuRepository.receiveStock(skuId, quantity, ProductSku.MAX_STOCK - quantity) == 0) {
-			throw new BusinessException(ErrorCode.STOCK_LIMIT_EXCEEDED);
+		if (delta == 0) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
+		}
+		if (productSkuRepository.adjustStock(skuId, delta, ProductSku.MAX_STOCK) == 0) {
+			throw new BusinessException(delta > 0 ? ErrorCode.STOCK_LIMIT_EXCEEDED : ErrorCode.OUT_OF_STOCK);
 		}
 		readCache.invalidateAfterCommit();
-		// 위 쿼리가 영속성 컨텍스트를 비우므로 더해진 재고가 반영된 상태로 다시 읽는다.
+		// 위 쿼리가 영속성 컨텍스트를 비우므로 바뀐 재고가 반영된 상태로 다시 읽는다.
 		return AdminProductDetailResponse.from(find(productId));
-	}
-
-	@Transactional
-	public AdminProductDetailResponse changePriceVisibility(Long productId, boolean priceVisible) {
-		Product product = find(productId);
-		product.changePriceVisibility(priceVisible);
-		readCache.invalidateAfterCommit();
-		return AdminProductDetailResponse.from(product);
 	}
 
 	@Transactional

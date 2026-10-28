@@ -66,6 +66,17 @@ variable "cors_allowed_origins" {
   type        = string
 }
 
+variable "refresh_cookie_same_site" {
+  description = "SameSite of the refresh-token cookie. Keep Strict when the web frontend shares the API's registrable domain (shop.example.com and api.example.com). See docs/deployment-proxy.md before using None."
+  type        = string
+  default     = "Strict"
+
+  validation {
+    condition     = contains(["Strict", "Lax", "None"], var.refresh_cookie_same_site)
+    error_message = "refresh_cookie_same_site must be Strict, Lax, or None."
+  }
+}
+
 variable "application_secret_arns" {
   description = "Map of application environment variable names to Secrets Manager secret ARNs; must include JWT_SECRET."
   type        = map(string)
@@ -114,6 +125,23 @@ variable "desired_count" {
   validation {
     condition     = var.desired_count >= 1
     error_message = "desired_count must be at least one when the ECS service is enabled."
+  }
+}
+
+variable "upload_storage" {
+  description = "Image storage: local keeps files on the EFS volume, s3 uses the uploads bucket behind CloudFront. Switch to s3 after copying existing files (docs/deployment-aws.md)."
+  type        = string
+  default     = "local"
+  validation {
+    condition     = contains(["local", "s3"], var.upload_storage)
+    error_message = "upload_storage must be local or s3."
+  }
+  validation {
+    condition = var.upload_storage == "local" || (
+      contains(keys(var.application_secret_arns), "UPLOAD_S3_ACCESS_KEY") &&
+      contains(keys(var.application_secret_arns), "UPLOAD_S3_SECRET_KEY")
+    )
+    error_message = "upload_storage = s3 needs UPLOAD_S3_ACCESS_KEY and UPLOAD_S3_SECRET_KEY in application_secret_arns."
   }
 }
 

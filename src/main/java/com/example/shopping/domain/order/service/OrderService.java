@@ -4,7 +4,6 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -14,21 +13,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.shopping.domain.cart.entity.CartItem;
 import com.example.shopping.domain.cart.entity.CartItemStatus;
-import com.example.shopping.domain.cart.repository.CartItemRepository;
 import com.example.shopping.domain.member.entity.MemberStatus;
 import com.example.shopping.domain.member.repository.MemberRepository;
-import com.example.shopping.domain.order.dto.response.AdminOrderDetailResponse.AddressResponse;
-import com.example.shopping.domain.order.dto.request.DeliveryRequest;
+import com.example.shopping.domain.order.dto.request.OrderCreateRequest;
 import com.example.shopping.domain.order.dto.response.OrderCreateResponse;
 import com.example.shopping.domain.order.dto.response.OrderDetailResponse;
 import com.example.shopping.domain.order.dto.response.OrderSummaryResponse;
-import com.example.shopping.domain.order.entity.CheckoutDelivery;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.entity.OrderItem;
 import com.example.shopping.domain.order.entity.ShippingAddress;
-import com.example.shopping.domain.order.repository.CheckoutDeliveryRepository;
 import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
 import com.example.shopping.domain.product.entity.ProductSku;
@@ -53,8 +47,6 @@ public class OrderService {
 	private static final int ORDER_NO_RANDOM_LENGTH = 16;
 
 	private final OrderRepository orderRepository;
-	private final CheckoutDeliveryRepository checkoutDeliveryRepository;
-	private final CartItemRepository cartItemRepository;
 	private final ProductSkuRepository productSkuRepository;
 	private final ProductReadCache productReadCache;
 	private final PaymentRepository paymentRepository;
@@ -62,23 +54,14 @@ public class OrderService {
 	private final OrderTxService orderTxService;
 	private final SecureRandom secureRandom = new SecureRandom();
 
-	/** 주문 1단계: 배송지를 저장한다. 다시 보내면 덮어쓴다. */
-	public AddressResponse saveDelivery(Long memberId, DeliveryRequest request) {
-		ShippingAddress address = request.toAddress();
-		checkoutDeliveryRepository.findById(memberId)
-				.ifPresentOrElse(
-						delivery -> delivery.change(address),
-						() -> checkoutDeliveryRepository.save(CheckoutDelivery.create(memberId, address)));
-		return AddressResponse.from(address);
-	}
-
 	/**
-	 * 장바구니에서 선택한 품목으로 결제 대기 주문을 만든다.
+	 * 요청에 담긴 품목과 배송지로 결제 대기 주문을 만든다. 서버에 저장해 둔 상태(장바구니 선택, 배송지)에 기대지 않으므로
+	 * 다른 탭·기기에서 장바구니를 바꿔도 화면에 보인 내용과 다른 주문이 만들어지지 않는다.
 	 * 금액은 요청으로 받지 않고 DB의 현재 가격으로 서버가 계산한다 (클라이언트가 보낸 금액은 조작될 수 있다).
 	 *
 	 * @param idempotencyKey 같은 키로 다시 요청하면 새로 만들지 않고 처음 만든 주문을 돌려준다. 없으면 null
 	 */
-	public OrderCreateResponse createOrder(Long memberId, String idempotencyKey) {
+	public OrderCreateResponse createOrder(Long memberId, String idempotencyKey, OrderCreateRequest request) {
 		if (idempotencyKey != null) {
 			Optional<Order> existing = orderRepository.findByMemberIdAndIdempotencyKey(memberId, idempotencyKey);
 			if (existing.isPresent()) {
@@ -89,19 +72,18 @@ public class OrderService {
 		memberRepository.findById(memberId)
 				.filter(member -> member.getStatus() == MemberStatus.ACTIVE)
 				.orElseThrow(() -> new BusinessException(ErrorCode.ACCOUNT_SUSPENDED));
-		ShippingAddress address = checkoutDeliveryRepository.findById(memberId)
-				.map(CheckoutDelivery::getAddress)
-				.orElseThrow(() -> new BusinessException(ErrorCode.DELIVERY_REQUIRED));
+		ShippingAddress address = request.delivery().toAddress();
+		List<OrderCreateRequest.Item> lines = sortedLines(request.items());
 
 		// 결제하지 않고 남겨 둔 이전 주문을 정리해 그 주문이 잡고 있던 재고를 먼저 푼다.
 		orderTxService.expirePendingOrdersOf(memberId);
 
 		Order order = Order.create(memberId, newOrderNo(), address,
 				LocalDateTime.now().plusMinutes(PAYMENT_DEADLINE_MINUTES), idempotencyKey);
-		for (CartItem item : findOrderableItems(memberId)) {
-			ProductSku sku = item.getSku();
+		for (OrderCreateRequest.Item line : lines) {
+			ProductSku sku = findOrderable(line.skuId(), line.quantity());
 			order.addItem(sku.getId(), sku.getProduct().getName(), sku.getOptionName(), sku.getPrice(),
-					item.getQuantity());
+					line.quantity());
 		}
 		// 상품 합계에 배송비·할인 정책을 적용하고 주문 시점의 금액을 저장한다.
 		order.finalizeAmounts();
@@ -142,29 +124,26 @@ public class OrderService {
 	}
 
 	/**
-	 * 선택한 품목 중 주문할 수 있는 것만 고른다. 금액 미표시·판매 중지 상품은 빼고 장바구니에 남겨 두며,
-	 * 재고가 모자란 품목이 있으면 주문 전체를 거절한다.
-	 * 여러 주문이 같은 옵션들을 서로 다른 순서로 잡다가 교착 상태에 빠지지 않도록 옵션 ID 순으로 정렬한다.
+	 * 같은 옵션이 두 번 들어 있으면 거절한다. 여러 주문이 같은 옵션들을 서로 다른 순서로 잡다가 교착 상태에 빠지지 않도록
+	 * 재고를 차감하는 순서(옵션 ID 순)로 정렬한다.
 	 */
-	private List<CartItem> findOrderableItems(Long memberId) {
-		List<CartItem> orderable = new ArrayList<>();
-		for (CartItem item : cartItemRepository.findAllWithProduct(memberId)) {
-			if (!item.isSelected()) {
-				continue;
-			}
-			CartItemStatus status = item.orderStatus();
-			if (status == CartItemStatus.OUT_OF_STOCK) {
-				throw new BusinessException(ErrorCode.OUT_OF_STOCK);
-			}
-			if (status == CartItemStatus.ORDERABLE) {
-				orderable.add(item);
-			}
+	private List<OrderCreateRequest.Item> sortedLines(List<OrderCreateRequest.Item> items) {
+		if (items.stream().map(OrderCreateRequest.Item::skuId).distinct().count() != items.size()) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
 		}
-		if (orderable.isEmpty()) {
-			throw new BusinessException(ErrorCode.NO_ORDERABLE_ITEMS);
-		}
-		orderable.sort(Comparator.comparing(item -> item.getSku().getId()));
-		return orderable;
+		return items.stream().sorted(Comparator.comparing(OrderCreateRequest.Item::skuId)).toList();
+	}
+
+	/** 장바구니와 같은 기준(CartItemStatus)으로 지금 이 수량을 주문할 수 있는지 확인한다. */
+	private ProductSku findOrderable(Long skuId, int quantity) {
+		ProductSku sku = productSkuRepository.findWithProductById(skuId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.SKU_NOT_FOUND));
+		return switch (CartItemStatus.of(sku, quantity)) {
+			case ORDERABLE -> sku;
+			case PRICE_HIDDEN -> throw new BusinessException(ErrorCode.PRICE_HIDDEN_PRODUCT);
+			case NOT_ON_SALE -> throw new BusinessException(ErrorCode.PRODUCT_NOT_ON_SALE);
+			case OUT_OF_STOCK -> throw new BusinessException(ErrorCode.OUT_OF_STOCK);
+		};
 	}
 
 	/** 날짜 + 추측할 수 없는 난수 16자. 헷갈리기 쉬운 글자(0·O, 1·I)는 쓰지 않는다. */

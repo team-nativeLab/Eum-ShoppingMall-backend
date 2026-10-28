@@ -17,6 +17,7 @@ import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.validation.SortValidator;
+import com.example.shopping.global.validation.ContactFormats;
 
 import lombok.RequiredArgsConstructor;
 
@@ -39,7 +40,7 @@ public class QuoteService {
 		}
 		String email = StringUtils.hasText(request.email()) ? request.email().trim() : null;
 		QuoteInquiry quote = QuoteInquiry.create(memberId, request.productId(), request.companyName().trim(),
-				request.managerName().trim(), request.phone().replace("-", ""), email, request.content());
+				request.managerName().trim(), ContactFormats.phone(request.phone()), email, request.content());
 		return QuoteResponse.from(quoteInquiryRepository.save(quote));
 	}
 

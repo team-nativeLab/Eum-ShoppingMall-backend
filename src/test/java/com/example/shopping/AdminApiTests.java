@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -76,7 +77,7 @@ class AdminApiTests {
 	@Test
 	@WithAnonymousUser
 	void 관리자_로그인은_관리자_계정에만_토큰을_준다() throws Exception {
-		insertMember("admin@example.com", "관리자", "ADMIN");
+		long adminId = insertMember("admin@example.com", "관리자", "ADMIN");
 		insertMember("member@example.com", "홍길동", "USER");
 
 		String body = adminLogin("admin@example.com", PASSWORD)
@@ -93,6 +94,19 @@ class AdminApiTests {
 		adminLogin("admin@example.com", "wrong-pass-1234")
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
+
+		// 성공·실패를 감사 로그에 남긴다. 실패는 누가 했는지 모르므로 입력한 이메일만 남기고, 비밀번호는 남기지 않는다.
+		var logins = jdbcTemplate.queryForList("""
+				select actor_member_id, response_status, details from admin_audit_log
+				where action = 'LOGIN' order by id
+				""");
+		assertThat(logins).extracting(row -> row.get("RESPONSE_STATUS")).containsExactly(200, 401, 401);
+		assertThat(logins.get(0).get("ACTOR_MEMBER_ID")).isEqualTo(adminId);
+		assertThat(logins.get(1).get("ACTOR_MEMBER_ID")).isNull();
+		assertThat((String) logins.get(1).get("DETAILS")).contains("member@example.com");
+		assertThat((String) logins.get(2).get("DETAILS")).contains("admin@example.com");
+		assertThat(logins).allSatisfy(row -> assertThat(String.valueOf(row.get("DETAILS")))
+				.doesNotContain(PASSWORD, "wrong-pass-1234"));
 	}
 
 	@Test
@@ -142,12 +156,11 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.data.role").value("USER"));
 
 		assertThat(roleOf("role-target@example.com")).isEqualTo("USER");
-		assertThat(jdbcTemplate.queryForObject("select access_token_version from member where id = ?", Long.class,
-				memberId)).isZero();
 		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where member_id = ?", Long.class,
 				memberId)).isZero();
+		// 권한을 회수하면 이전 권한이 담긴 Access 토큰도 바로 쓸 수 없다.
 		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
-				.andExpect(status().isOk());
+				.andExpect(status().isUnauthorized());
 
 		long adminId = insertMember("ordinary-admin@example.com", "관리자", "ADMIN");
 		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(admin(adminId))
@@ -230,12 +243,67 @@ class AdminApiTests {
 				String.class, superAdminId)).isEqualTo("contents");
 		assertThat(jdbcTemplate.queryForObject("select target_id from admin_audit_log where actor_member_id = ?",
 				String.class, superAdminId)).isEqualTo("terms");
+		// 무엇으로 바꿨는지(요청 본문)도 남긴다.
+		assertThat(jdbcTemplate.queryForObject("select details from admin_audit_log where actor_member_id = ?",
+				String.class, superAdminId)).isEqualTo("{\"title\":\"이용약관\",\"body\":\"서비스 이용 약관\"}");
 
 		mockMvc.perform(get("/api/v1/admin/audit-logs").with(admin(adminId)))
 				.andExpect(status().isForbidden());
 		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId)))
 				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].details").value(Matchers.containsString("서비스 이용 약관")));
+	}
+
+	@Test
+	void 감사_로그는_경로_패턴으로_대상을_정하고_권한이_없어_거절된_시도도_남긴다() throws Exception {
+		long superAdminId = insertMember("target-super@example.com", "최고관리자", "SUPER_ADMIN");
+		long adminId = insertMember("target-admin@example.com", "관리자", "ADMIN");
+		long memberId = insertMember("target-member@example.com", "회원", "USER");
+		long skuId = insertSku();
+		long productId = jdbcTemplate.queryForObject("select product_id from product_sku where id = ?", Long.class, skuId);
+
+		byte[] png = { (byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4 };
+		mockMvc.perform(multipart("/api/v1/uploads").file(new MockMultipartFile("file", "a.png", "image/png", png))
+				.with(admin(adminId)))
+				.andExpect(status().isOk());
+		mockMvc.perform(post(stockAdjustmentUrl(productId, skuId)).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"delta":5,"reason":"입고"}
+						"""))
+				.andExpect(status().isOk());
+		// 최고 관리자 전용 기능을 시도해 거절된 기록은 남기고, 입력 오류는 남기지 않는다.
+		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("""
+						{"role":"ADMIN"}
+						"""))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(post(stockAdjustmentUrl(productId, skuId)).with(admin(adminId))
+				.contentType(MediaType.APPLICATION_JSON).content("{}"))
+				.andExpect(status().isBadRequest());
+
+		assertThat(jdbcTemplate.queryForList("""
+				select target_type, target_id, response_status from admin_audit_log
+				where actor_member_id = ? order by id
+				""", adminId))
+				.extracting(row -> row.get("target_type") + "/" + row.get("target_id") + "/" + row.get("response_status"))
+				.containsExactly("uploads/null/200", "skus/" + skuId + "/200", "users/" + memberId + "/403");
+
+		// 날짜만 보내면 toDate는 그날 끝까지 포함한다.
+		jdbcTemplate.update("update admin_audit_log set created_at = ? where actor_member_id = ? and target_type = 'uploads'",
+				LocalDateTime.of(2026, 10, 1, 23, 30), adminId);
+		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId))
+				.param("actorMemberId", String.valueOf(adminId)).param("targetType", "uploads")
+				.param("fromDate", "2026-10-01").param("toDate", "2026-10-01"))
+				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.totalElements").value(1));
+		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId))
+				.param("actorMemberId", String.valueOf(adminId)).param("targetType", "uploads")
+				.param("fromDate", "2026-10-02T00:00:00"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.totalElements").value(0));
+		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId)).param("fromDate", "2026-13-01"))
+				.andExpect(status().isBadRequest());
 	}
 
 	@Test
@@ -388,7 +456,7 @@ class AdminApiTests {
 				.andExpect(content().string(not(containsString("35000"))))
 				.andExpect(content().string(not(containsString("36000"))));
 
-		patchJson("/api/v1/admin/products/" + productId + "/visibility", """
+		patchJson("/api/v1/admin/products/" + productId, """
 				{"priceVisible":true}
 				""").andExpect(status().isOk());
 		mockMvc.perform(get("/api/v1/products/{id}", productId))
@@ -408,10 +476,8 @@ class AdminApiTests {
 		entityManager.clear();
 
 		patchJson("/api/v1/admin/products/" + productId, """
-				{"name":"경량 안전모","status":"HIDDEN","description":"",
-				 "skus":[{"id":%d,"optionName":"흰색","price":40000,"stock":5},
-				         {"optionName":"파랑","price":41000,"stock":3}]}
-				""".formatted(skuId))
+				{"name":"경량 안전모","status":"HIDDEN","description":""}
+				""")
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.name").value("경량 안전모"))
 				.andExpect(jsonPath("$.data.status").value("HIDDEN"))
@@ -474,7 +540,7 @@ class AdminApiTests {
 	}
 
 	@Test
-	void 입고하면_현재_재고에_수량이_더해지고_그사이_주문으로_줄어든_재고를_덮어쓰지_않는다() throws Exception {
+	void 재고를_조정하면_현재_재고에_더해지고_그사이_주문으로_줄어든_재고를_덮어쓰지_않는다() throws Exception {
 		String created = postJson("/api/v1/admin/products", """
 				{"name":"산업용 안전모","basePrice":30000,
 				 "skus":[{"optionName":"흰색","price":30000,"stock":10},{"optionName":"노랑","price":30000,"stock":0}]}
@@ -483,8 +549,8 @@ class AdminApiTests {
 		long whiteSku = ((Number) JsonPath.read(created, "$.data.skus[0].id")).longValue();
 		long yellowSku = ((Number) JsonPath.read(created, "$.data.skus[1].id")).longValue();
 
-		postJson(stockInUrl(productId, yellowSku), """
-				{"quantity":5}
+		postJson(stockAdjustmentUrl(productId, yellowSku), """
+				{"delta":5,"reason":"입고"}
 				""")
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.skus[0].stock").value(10))
@@ -493,13 +559,24 @@ class AdminApiTests {
 		// 관리자가 화면을 띄워 둔 사이 주문이 들어와 흰색 재고가 10 → 7로 줄어든 상황
 		jdbcTemplate.update("update product_sku set stock = 7, version = version + 1 where id = ?", whiteSku);
 
-		postJson(stockInUrl(productId, whiteSku), """
-				{"quantity":5}
+		postJson(stockAdjustmentUrl(productId, whiteSku), """
+				{"delta":5}
 				""")
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.skus[0].stock").value(12));
+		// 파손·분실은 음수로 줄인다. 현재 재고보다 많이 줄일 수는 없다.
+		postJson(stockAdjustmentUrl(productId, whiteSku), """
+				{"delta":-3,"reason":"파손"}
+				""")
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.skus[0].stock").value(9));
+		postJson(stockAdjustmentUrl(productId, whiteSku), """
+				{"delta":-10}
+				""")
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("OUT_OF_STOCK"));
 		mockMvc.perform(get("/api/v1/admin/products/{id}", productId))
-				.andExpect(jsonPath("$.data.skus[0].stock").value(12))
+				.andExpect(jsonPath("$.data.skus[0].stock").value(9))
 				.andExpect(jsonPath("$.data.skus[1].stock").value(5));
 		// 품절이던 옵션은 재고가 들어오면 고객 화면에서 품절이 풀린다.
 		mockMvc.perform(get("/api/v1/products/{id}", productId))
@@ -507,7 +584,7 @@ class AdminApiTests {
 	}
 
 	@Test
-	void 잘못된_입고_요청은_거부한다() throws Exception {
+	void 잘못된_재고_조정_요청은_거부한다() throws Exception {
 		String first = postJson("/api/v1/admin/products", """
 				{"name":"안전모","basePrice":30000,"skus":[{"optionName":"흰색","price":30000,"stock":10}]}
 				""").andReturn().getResponse().getContentAsString();
@@ -518,31 +595,31 @@ class AdminApiTests {
 		long skuId = ((Number) JsonPath.read(first, "$.data.skus[0].id")).longValue();
 		long otherProductSku = ((Number) JsonPath.read(second, "$.data.skus[0].id")).longValue();
 
-		for (String body : new String[] { "{\"quantity\":0}", "{\"quantity\":-3}", "{\"quantity\":1000001}", "{}" }) {
-			postJson(stockInUrl(productId, skuId), body)
+		for (String body : new String[] { "{\"delta\":0}", "{\"delta\":1000001}", "{\"delta\":-1000001}", "{}" }) {
+			postJson(stockAdjustmentUrl(productId, skuId), body)
 					.andExpect(status().isBadRequest())
 					.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 		}
 		// 다른 상품의 옵션, 없는 상품
-		postJson(stockInUrl(productId, otherProductSku), "{\"quantity\":1}")
+		postJson(stockAdjustmentUrl(productId, otherProductSku), "{\"delta\":1}")
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("SKU_NOT_FOUND"));
-		postJson(stockInUrl(999_999, skuId), "{\"quantity\":1}")
+		postJson(stockAdjustmentUrl(999_999, skuId), "{\"delta\":1}")
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
 
-		// 재고 상한(10억 개)을 넘는 입고는 받지 않고 재고도 그대로 둔다.
+		// 재고 상한(10억 개)을 넘는 조정은 받지 않고 재고도 그대로 둔다.
 		jdbcTemplate.update("update product_sku set stock = 999999999 where id = ?", skuId);
-		postJson(stockInUrl(productId, skuId), "{\"quantity\":2}")
+		postJson(stockAdjustmentUrl(productId, skuId), "{\"delta\":2}")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("STOCK_LIMIT_EXCEEDED"));
 		assertThat(jdbcTemplate.queryForObject("select stock from product_sku where id = ?", Integer.class, skuId))
 				.isEqualTo(999_999_999);
-		postJson(stockInUrl(productId, skuId), "{\"quantity\":1}").andExpect(status().isOk());
+		postJson(stockAdjustmentUrl(productId, skuId), "{\"delta\":1}").andExpect(status().isOk());
 
-		// 삭제된 상품에는 입고할 수 없다.
+		// 삭제된 상품의 재고는 조정할 수 없다.
 		mockMvc.perform(delete("/api/v1/admin/products/{id}", productId)).andExpect(status().isOk());
-		postJson(stockInUrl(productId, skuId), "{\"quantity\":1}").andExpect(status().isNotFound());
+		postJson(stockAdjustmentUrl(productId, skuId), "{\"delta\":1}").andExpect(status().isNotFound());
 	}
 
 	@Test
@@ -872,7 +949,7 @@ class AdminApiTests {
 				{"imageUrl":"/files/second.png","sortOrder":2}
 				""").andExpect(status().isCreated()).andExpect(jsonPath("$.data.visible").value(true)));
 		long firstId = idOf(postJson("/api/v1/admin/banners", """
-				{"imageUrl":"https://cdn.example.com/first.png","linkUrl":"/products/1","sortOrder":1,"visible":false}
+				{"imageUrl":"/files/first.png","linkUrl":"/products/1","sortOrder":1,"visible":false}
 				""").andExpect(status().isCreated()));
 
 		mockMvc.perform(get("/api/v1/admin/banners"))
@@ -884,7 +961,7 @@ class AdminApiTests {
 				{"linkUrl":"","visible":true}
 				""")
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.imageUrl").value("https://cdn.example.com/first.png"))
+				.andExpect(jsonPath("$.data.imageUrl").value("/files/first.png"))
 				.andExpect(jsonPath("$.data.linkUrl").doesNotExist())
 				.andExpect(jsonPath("$.data.visible").value(true));
 
@@ -900,6 +977,31 @@ class AdminApiTests {
 		mockMvc.perform(delete("/api/v1/admin/banners/{id}", secondId))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("BANNER_NOT_FOUND"));
+	}
+
+	@Test
+	void 상품과_배너_이미지는_업로드_API가_돌려준_주소만_받는다() throws Exception {
+		postJson("/api/v1/admin/banners", """
+				{"imageUrl":"https://tracker.example.com/a.png"}
+				""").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_IMAGE_URL"));
+		postJson("/api/v1/admin/products", """
+				{"name":"안전모","basePrice":1000,"status":"HIDDEN","imageUrl":"/files/../application.yaml"}
+				""").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_IMAGE_URL"));
+
+		long productId = idOf(postJson("/api/v1/admin/products", """
+				{"name":"안전모","basePrice":1000,"status":"HIDDEN","imageUrl":"/files/helmet.png"}
+				"""));
+		patchJson("/api/v1/admin/products/" + productId, """
+				{"imageUrl":"https://tracker.example.com/a.png"}
+				""").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_IMAGE_URL"));
+
+		// 제한 전에 저장한 외부 주소는 수정 화면이 그대로 다시 보내도 통과한다.
+		jdbcTemplate.update("update product set image_url = ? where id = ?", "https://old.example.com/a.png",
+				productId);
+		entityManager.clear();
+		patchJson("/api/v1/admin/products/" + productId, """
+				{"name":"새 안전모","imageUrl":"https://old.example.com/a.png"}
+				""").andExpect(status().isOk());
 	}
 
 	// ───────── 파일 업로드 ─────────
@@ -944,6 +1046,20 @@ class AdminApiTests {
 				.andExpect(status().isUnsupportedMediaType());
 	}
 
+	@Test
+	void 로컬_저장소에서는_직접_업로드를_쓸_수_없다고_알린다() throws Exception {
+		postJson("/api/v1/uploads/presigned-url", """
+				{"contentType":"image/png","contentLength":12}
+				""")
+				.andExpect(status().isNotImplemented())
+				.andExpect(jsonPath("$.code").value("PRESIGNED_UPLOAD_NOT_SUPPORTED"));
+		postJson("/api/v1/uploads/complete", """
+				{"fileKey":"products/2026/10/a.png"}
+				""")
+				.andExpect(status().isNotImplemented())
+				.andExpect(jsonPath("$.code").value("PRESIGNED_UPLOAD_NOT_SUPPORTED"));
+	}
+
 	// ───────── 대시보드 ─────────
 
 	@Test
@@ -984,8 +1100,8 @@ class AdminApiTests {
 		return mockMvc.perform(patch(url).contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 
-	private String stockInUrl(long productId, long skuId) {
-		return "/api/v1/admin/products/" + productId + "/skus/" + skuId + "/stock-in";
+	private String stockAdjustmentUrl(long productId, long skuId) {
+		return "/api/v1/admin/products/" + productId + "/skus/" + skuId + "/stock-adjustments";
 	}
 
 	private long idOf(ResultActions result) throws Exception {

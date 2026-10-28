@@ -26,6 +26,10 @@ public enum ErrorCode {
 	FILE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "파일이 너무 큽니다. 5MB 이하의 파일만 올릴 수 있습니다."),
 	REQUEST_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "요청 내용이 너무 큽니다."),
 	INVALID_FILE(HttpStatus.BAD_REQUEST, "업로드할 수 없는 파일입니다. JPG, PNG, GIF, WEBP 이미지만 올릴 수 있습니다."),
+	UPLOAD_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+	UPLOAD_NOT_FOUND(HttpStatus.NOT_FOUND, "업로드된 파일을 찾을 수 없습니다. 다시 업로드해 주세요."),
+	PRESIGNED_UPLOAD_NOT_SUPPORTED(HttpStatus.NOT_IMPLEMENTED, "이 서버에서는 직접 업로드를 쓸 수 없습니다. 파일 업로드(POST /api/v1/uploads)를 사용해 주세요."),
+	INVALID_IMAGE_URL(HttpStatus.BAD_REQUEST, "이미지 주소는 파일 업로드 API가 돌려준 주소만 쓸 수 있습니다."),
 	BANNER_NOT_FOUND(HttpStatus.NOT_FOUND, "배너를 찾을 수 없습니다."),
 	CONTENT_NOT_FOUND(HttpStatus.NOT_FOUND, "콘텐츠를 찾을 수 없습니다."),
 
@@ -38,10 +42,17 @@ public enum ErrorCode {
 	CURRENT_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "현재 비밀번호가 올바르지 않습니다."),
 	PASSWORD_NOT_CHANGED(HttpStatus.BAD_REQUEST, "새 비밀번호가 현재 비밀번호와 같습니다."),
 	ACCOUNT_HAS_ACTIVE_ORDERS(HttpStatus.CONFLICT, "진행 중인 주문이 있어 탈퇴할 수 없습니다."),
+	EMAIL_VERIFICATION_REQUIRED(HttpStatus.BAD_REQUEST, "이메일 인증을 먼저 해 주세요. 인증 후 30분이 지났다면 다시 인증해 주세요."),
+	VERIFICATION_CODE_INVALID(HttpStatus.BAD_REQUEST, "인증번호가 올바르지 않거나 만료되었습니다."),
+	VERIFICATION_ATTEMPTS_EXCEEDED(HttpStatus.BAD_REQUEST, "인증번호를 여러 번 틀렸습니다. 인증번호를 다시 받아 주세요."),
+	VERIFICATION_RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "인증번호는 1분에 한 번만 받을 수 있습니다. 잠시 후 다시 시도해 주세요."),
+	VERIFICATION_DAILY_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "인증번호 요청·입력 횟수가 하루 한도를 넘었습니다. 24시간 뒤에 다시 시도해 주세요."),
+	EMAIL_SEND_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요."),
 
 	// 상품
 	PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
 	PRODUCT_NOT_ON_SALE(HttpStatus.CONFLICT, "판매 중인 상품이 아닙니다."),
+	PRICE_HIDDEN_PRODUCT(HttpStatus.CONFLICT, "금액 미표시 상품은 주문할 수 없습니다. 견적 문의를 이용해 주세요."),
 	OUT_OF_STOCK(HttpStatus.CONFLICT, "재고가 부족합니다."),
 	SKU_NOT_FOUND(HttpStatus.NOT_FOUND, "상품 옵션을 찾을 수 없습니다."),
 	STOCK_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "재고는 옵션당 10억 개를 넘을 수 없습니다."),
@@ -56,10 +67,7 @@ public enum ErrorCode {
 	// 주문
 	ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
 	ORDER_EXPIRED(HttpStatus.GONE, "주문이 만료되었습니다."),
-	FORBIDDEN_ORDER(HttpStatus.FORBIDDEN, "본인의 주문이 아닙니다."),
 	INVALID_ORDER_STATUS(HttpStatus.CONFLICT, "현재 주문 상태에서는 처리할 수 없습니다."),
-	DELIVERY_REQUIRED(HttpStatus.CONFLICT, "배송지를 먼저 입력해 주세요."),
-	NO_ORDERABLE_ITEMS(HttpStatus.CONFLICT, "주문할 수 있는 상품이 없습니다."),
 	ORDER_AMOUNT_INVALID(HttpStatus.CONFLICT, "결제할 금액이 없는 주문은 만들 수 없습니다."),
 	ORDER_AMOUNT_TOO_LARGE(HttpStatus.BAD_REQUEST, "한 번에 결제할 수 있는 금액을 넘었습니다. 나눠서 주문해 주세요."),
 

@@ -1,6 +1,5 @@
 package com.example.shopping.domain.member.service;
 
-import java.util.Locale;
 
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -11,6 +10,7 @@ import org.springframework.stereotype.Component;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberRole;
 import com.example.shopping.domain.member.repository.MemberRepository;
+import com.example.shopping.global.validation.ContactFormats;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +41,7 @@ public class AdminAccountInitializer implements ApplicationRunner {
 			// 짧은 비밀번호로 관리자 계정이 만들어지는 것을 막기 위해 기동을 중단한다.
 			throw new IllegalStateException("관리자 초기 비밀번호(ADMIN_PASSWORD)는 " + MIN_PASSWORD_LENGTH + "자 이상이어야 합니다.");
 		}
-		String email = properties.email().trim().toLowerCase(Locale.ROOT);
+		String email = ContactFormats.loginEmail(properties.email());
 		Member existing = memberRepository.findByEmail(email).orElse(null);
 		if (existing != null) {
 			if (existing.getRole() == MemberRole.ADMIN) {

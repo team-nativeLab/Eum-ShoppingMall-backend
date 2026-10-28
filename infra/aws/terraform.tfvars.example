@@ -4,11 +4,17 @@ certificate_arn      = "arn:aws:acm:ap-northeast-2:123456789012:certificate/repl
 api_domain           = "api.example.com"
 cors_allowed_origins = "https://shop.example.com"
 image_tag            = "replace-with-immutable-git-sha"
+# The web frontend must share the API's registrable domain (shop.example.com + api.example.com) for login refresh to work.
+# A *.vercel.app frontend is a different site from any API domain; see docs/deployment-proxy.md.
+refresh_cookie_same_site = "Strict"
 
 # Create these values in AWS Secrets Manager first; enter ARNs, never secret values.
 application_secret_arns = {
   JWT_SECRET     = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/jwt-replace"
   TOSS_SECRET_KEY = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/toss-replace"
+  # Required when upload_storage = "s3": access key of the uploads_iam_user output.
+  # UPLOAD_S3_ACCESS_KEY = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/s3-access-key-replace"
+  # UPLOAD_S3_SECRET_KEY = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/s3-secret-key-replace"
 }
 database_app_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/db-app-replace"
 
@@ -18,3 +24,5 @@ database_app_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:se
 db_multi_az = false
 # For production, enable Multi-AZ and scale ECS/Redis after reviewing the cost estimate.
 enable_ecs_service = false
+# Keep local until existing EFS images are copied to S3 (docs/deployment-aws.md), then set to s3.
+upload_storage = "local"
