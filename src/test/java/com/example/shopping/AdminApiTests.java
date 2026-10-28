@@ -156,12 +156,11 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.data.role").value("USER"));
 
 		assertThat(roleOf("role-target@example.com")).isEqualTo("USER");
-		assertThat(jdbcTemplate.queryForObject("select access_token_version from member where id = ?", Long.class,
-				memberId)).isZero();
 		assertThat(jdbcTemplate.queryForObject("select count(*) from refresh_token where member_id = ?", Long.class,
 				memberId)).isZero();
+		// 권한을 회수하면 이전 권한이 담긴 Access 토큰도 바로 쓸 수 없다.
 		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
-				.andExpect(status().isOk());
+				.andExpect(status().isUnauthorized());
 
 		long adminId = insertMember("ordinary-admin@example.com", "관리자", "ADMIN");
 		mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", memberId).with(admin(adminId))

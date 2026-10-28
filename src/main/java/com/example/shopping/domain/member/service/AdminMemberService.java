@@ -79,6 +79,7 @@ public class AdminMemberService {
 		if (target.getRole() != role) {
 			target.changeRole(role);
 			refreshTokenService.revokeAll(targetId);
+			memberTokenStateCache.refresh(target);
 		}
 		List<Order> recentOrders = orderRepository.findByMemberId(targetId,
 				PageRequest.of(0, RECENT_ORDER_COUNT, Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
