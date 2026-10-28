@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -12,7 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.example.shopping.global.scheduling.SchedulerLockService;
+import com.example.shopping.global.scheduling.ScheduledJobRunner;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -30,40 +29,24 @@ public class UnusedImageCleaner {
 
 	private final FileStorage fileStorage;
 	private final List<ImageReferences> imageReferences;
-	private final SchedulerLockService schedulerLockService;
+	private final ScheduledJobRunner jobRunner;
 	private final Duration minAge;
 	private final int maxDeletesPerRun;
 
 	public UnusedImageCleaner(FileStorage fileStorage, List<ImageReferences> imageReferences,
-			SchedulerLockService schedulerLockService,
+			ScheduledJobRunner jobRunner,
 			@Value("${upload.cleanup.min-age-hours:24}") long minAgeHours,
 			@Value("${upload.cleanup.max-deletes-per-run:1000}") int maxDeletesPerRun) {
 		this.fileStorage = fileStorage;
 		this.imageReferences = imageReferences;
-		this.schedulerLockService = schedulerLockService;
+		this.jobRunner = jobRunner;
 		this.minAge = Duration.ofHours(minAgeHours);
 		this.maxDeletesPerRun = maxDeletesPerRun;
 	}
 
 	@Scheduled(cron = "${upload.cleanup.cron:0 30 4 * * *}")
 	public void purgeUnusedImages() {
-		Optional<String> owner = schedulerLockService.tryAcquire(JOB_NAME, LOCK_DURATION);
-		if (owner.isEmpty()) {
-			log.debug("정기 작업 {} 생략: 다른 서버가 실행 중입니다.", JOB_NAME);
-			return;
-		}
-		long startedAt = System.nanoTime();
-		try {
-			int deleted = purge(Instant.now().minus(minAge));
-			log.info("정기 작업 {} 완료: 삭제 {}, 소요 {}ms", JOB_NAME, deleted,
-					Duration.ofNanos(System.nanoTime() - startedAt).toMillis());
-		} catch (RuntimeException e) {
-			log.error("정기 작업 {} 실행 실패", JOB_NAME, e);
-		} finally {
-			if (!schedulerLockService.release(JOB_NAME, owner.get())) {
-				log.error("정기 작업 {} 잠금이 만료되었거나 소유권을 잃었습니다.", JOB_NAME);
-			}
-		}
+		jobRunner.run(JOB_NAME, LOCK_DURATION, (stats, owner) -> stats.processed(purge(Instant.now().minus(minAge))));
 	}
 
 	/**

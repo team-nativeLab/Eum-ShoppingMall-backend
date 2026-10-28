@@ -26,10 +26,14 @@ Uploads use local disk by default (`UPLOAD_STORAGE=local`). To use S3, set `UPLO
 
 ## Request tracing and metrics
 
-Every response includes `X-Request-Id`. A safe incoming value (1–64 letters, numbers, dots, underscores, or hyphens) is echoed; otherwise the server generates a UUID. The same value is included in application log lines. Actuator `health` and `metrics` are enabled; only health probes are public, while the remaining actuator routes require an administrator token. A metrics backend and alert delivery destination still need to be selected before operational alerts can be enabled.
+Every response includes `X-Request-Id`. A safe incoming value (1–64 letters, numbers, dots, underscores, or hyphens) is echoed; otherwise the server generates a UUID. The same value is included in application log lines. Actuator `health` and `metrics` are enabled; only health probes are public, while the remaining actuator routes require an administrator token. A metrics backend and alert delivery destination still need to be selected before operational alerts can be enabled. Situations that need a person (PG amount mismatch, failed automatic refund, a deposit that conflicts with the order state, stopped cancellation recovery, notifications that failed every attempt) are logged as `[수동 확인 필요: reason]` and counted in `manual.check.required{reason}`, so an alert can be attached to that metric. Scheduled jobs run through `ScheduledJobRunner`, which takes a database lease so only one instance runs each job and reports `scheduled.job.failures{job}` (job exceptions and per-item failures) and `scheduled.job.lock.lost{job}` (the lease expired before the job finished).
 ## Member withdrawal and suspension
 
 `DELETE /api/v1/me` requires `{"password":"..."}`. Withdrawal is rejected while the member has a pending, processing, waiting-for-deposit, paid, preparing, shipped, or cancel-requested (refund not yet confirmed) order (`OrderStatus.IN_PROGRESS`). On success, the account is marked `WITHDRAWN`, its login credentials and profile identifiers are anonymized, and refresh tokens and cart items are removed. Historical orders remain. Administrators can suspend or reactivate another account with `PATCH /api/v1/admin/users/{userId}/status`; suspending requires a reason and revokes refresh tokens.
+
+## API access policy
+
+Which APIs are public, admin-only, rate limited per IP, and recorded in the admin audit log is defined in one table, `global/security/ApiPolicy`; the security configuration, the rate-limit filter, and the audit interceptor all read it. `ApiPolicyTests` fails when controllers and the table disagree: an `Admin*` controller outside the admin table or not audited, an `/api/v1/admin/**` route served by a non-admin controller, a stale path or rate-limit rule, or a login-free write without a rate limit. The per-IP limit and the login lock share one Redis counter implementation (`SharedCounter`) that falls back to per-instance counting during a Redis outage.
 
 ## Login attempt limit
 
@@ -46,3 +50,7 @@ Email verification codes (sign-up and password reset) can be sent at most 5 time
 ## Shipping policy
 
 Orders have no discount; the shipping fee is the only amount added to the item total. Administrators set it with `GET`/`PUT /api/v1/admin/shipping-policy` (`{"shippingFee":3000,"freeShippingThreshold":50000}`): items totaling at least `freeShippingThreshold` ship free, omitting `freeShippingThreshold` always charges the fee, and `shippingFee` 0 makes shipping free. Until an administrator saves a policy, the fee is 5,000 KRW below 100,000 KRW. Cart estimates and new orders use the current policy; each order stores the fee it was created with, so policy changes do not alter existing orders. `GET /api/v1/shipping-policy` returns the policy without login for storefront notices. The cart response no longer has `discountAmount`; order responses keep it for orders created before the change, and new orders record 0.
+
+## Product read cache
+
+Public product reads (home, categories, list/search, facets, suggestions) are cached in Redis for `PRODUCT_READ_CACHE_TTL_SECONDS` (default 60). Only administrator catalog changes clear the whole cache; stock and sales-count changes from orders show up within the TTL, while product detail, cart, and order checks always read the database. `product.read.cache{result=hit|miss|unavailable}` counts lookups.

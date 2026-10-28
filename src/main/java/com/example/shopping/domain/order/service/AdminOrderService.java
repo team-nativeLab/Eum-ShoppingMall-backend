@@ -44,9 +44,14 @@ public class AdminOrderService {
 	public PageResponse<AdminOrderSummaryResponse> search(OrderStatus status, Long memberId, String orderNo,
 			Pageable pageable) {
 		SortValidator.requireAllowed(pageable, SORTABLE);
-		String trimmed = StringUtils.hasText(orderNo) ? orderNo.trim() : null;
-		return PageResponse.from(orderRepository.search(status, memberId, trimmed, pageable)
+		String orderNoPrefix = StringUtils.hasText(orderNo) ? likePrefix(orderNo.trim()) : null;
+		return PageResponse.from(orderRepository.search(status, memberId, orderNoPrefix, pageable)
 				.map(AdminOrderSummaryResponse::from));
+	}
+
+	/** 입력한 값으로 시작하는 LIKE 패턴. %와 _는 글자 그대로 찾는다. */
+	private static String likePrefix(String value) {
+		return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
 	}
 
 	public AdminOrderDetailResponse getDetail(Long orderId) {

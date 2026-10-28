@@ -24,7 +24,10 @@ import com.example.shopping.domain.upload.service.FileStorage;
 import com.example.shopping.domain.upload.service.ImageReferences;
 import com.example.shopping.domain.upload.service.LocalFileStorage;
 import com.example.shopping.domain.upload.service.UnusedImageCleaner;
+import com.example.shopping.global.scheduling.ScheduledJobRunner;
 import com.example.shopping.global.scheduling.SchedulerLockService;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /** 참조 없는 업로드 이미지 정리. 다른 테스트가 올린 파일과 섞이지 않게 임시 폴더의 로컬 저장소로 확인한다. */
 @SpringBootTest
@@ -49,7 +52,8 @@ class UnusedImageCleanerTests {
 
 	private UnusedImageCleaner cleaner(int maxDeletesPerRun) throws IOException {
 		FileStorage storage = new LocalFileStorage(uploadDir.toString());
-		return new UnusedImageCleaner(storage, imageReferences, schedulerLockService, 24, maxDeletesPerRun);
+		return new UnusedImageCleaner(storage, imageReferences,
+				new ScheduledJobRunner(schedulerLockService, new SimpleMeterRegistry()), 24, maxDeletesPerRun);
 	}
 
 	@Test
