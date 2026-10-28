@@ -5,7 +5,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 
-import org.springframework.http.HttpMethod;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -29,31 +28,11 @@ import jakarta.servlet.http.HttpServletResponse;
  * 정상 동작 시 Redis 카운터를 공유하고, Redis 장애 시에는 각 인스턴스의 제한으로 요청을 완화한다(SharedCounter).
  */
 public class RateLimitFilter extends OncePerRequestFilter {
-	// 보안 설정과 같은 방식으로 경로를 비교한다. *는 경로 한 칸(주문번호 등)을 뜻한다.
-	private static final List<Rule> RULES = List.of(
-			rule(HttpMethod.POST, "/api/v1/auth/login", "POST /api/v1/login"),
-			rule(HttpMethod.POST, "/api/v1/auth/signup"),
-			rule(HttpMethod.POST, "/api/v1/auth/refresh"),
-			// 인증번호 발송(메일 비용·스팸)과 확인(번호 대입)을 IP별로 제한한다.
-			rule(HttpMethod.POST, "/api/v1/auth/email-verifications"),
-			rule(HttpMethod.POST, "/api/v1/auth/email-verifications/confirm"),
-			rule(HttpMethod.POST, "/api/v1/auth/password-reset"),
-			rule(HttpMethod.POST, "/api/v1/auth/password-reset/confirm"),
-			rule(HttpMethod.POST, "/api/v1/admin/auth/login", "POST /api/v1/login"),
-			rule(HttpMethod.PATCH, "/api/v1/me/password"),
-			rule(HttpMethod.POST, "/api/v1/quotes"),
-			rule(HttpMethod.POST, "/api/v1/support/inquiries"),
-			rule(HttpMethod.POST, "/api/v1/orders"),
-			rule(HttpMethod.POST, "/api/v1/orders/*/cancel"),
-			rule(HttpMethod.POST, "/api/v1/payments/confirm"),
-			rule(HttpMethod.POST, "/api/v1/uploads/presigned-url"),
-			rule(HttpMethod.POST, "/api/v1/uploads"),
-			// 공개 상품 조회는 화면 기능별로 따로 센다. 검색 한 번에 목록·필터 개수를 함께 부르고,
-			// 자동 완성은 글자를 칠 때마다 부르므로 한 묶음으로 세면 한 사무실(같은 공인 IP) 직원 몇 명만으로도 막힌다.
-			publicRead("/api/v1/products/suggestions", "GET /api/v1/products/suggestions", Limit.AUTOCOMPLETE),
-			publicRead("/api/v1/products/facets", "GET /api/v1/products/facets", Limit.PUBLIC_READ),
-			publicRead("/api/v1/products", "GET /api/v1/products", Limit.PUBLIC_READ),
-			publicRead("/api/v1/products/**", "GET /api/v1/products/{productId}", Limit.PUBLIC_READ));
+	// 어떤 API를 어떻게 제한할지는 ApiPolicy.RATE_LIMITS에 둔다. 보안 설정과 같은 방식으로 경로를 비교한다.
+	private static final List<Rule> RULES = ApiPolicy.RATE_LIMITS.stream()
+			.map(limit -> new Rule(limit.bucket(),
+					PathPatternRequestMatcher.withDefaults().matcher(limit.method(), limit.pattern()), limit.limit()))
+			.toList();
 
 	private static final long WINDOW_MILLIS = 60_000;
 	private static final int MAX_TRACKED_KEYS = 100_000;
@@ -113,22 +92,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
 		chain.doFilter(request, response);
 	}
 
-	private static Rule rule(HttpMethod method, String pattern) {
-		return rule(method, pattern, method + " " + pattern);
-	}
-
-	private static Rule rule(HttpMethod method, String pattern, String bucket) {
-		return new Rule(bucket, PathPatternRequestMatcher.withDefaults().matcher(method, pattern), Limit.DEFAULT);
-	}
-
-	private static Rule publicRead(String pattern, String bucket, Limit limit) {
-		return new Rule(bucket, PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, pattern), limit);
-	}
-
-	private enum Limit {
-		DEFAULT, PUBLIC_READ, AUTOCOMPLETE
-	}
-
-	private record Rule(String bucket, RequestMatcher matcher, Limit limit) {
+	private record Rule(String bucket, RequestMatcher matcher, ApiPolicy.Limit limit) {
 	}
 }
