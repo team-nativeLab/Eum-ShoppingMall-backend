@@ -18,6 +18,8 @@ import com.example.shopping.domain.payment.gateway.PgPayment;
 import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.gateway.PgUnavailableException;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
+import com.example.shopping.domain.payment.service.VirtualAccountReconciler;
+import com.example.shopping.global.monitoring.ManualCheckAlerts;
 import com.example.shopping.global.scheduling.ScheduledJobRunner;
 import com.example.shopping.global.scheduling.SchedulerLockService;
 
@@ -44,6 +46,8 @@ public class OrderMaintenanceScheduler {
 	private final PaymentGateway paymentGateway;
 	private final SchedulerLockService schedulerLockService;
 	private final ScheduledJobRunner jobRunner;
+	private final VirtualAccountReconciler virtualAccountReconciler;
+	private final ManualCheckAlerts alerts;
 
 	/**
 	 * 결제 기한이 지난 결제 대기 주문을 만료시키고 잡아 둔 재고를 되돌린다.
@@ -121,13 +125,14 @@ public class OrderMaintenanceScheduler {
 		}
 		if (actual.get().totalAmount() != order.getTotalAmount()) {
 			// 자동으로 판단하지 않고 사람이 확인하도록 남겨 둔다.
-			log.error("주문 {} PG 승인 금액 불일치(서버 {} / PG {}). 수동 확인이 필요합니다.", order.getOrderNo(),
+			alerts.raise("pg_amount_mismatch", "주문 {} PG 승인 금액이 주문과 다릅니다(서버 {} / PG {}).", order.getOrderNo(),
 					order.getTotalAmount(), actual.get().totalAmount());
 			return;
 		}
 		if (!orderTxService.completePayment(orderId, actual.get())
 				&& actual.get().status() == PgStatus.WAITING_FOR_DEPOSIT) {
-			log.error("주문 {} 가상계좌 정보가 부족해 승인 보정을 보류합니다.", order.getOrderNo());
+			alerts.raise("virtual_account_info_missing", "주문 {} PG 응답에 가상계좌 정보가 없어 승인 보정을 보류합니다.",
+					order.getOrderNo());
 		}
 	}
 
@@ -185,31 +190,9 @@ public class OrderMaintenanceScheduler {
 		if (order == null || payment == null) {
 			return;
 		}
-
-		Optional<PgPayment> actual = paymentGateway.findByOrderNo(order.getOrderNo());
-		if (actual.isEmpty() || !matchesVirtualAccount(order, payment, actual.get())) {
-			log.error("주문 {} 가상계좌 PG 정보 불일치. 수동 확인이 필요합니다.", order.getOrderNo());
-			return;
-		}
-
-		PgPayment pg = actual.get();
-		if (pg.status() == PgStatus.DONE) {
-			orderTxService.completeVirtualAccountDeposit(orderId, payment.getId(), pg);
-			return;
-		}
-		if ((pg.status() == PgStatus.WAITING_FOR_DEPOSIT || pg.status() == PgStatus.CANCELED)
-				&& !payment.getVirtualAccountDueAt().isAfter(LocalDateTime.now())) {
-			orderTxService.expireVirtualAccount(orderId, payment.getId());
-		}
-	}
-
-	private boolean matchesVirtualAccount(Order order, Payment payment, PgPayment pg) {
-		return "가상계좌".equals(payment.getMethod())
-				&& payment.getVirtualAccountDueAt() != null
-				&& payment.getVirtualAccountNumber() != null
-				&& order.getOrderNo().equals(pg.orderNo())
-				&& payment.getPaymentKey().equals(pg.paymentKey())
-				&& pg.totalAmount() == order.getTotalAmount()
-				&& payment.matchesWebhookSecret(pg.secret());
+		paymentGateway.findByOrderNo(order.getOrderNo()).ifPresentOrElse(
+				pg -> virtualAccountReconciler.reconcile(order, payment, pg),
+				() -> alerts.raise("virtual_account_not_found", "주문 {} 입금 대기 중인 가상계좌를 PG에서 찾지 못했습니다.",
+						order.getOrderNo()));
 	}
 }

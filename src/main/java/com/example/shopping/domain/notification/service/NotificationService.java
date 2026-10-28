@@ -21,6 +21,7 @@ import com.example.shopping.domain.notification.entity.NotificationMessage;
 import com.example.shopping.domain.notification.entity.NotificationStatus;
 import com.example.shopping.domain.notification.repository.NotificationMessageRepository;
 import com.example.shopping.domain.notification.sender.AlimtalkSender;
+import com.example.shopping.global.monitoring.ManualCheckAlerts;
 import com.example.shopping.global.scheduling.ScheduledJobRunner;
 
 import lombok.extern.slf4j.Slf4j;
@@ -46,14 +47,16 @@ public class NotificationService implements DisposableBean {
 	private final AlimtalkSender alimtalkSender;
 	private final TransactionTemplate transactionTemplate;
 	private final ScheduledJobRunner jobRunner;
+	private final ManualCheckAlerts alerts;
 	private final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
 	public NotificationService(NotificationMessageRepository repository, AlimtalkSender alimtalkSender,
-			TransactionTemplate transactionTemplate, ScheduledJobRunner jobRunner) {
+			TransactionTemplate transactionTemplate, ScheduledJobRunner jobRunner, ManualCheckAlerts alerts) {
 		this.repository = repository;
 		this.alimtalkSender = alimtalkSender;
 		this.transactionTemplate = transactionTemplate;
 		this.jobRunner = jobRunner;
+		this.alerts = alerts;
 		executor.setThreadNamePrefix("notification-");
 		executor.setCorePoolSize(2);
 		executor.setMaxPoolSize(4);
@@ -142,7 +145,7 @@ public class NotificationService implements DisposableBean {
 			} else {
 				current.markFailed(failure, LocalDateTime.now());
 				if (current.getStatus() == NotificationStatus.FAILED) {
-					log.error("알림톡을 {}번 모두 보내지 못했습니다. 확인이 필요합니다: id={}, 대상={} {}",
+					alerts.raise("notification_failed", "알림톡을 {}번 모두 보내지 못했습니다: id={}, 대상={} {}",
 							NotificationMessage.MAX_ATTEMPTS, id, current.getReferenceType(), current.getReferenceId());
 				}
 			}
