@@ -52,18 +52,26 @@ public class OrderMaintenanceScheduler {
 	/**
 	 * 결제 기한이 지난 결제 대기 주문을 만료시키고 잡아 둔 재고를 되돌린다.
 	 * DB만 쓰는 작업이라 자기 잠금으로 돌린다. PG를 부르는 가상계좌 작업이 느려도 재고 반환이 늦어지지 않는다.
+	 * 한꺼번에 많이 쌓여도 다음 실행(1분 뒤)까지 재고를 묶어 두지 않도록, 남은 것이 있으면 작업 시간 안에서 이어서 처리한다.
 	 */
 	@Scheduled(fixedDelay = 60_000)
 	public void expireUnpaidOrders() {
 		jobRunner.run("expireUnpaidOrders", LOCK_DURATION, (stats, owner) -> {
-			List<Long> pendingIds = orderRepository.findExpiredPendingIds(LocalDateTime.now(),
-					PageRequest.of(0, DB_BATCH_SIZE));
-			for (Long orderId : pendingIds) {
-				if (stats.timeLimitReached(JOB_TIME_LIMIT)) {
-					break;
+			List<Long> pendingIds;
+			do {
+				int processedBefore = stats.processedCount();
+				pendingIds = orderRepository.findExpiredPendingIds(LocalDateTime.now(), PageRequest.of(0, DB_BATCH_SIZE));
+				for (Long orderId : pendingIds) {
+					if (stats.timeLimitReached(JOB_TIME_LIMIT)) {
+						return;
+					}
+					process(stats, "주문 만료 처리", orderId, () -> orderTxService.expire(orderId));
 				}
-				process(stats, "주문 만료 처리", orderId, () -> orderTxService.expire(orderId));
-			}
+				// 한 묶음에서 하나도 처리하지 못했으면(계속 실패하는 주문뿐) 다음 실행으로 넘긴다.
+				if (stats.processedCount() == processedBefore) {
+					return;
+				}
+			} while (pendingIds.size() == DB_BATCH_SIZE);
 		});
 	}
 
@@ -100,19 +108,37 @@ public class OrderMaintenanceScheduler {
 		});
 	}
 
-	/** PG 응답 누락으로 멈춘 취소와 과거 CANCELED/DONE 불일치를 복구한다. */
+	/** PG 응답 누락으로 취소 확인 중(CANCEL_REQUESTED)에 멈춘 주문을 PG의 실제 상태에 맞춘다. */
 	@Scheduled(fixedDelay = 300_000)
 	public void reconcileStuckCancellations() {
 		jobRunner.run("reconcileStuckCancellations", LOCK_DURATION, (stats, owner) -> {
 			LocalDateTime before = LocalDateTime.now().minusMinutes(STUCK_AFTER_MINUTES);
-			List<Long> orderIds = orderRepository.findStuckCancellationIds(before, PageRequest.of(0, PG_BATCH_SIZE));
-			for (Long orderId : orderIds) {
-				if (stats.timeLimitReached(JOB_TIME_LIMIT)) {
-					break;
-				}
-				process(stats, "취소 상태 보정", orderId, () -> orderCancelService.reconcileCancellation(orderId));
-			}
+			reconcileCancellations(stats, orderRepository.findStuckCancelRequestIds(before,
+					PageRequest.of(0, PG_BATCH_SIZE)));
 		});
+	}
+
+	/**
+	 * 예전에 주문 상태만 먼저 취소로 바뀌고 결제는 완료로 남은 주문(CANCELED + DONE)을 PG에 맞춘다.
+	 * #42 이후로는 취소 완료와 결제 취소가 한 트랜잭션이라 새로 생기지 않는다. 확인하려면 취소된 주문을 모두 읽어야 하므로
+	 * 5분마다가 아니라 하루에 한 번만 본다.
+	 */
+	@Scheduled(cron = "0 45 4 * * *")
+	public void reconcileLegacyCancellations() {
+		jobRunner.run("reconcileLegacyCancellations", LOCK_DURATION, (stats, owner) -> {
+			LocalDateTime before = LocalDateTime.now().minusMinutes(STUCK_AFTER_MINUTES);
+			reconcileCancellations(stats, orderRepository.findCanceledWithDonePaymentIds(before,
+					PageRequest.of(0, PG_BATCH_SIZE)));
+		});
+	}
+
+	private void reconcileCancellations(ScheduledJobRunner.JobStats stats, List<Long> orderIds) {
+		for (Long orderId : orderIds) {
+			if (stats.timeLimitReached(JOB_TIME_LIMIT)) {
+				return;
+			}
+			process(stats, "취소 상태 보정", orderId, () -> orderCancelService.reconcileCancellation(orderId));
+		}
 	}
 
 	private void reconcile(Long orderId) {
