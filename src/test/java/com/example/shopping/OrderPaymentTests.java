@@ -587,6 +587,22 @@ class OrderPaymentTests {
 	}
 
 	@Test
+	void 만료할_주문이_한_묶음보다_많아도_한_번_실행에_모두_만료한다() throws Exception {
+		for (int i = 0; i < 120; i++) {
+			jdbcTemplate.update("""
+					insert into orders (order_no, member_id, status, total_amount, item_amount, discount_amount,
+					                    shipping_fee, order_name, expires_at, version, created_at, updated_at)
+					values (?, ?, 'PENDING', 10000, 10000, 0, 0, '만료 대상', ?, 0, now(), now())
+					""", "EXPIRE-" + i, buyer, LocalDateTime.now().minusMinutes(1));
+		}
+
+		scheduler.expireUnpaidOrders();
+
+		assertThat(jdbcTemplate.queryForObject("select count(*) from orders where status = 'PENDING'", Long.class))
+				.isZero();
+	}
+
+	@Test
 	void 가상계좌_보정_작업이_잠금을_잡고_있어도_결제_기한_만료는_처리된다() throws Exception {
 		long sku = insertProductWithSku("안전모", 30000, true, 5);
 		String expiredOrder = createOrder(buyer, sku, 2);
@@ -862,7 +878,10 @@ class OrderPaymentTests {
 		entityManager.clear();
 		doReturn(Optional.of(pg(orderNo, PgStatus.CANCELED, 65000))).when(paymentGateway).findByOrderNo(orderNo);
 
+		// 5분마다 도는 취소 보정은 취소 확인 중인 주문만 보고, 예전 불일치는 하루 한 번 도는 작업이 맡는다.
 		scheduler.reconcileStuckCancellations();
+		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("DONE");
+		scheduler.reconcileLegacyCancellations();
 
 		assertThat(statusOf(orderNo)).isEqualTo("CANCELED");
 		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("CANCELED");
@@ -881,7 +900,7 @@ class OrderPaymentTests {
 		when(paymentGateway.cancel(PAYMENT_KEY, "고객 주문 취소", "cancel-" + orderNo))
 				.thenReturn(pg(orderNo, PgStatus.CANCELED, 65000));
 
-		scheduler.reconcileStuckCancellations();
+		scheduler.reconcileLegacyCancellations();
 
 		assertThat(statusOf(orderNo)).isEqualTo("CANCELED");
 		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("CANCELED");
@@ -899,7 +918,7 @@ class OrderPaymentTests {
 		entityManager.clear();
 		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 65000))).when(paymentGateway).findByOrderNo(orderNo);
 
-		scheduler.reconcileStuckCancellations();
+		scheduler.reconcileLegacyCancellations();
 
 		assertThat(statusOf(orderNo)).isEqualTo("CANCELED");
 		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("DONE");
