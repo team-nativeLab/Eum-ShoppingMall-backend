@@ -1,3 +1,6 @@
+# upload_storage = "local"일 때 업로드 이미지를 저장하는 EFS. ECS 태스크는 액세스 포인트를 거쳐 /uploads만 쓴다.
+# S3로 옮긴 뒤에는 지울 수 있다(docs/deployment-aws.md의 "업로드 이미지를 S3로 옮기기").
+
 resource "aws_efs_file_system" "uploads" {
   encrypted        = true
   performance_mode = "generalPurpose"

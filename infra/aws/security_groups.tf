@@ -1,3 +1,6 @@
+# 보안 그룹. 들어오는 트래픽은 인터넷 → ALB → 앱 → RDS·Redis·EFS 순서로만 허용한다.
+# description은 주석이 아니라 AWS에 저장되는 값이다. 바꾸면 보안 그룹이 교체되고 한글도 쓸 수 없어 영어로 둔다.
+
 resource "aws_security_group" "alb" {
   name_prefix = "${var.name}-alb-"
   description = "Public HTTPS entry point"
@@ -25,6 +28,7 @@ resource "aws_security_group" "alb" {
   }
 }
 
+# 앱은 결제·메일 같은 외부 API를 호출하므로 나가는 트래픽을 막지 않는다.
 resource "aws_security_group" "app" {
   name_prefix = "${var.name}-app-"
   description = "Private ECS tasks; only ALB can reach the application"

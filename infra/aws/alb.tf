@@ -1,3 +1,5 @@
+# 공용 진입점인 ALB. HTTP는 HTTPS로 돌려보내고, HTTPS 요청을 앱으로 넘긴다.
+
 resource "aws_lb" "api" {
   name               = "${var.name}-alb"
   internal           = false

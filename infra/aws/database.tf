@@ -1,3 +1,6 @@
+# RDS MySQL. 마스터 비밀번호는 AWS가 Secrets Manager에서 관리한다(rds_master_secret_arn 출력).
+# 앱은 마스터 계정을 쓰지 않고 database_app_secret_arn의 최소 권한 계정으로 접속한다.
+
 resource "aws_db_subnet_group" "main" {
   name       = "${var.name}-db"
   subnet_ids = aws_subnet.data[*].id

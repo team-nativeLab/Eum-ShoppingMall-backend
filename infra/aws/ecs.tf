@@ -1,3 +1,5 @@
+# API를 실행하는 ECS Fargate와 로그 그룹.
+
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/ecs/${var.name}"
   retention_in_days = 30
@@ -39,6 +41,7 @@ resource "aws_ecs_task_definition" "api" {
       { name = "REDIS_HOST", value = aws_elasticache_replication_group.main.primary_endpoint_address },
       { name = "REDIS_PORT", value = "6379" },
       { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
+      # ALB가 있는 공용 서브넷만 프록시로 믿는다.
       { name = "TRUSTED_PROXY_CIDRS", value = join(",", var.public_subnet_cidrs) },
       { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
       { name = "REFRESH_COOKIE_SAME_SITE", value = var.refresh_cookie_same_site },
@@ -48,6 +51,7 @@ resource "aws_ecs_task_definition" "api" {
       { name = "UPLOAD_CDN_BASE_URL", value = "https://${aws_cloudfront_distribution.uploads.domain_name}" },
       { name = "AWS_REGION", value = var.aws_region }
     ]
+    # 비밀 값은 environment에 넣지 않는다. ECS가 Secrets Manager에서 읽어 환경변수로 넣는다.
     secrets = concat([
       { name = "DB_USERNAME", valueFrom = "${var.database_app_secret_arn}:username::" },
       { name = "DB_PASSWORD", valueFrom = "${var.database_app_secret_arn}:password::" },
@@ -66,6 +70,7 @@ resource "aws_ecs_task_definition" "api" {
   depends_on = [aws_iam_role_policy_attachment.execution, aws_iam_role_policy.secrets, aws_iam_role_policy.efs]
 }
 
+# enable_ecs_service를 켜야 만들어진다. 제한된 DB 계정과 스키마가 먼저 준비돼야 한다.
 resource "aws_ecs_service" "api" {
   count                              = var.enable_ecs_service ? 1 : 0
   name                               = var.name

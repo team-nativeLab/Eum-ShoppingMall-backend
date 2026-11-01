@@ -1,3 +1,6 @@
+# ElastiCache Redis. 전송·저장 암호화와 AUTH 토큰을 켠다.
+# ECS가 Secrets Manager에서 토큰을 읽어 앱에 넘긴다. 토큰 값은 Terraform 상태에도 저장되므로 상태 버킷을 암호화해야 한다.
+
 resource "aws_elasticache_subnet_group" "main" {
   name       = "${var.name}-redis"
   subnet_ids = aws_subnet.data[*].id
