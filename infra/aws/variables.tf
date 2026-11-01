@@ -124,6 +124,51 @@ variable "enable_ecs_service" {
   }
 }
 
+# ---- 비용 경보 ----
+
+variable "budget_limit_usd" {
+  description = "월 예산(USD). AWS 계정 전체 비용과 비교한다. 적용 전에 팀에서 확정한다."
+  type        = number
+  validation {
+    condition     = var.budget_limit_usd > 0
+    error_message = "budget_limit_usd에 팀에서 확정한 월 예산을 넣어 주세요. 0보다 커야 합니다."
+  }
+}
+
+variable "budget_alert_emails" {
+  description = "예산 알림을 받을 이메일(1~10개). 적용 전에 팀에서 확정한다."
+  type        = list(string)
+  validation {
+    condition     = length(var.budget_alert_emails) >= 1 && length(var.budget_alert_emails) <= 10
+    error_message = "budget_alert_emails는 1개 이상 10개 이하여야 합니다. AWS가 알림 하나에 이메일 10개까지만 받습니다."
+  }
+  validation {
+    condition = alltrue([
+      for email in var.budget_alert_emails :
+      can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", email)) && !endswith(email, "@example.com")
+    ])
+    error_message = "budget_alert_emails에 팀에서 확정한 실제 이메일을 넣어 주세요. example.com 주소로는 알림을 받을 수 없습니다."
+  }
+}
+
+variable "budget_alert_thresholds" {
+  description = "실제 비용이 월 예산의 몇 %를 넘으면 알릴지. 예측 비용 100% 알림은 따로 보낸다."
+  type        = list(number)
+  default     = [50, 80, 100]
+  validation {
+    condition = (
+      length(var.budget_alert_thresholds) >= 1 &&
+      length(var.budget_alert_thresholds) <= 4 &&
+      length(distinct(var.budget_alert_thresholds)) == length(var.budget_alert_thresholds)
+    )
+    error_message = "budget_alert_thresholds는 서로 다른 값 1~4개여야 합니다. AWS가 예산 하나에 알림 5개까지만 받고, 그중 하나는 예측 비용 알림입니다."
+  }
+  validation {
+    condition     = alltrue([for threshold in var.budget_alert_thresholds : threshold > 0])
+    error_message = "budget_alert_thresholds의 값은 0보다 커야 합니다."
+  }
+}
+
 # ---- ECS 배포 ----
 
 variable "image_tag" {

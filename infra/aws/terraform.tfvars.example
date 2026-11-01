@@ -17,6 +17,10 @@ enable_alb         = false
 enable_efs         = false
 enable_ecs_service = false
 
+# 월 예산과 알림 수신자. 팀에서 확정한 값으로 바꿔야 plan이 통과한다.
+budget_limit_usd    = 0
+budget_alert_emails = ["replace-me@example.com"]
+
 # 값은 AWS Secrets Manager에 먼저 만들고 여기에는 ARN만 적는다. 비밀 값을 직접 넣지 않는다.
 application_secret_arns = {
   JWT_SECRET      = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/jwt-replace"
