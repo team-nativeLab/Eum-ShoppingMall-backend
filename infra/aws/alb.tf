@@ -8,7 +8,7 @@ resource "aws_lb" "api" {
 
 resource "aws_lb_target_group" "api" {
   name        = "${var.name}-api"
-  port        = 8080
+  port        = local.api_port
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = aws_vpc.main.id

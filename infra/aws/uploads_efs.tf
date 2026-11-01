@@ -9,14 +9,14 @@ resource "aws_efs_file_system" "uploads" {
 resource "aws_efs_access_point" "uploads" {
   file_system_id = aws_efs_file_system.uploads.id
   posix_user {
-    uid = 10001
-    gid = 10001
+    uid = local.app_posix_id
+    gid = local.app_posix_id
   }
   root_directory {
     path = "/uploads"
     creation_info {
-      owner_uid   = 10001
-      owner_gid   = 10001
+      owner_uid   = local.app_posix_id
+      owner_gid   = local.app_posix_id
       permissions = "0750"
     }
   }

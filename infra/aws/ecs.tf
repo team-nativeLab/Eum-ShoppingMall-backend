@@ -29,10 +29,10 @@ resource "aws_ecs_task_definition" "api" {
   }
 
   container_definitions = jsonencode([{
-    name         = "api"
+    name         = local.api_container_name
     image        = "${aws_ecr_repository.api.repository_url}:${var.image_tag}"
     essential    = true
-    portMappings = [{ containerPort = 8080, protocol = "tcp" }]
+    portMappings = [{ containerPort = local.api_port, protocol = "tcp" }]
     environment = [
       { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
       { name = "DB_URL", value = "jdbc:mysql://${aws_db_instance.main.address}:3306/${var.db_name}?sslMode=VERIFY_IDENTITY" },
@@ -42,7 +42,7 @@ resource "aws_ecs_task_definition" "api" {
       { name = "TRUSTED_PROXY_CIDRS", value = join(",", var.public_subnet_cidrs) },
       { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
       { name = "REFRESH_COOKIE_SAME_SITE", value = var.refresh_cookie_same_site },
-      { name = "UPLOAD_DIR", value = "/app/uploads" },
+      { name = "UPLOAD_DIR", value = local.uploads_mount_path },
       { name = "UPLOAD_STORAGE", value = var.upload_storage },
       { name = "UPLOAD_S3_BUCKET", value = aws_s3_bucket.uploads.bucket },
       { name = "UPLOAD_CDN_BASE_URL", value = "https://${aws_cloudfront_distribution.uploads.domain_name}" },
@@ -53,7 +53,7 @@ resource "aws_ecs_task_definition" "api" {
       { name = "DB_PASSWORD", valueFrom = "${var.database_app_secret_arn}:password::" },
       { name = "SPRING_DATA_REDIS_PASSWORD", valueFrom = aws_secretsmanager_secret.redis.arn }
     ], local.app_secrets)
-    mountPoints = [{ sourceVolume = "uploads", containerPath = "/app/uploads", readOnly = false }]
+    mountPoints = [{ sourceVolume = "uploads", containerPath = local.uploads_mount_path, readOnly = false }]
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -85,8 +85,8 @@ resource "aws_ecs_service" "api" {
   }
   load_balancer {
     target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "api"
-    container_port   = 8080
+    container_name   = local.api_container_name
+    container_port   = local.api_port
   }
   depends_on = [aws_lb_listener.https, aws_efs_mount_target.uploads]
 }
