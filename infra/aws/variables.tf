@@ -83,17 +83,52 @@ variable "refresh_cookie_same_site" {
   }
 }
 
+# ---- 쓰지 않아도 요금이 나오는 리소스 ----
+# 모두 기본값이 false다. 켜는 순서와 구성별 비용은 docs/deployment-aws.md의 "비용과 구성 단계"를 참고한다.
+
+variable "enable_data_layer" {
+  description = "RDS와 Redis를 만든다. 스키마를 준비할 때부터 켠다."
+  type        = bool
+  default     = false
+}
+
+variable "enable_nat_gateway" {
+  description = "NAT Gateway를 만든다. ECS 태스크가 ECR, Secrets Manager, 외부 API에 닿으려면 필요하다."
+  type        = bool
+  default     = false
+}
+
+variable "enable_alb" {
+  description = "ALB를 만든다. 지웠다가 다시 만들면 DNS 이름이 바뀌어 API 도메인을 다시 연결해야 한다."
+  type        = bool
+  default     = false
+}
+
+variable "enable_efs" {
+  description = "업로드 이미지용 EFS를 만든다. upload_storage가 local이면 ECS 서비스에 필요하다. 끄면 저장된 파일도 지워진다."
+  type        = bool
+  default     = false
+}
+
+variable "enable_ecs_service" {
+  description = "ECS 태스크 정의와 서비스를 만든다. 제한된 DB 계정과 스키마가 준비될 때까지 false로 둔다."
+  type        = bool
+  default     = false
+  validation {
+    condition     = !var.enable_ecs_service || (var.enable_data_layer && var.enable_nat_gateway && var.enable_alb)
+    error_message = "enable_ecs_service를 켜려면 enable_data_layer, enable_nat_gateway, enable_alb도 켜야 합니다."
+  }
+  validation {
+    condition     = !var.enable_ecs_service || var.upload_storage == "s3" || var.enable_efs
+    error_message = "upload_storage가 local이면 enable_ecs_service를 켤 때 enable_efs도 켜야 합니다."
+  }
+}
+
 # ---- ECS 배포 ----
 
 variable "image_tag" {
   description = "실행할 ECR 이미지 태그. 덮어쓸 수 없으므로 Git 커밋 SHA를 권장한다."
   type        = string
-}
-
-variable "enable_ecs_service" {
-  description = "ECS 서비스 생성 여부. 제한된 DB 계정과 스키마가 준비될 때까지 false로 둔다."
-  type        = bool
-  default     = false
 }
 
 variable "desired_count" {
