@@ -83,17 +83,97 @@ variable "refresh_cookie_same_site" {
   }
 }
 
+# ---- 쓰지 않아도 요금이 나오는 리소스 ----
+# 모두 기본값이 false다. 켜는 순서와 구성별 비용은 docs/deployment-aws.md의 "비용과 구성 단계"를 참고한다.
+
+variable "enable_data_layer" {
+  description = "RDS와 Redis를 만든다. 스키마를 준비할 때부터 켠다."
+  type        = bool
+  default     = false
+}
+
+variable "enable_nat_gateway" {
+  description = "NAT Gateway를 만든다. ECS 태스크가 ECR, Secrets Manager, 외부 API에 닿으려면 필요하다."
+  type        = bool
+  default     = false
+}
+
+variable "enable_alb" {
+  description = "ALB를 만든다. 지웠다가 다시 만들면 DNS 이름이 바뀌어 API 도메인을 다시 연결해야 한다."
+  type        = bool
+  default     = false
+}
+
+variable "enable_efs" {
+  description = "업로드 이미지용 EFS를 만든다. upload_storage가 local이면 ECS 서비스에 필요하다. 끄면 저장된 파일도 지워진다."
+  type        = bool
+  default     = false
+}
+
+variable "enable_ecs_service" {
+  description = "ECS 태스크 정의와 서비스를 만든다. 제한된 DB 계정과 스키마가 준비될 때까지 false로 둔다."
+  type        = bool
+  default     = false
+  validation {
+    condition     = !var.enable_ecs_service || (var.enable_data_layer && var.enable_nat_gateway && var.enable_alb)
+    error_message = "enable_ecs_service를 켜려면 enable_data_layer, enable_nat_gateway, enable_alb도 켜야 합니다."
+  }
+  validation {
+    condition     = !var.enable_ecs_service || var.upload_storage == "s3" || var.enable_efs
+    error_message = "upload_storage가 local이면 enable_ecs_service를 켤 때 enable_efs도 켜야 합니다."
+  }
+}
+
+# ---- 비용 경보 ----
+
+variable "budget_limit_usd" {
+  description = "월 예산(USD). AWS 계정 전체 비용과 비교한다. 적용 전에 팀에서 확정한다."
+  type        = number
+  validation {
+    condition     = var.budget_limit_usd > 0
+    error_message = "budget_limit_usd에 팀에서 확정한 월 예산을 넣어 주세요. 0보다 커야 합니다."
+  }
+}
+
+variable "budget_alert_emails" {
+  description = "예산 알림을 받을 이메일(1~10개). 적용 전에 팀에서 확정한다."
+  type        = list(string)
+  validation {
+    condition     = length(var.budget_alert_emails) >= 1 && length(var.budget_alert_emails) <= 10
+    error_message = "budget_alert_emails는 1개 이상 10개 이하여야 합니다. AWS가 알림 하나에 이메일 10개까지만 받습니다."
+  }
+  validation {
+    condition = alltrue([
+      for email in var.budget_alert_emails :
+      can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", email)) && !endswith(email, "@example.com")
+    ])
+    error_message = "budget_alert_emails에 팀에서 확정한 실제 이메일을 넣어 주세요. example.com 주소로는 알림을 받을 수 없습니다."
+  }
+}
+
+variable "budget_alert_thresholds" {
+  description = "실제 비용이 월 예산의 몇 %를 넘으면 알릴지. 예측 비용 100% 알림은 따로 보낸다."
+  type        = list(number)
+  default     = [50, 80, 100]
+  validation {
+    condition = (
+      length(var.budget_alert_thresholds) >= 1 &&
+      length(var.budget_alert_thresholds) <= 4 &&
+      length(distinct(var.budget_alert_thresholds)) == length(var.budget_alert_thresholds)
+    )
+    error_message = "budget_alert_thresholds는 서로 다른 값 1~4개여야 합니다. AWS가 예산 하나에 알림 5개까지만 받고, 그중 하나는 예측 비용 알림입니다."
+  }
+  validation {
+    condition     = alltrue([for threshold in var.budget_alert_thresholds : threshold > 0])
+    error_message = "budget_alert_thresholds의 값은 0보다 커야 합니다."
+  }
+}
+
 # ---- ECS 배포 ----
 
 variable "image_tag" {
   description = "실행할 ECR 이미지 태그. 덮어쓸 수 없으므로 Git 커밋 SHA를 권장한다."
   type        = string
-}
-
-variable "enable_ecs_service" {
-  description = "ECS 서비스 생성 여부. 제한된 DB 계정과 스키마가 준비될 때까지 false로 둔다."
-  type        = bool
-  default     = false
 }
 
 variable "desired_count" {

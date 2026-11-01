@@ -54,30 +54,34 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# NAT Gateway는 첫 번째 공용 서브넷에 1개만 둔다. 그 AZ에 장애가 나면 앱 서브넷의 외부 통신이 끊긴다.
+# NAT Gateway는 enable_nat_gateway를 켜야 만든다.
+# 첫 번째 공용 서브넷에 1개만 둔다. 그 AZ에 장애가 나면 앱 서브넷의 외부 통신이 끊긴다.
 resource "aws_eip" "nat" {
+  count  = var.enable_nat_gateway ? 1 : 0
   domain = "vpc"
 }
 
 resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
+  count         = var.enable_nat_gateway ? 1 : 0
+  allocation_id = aws_eip.nat[0].id
   subnet_id     = aws_subnet.public[0].id
   depends_on    = [aws_internet_gateway.main]
 }
 
-# 앱 서브넷 라우팅
+# 앱 서브넷 라우팅. NAT Gateway를 끄면 함께 없어져 앱 서브넷은 VPC 안에서만 통신한다.
 resource "aws_route_table" "app" {
+  count  = var.enable_nat_gateway ? 1 : 0
   vpc_id = aws_vpc.main.id
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
+    nat_gateway_id = aws_nat_gateway.main[0].id
   }
 }
 
 resource "aws_route_table_association" "app" {
-  count          = 2
+  count          = var.enable_nat_gateway ? 2 : 0
   subnet_id      = aws_subnet.app[count.index].id
-  route_table_id = aws_route_table.app.id
+  route_table_id = aws_route_table.app[0].id
 }
 
 # 데이터 서브넷 라우팅. 인터넷으로 나가는 기본 경로를 두지 않는다.

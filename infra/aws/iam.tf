@@ -20,30 +20,32 @@ resource "aws_iam_role_policy" "secrets" {
       Effect = "Allow"
       Action = ["secretsmanager:GetSecretValue"]
       Resource = concat(
-        [var.database_app_secret_arn, aws_secretsmanager_secret.redis.arn],
+        [var.database_app_secret_arn],
+        aws_secretsmanager_secret.redis[*].arn,
         values(var.application_secret_arns)
       )
     }]
   })
 }
 
-# 태스크 역할: 실행 중인 앱 컨테이너가 쓴다. 지금은 EFS 마운트 권한만 준다.
+# 태스크 역할: 실행 중인 앱 컨테이너가 쓴다. 지금은 EFS를 켰을 때 마운트 권한만 준다.
 resource "aws_iam_role" "task" {
   name               = "${var.name}-ecs-task"
   assume_role_policy = local.ecs_tasks_assume_role_policy
 }
 
 resource "aws_iam_role_policy" "efs" {
-  name = "${var.name}-mount-uploads"
-  role = aws_iam_role.task.id
+  count = var.enable_efs ? 1 : 0
+  name  = "${var.name}-mount-uploads"
+  role  = aws_iam_role.task.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow"
       Action   = ["elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite"]
-      Resource = aws_efs_file_system.uploads.arn
+      Resource = aws_efs_file_system.uploads[0].arn
       Condition = {
-        StringEquals = { "elasticfilesystem:AccessPointArn" = aws_efs_access_point.uploads.arn }
+        StringEquals = { "elasticfilesystem:AccessPointArn" = aws_efs_access_point.uploads[0].arn }
       }
     }]
   })

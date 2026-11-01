@@ -9,6 +9,18 @@ image_tag            = "replace-with-immutable-git-sha"
 # *.vercel.app 프론트는 어떤 API 도메인과도 다른 사이트다. docs/deployment-proxy.md를 참고한다.
 refresh_cookie_same_site = "Strict"
 
+# 쓰지 않아도 요금이 나오는 리소스. 모두 false면 고정 비용이 없다.
+# 켜는 순서와 구성별 비용은 docs/deployment-aws.md의 "비용과 구성 단계"를 참고한다.
+enable_data_layer  = false
+enable_nat_gateway = false
+enable_alb         = false
+enable_efs         = false
+enable_ecs_service = false
+
+# 월 예산과 알림 수신자. 팀에서 확정한 값으로 바꿔야 plan이 통과한다.
+budget_limit_usd    = 0
+budget_alert_emails = ["replace-me@example.com"]
+
 # 값은 AWS Secrets Manager에 먼저 만들고 여기에는 ARN만 적는다. 비밀 값을 직접 넣지 않는다.
 application_secret_arns = {
   JWT_SECRET      = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/jwt-replace"
@@ -22,8 +34,8 @@ database_app_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:se
 # 이 파일에 넣지 않고 실행할 때 안전한 셸이나 CI 시크릿 저장소에서 넘긴다.
 # export TF_VAR_redis_auth_token="<16~128자 Redis AUTH 토큰>"
 
-db_multi_az = false
 # 운영에서는 비용을 검토한 뒤 Multi-AZ를 켜고 ECS·Redis 규모를 늘린다.
-enable_ecs_service = false
+db_multi_az = false
+
 # 기존 EFS 이미지를 S3로 옮길 때까지 local로 두고(docs/deployment-aws.md), 옮긴 뒤 s3로 바꾼다.
 upload_storage = "local"
