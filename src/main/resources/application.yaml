@@ -87,6 +87,10 @@ management:
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  allowed-methods: GET, POST, PUT, DELETE, OPTIONS
+  allowed-headers: "*"
+  allow-credentials: true
+  max-age: 3600
 
 # API 문서 UI는 운영에 노출되지 않도록 기본은 끄고, 로컬 등 필요한 환경에서만 켠다.
 springdoc:
@@ -102,26 +106,24 @@ security:
     access-token-expiry: 900
     refresh-token-expiry: 1209600
     refresh-cookie-secure: true
+    token-validity-in-seconds: 500
     # Strict by default. Set to None only when frontend/API are cross-site and both use HTTPS.
     refresh-cookie-same-site: ${REFRESH_COOKIE_SAME_SITE:Strict}
   rate-limit:
-    # 로그인·회원가입·문의 접수·주문·결제 등에 적용하는 IP별 분당 요청 한도
-    requests-per-minute: ${RATE_LIMIT_PER_MINUTE:10}
-    # 공개 상품 조회의 IP별 분당 한도. 목록·필터 개수(브랜드 포함)·상세를 각각 따로 세고, 자동 완성은 이 값의 두 배다.
-    # 한 사무실 직원들이 같은 공인 IP로 접속하므로 넉넉하게 둔다. 크롤링 같은 대량 요청은 프록시·WAF에서 막는다.
-    public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:300}
+    requests-per-minute: ${RATE_LIMIT_PER_MINUTE}
+    public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE}
   login-lock:
     # 한 이메일이 첫 실패부터 10분 안에 이만큼 틀리면 그 10분 동안 로그인을 막는다. IP를 바꿔 가며 비밀번호를 넣어 보는 공격 대비.
-    max-failures: ${LOGIN_LOCK_MAX_FAILURES:10}
+    max-failures: ${LOGIN_LOCK_MAX_FAILURES}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
-    max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}
+    max-body-bytes: ${MAX_REQUEST_BODY_BYTES}
 
 admin:
   bootstrap:
     # 두 값이 모두 있으면, 서버가 뜰 때 이 이메일의 계정이 없는 경우에 한해 관리자 계정을 만든다.
-    email: ${ADMIN_EMAIL:}
-    password: ${ADMIN_PASSWORD:}
+    email: ${ADMIN_EMAIL}
+    password: ${ADMIN_PASSWORD}
 
 payment:
   toss:
@@ -153,16 +155,19 @@ app:
     # true면 회원가입에 이메일 인증 토큰이 필요하다. 프론트가 인증 화면을 붙이고 메일 서버(MAIL_HOST)를 설정한 뒤 켠다.
     signup-email-verification-required: ${SIGNUP_EMAIL_VERIFICATION_REQUIRED:false}
   mail:
-    # 인증번호 메일을 보낼 SMTP 서버 (AWS SES SMTP, 사내 메일 서버 등). 비어 있으면 보내지 않고 로그만 남긴다.
     host: ${MAIL_HOST:}
     port: ${MAIL_PORT:587}
-    # 계정을 주면 SMTP 인증과 STARTTLS를 켠다.
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
-    # 보내는 사람 주소. MAIL_HOST를 설정하면 필수다. (예: no-reply@example.com 또는 "이음 쇼핑몰 <no-reply@example.com>")
     from: ${MAIL_FROM:}
-    # 메일 제목 앞에 붙는 이름
     service-name: ${MAIL_SERVICE_NAME:이음 쇼핑몰}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          timeout: 5000
   cache:
     # 공개 상품 조회의 공유 Redis 캐시 TTL (초)
     product-ttl-seconds: ${PRODUCT_READ_CACHE_TTL_SECONDS:60}
