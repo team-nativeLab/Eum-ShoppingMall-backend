@@ -67,6 +67,7 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 - Terraform 상태를 보관할 비공개 S3 버킷. 버전 관리, 기본 암호화, 퍼블릭 액세스 차단을 켜고 `backend.hcl.example`을 복사해 실제 버킷명으로 채웁니다. Redis AUTH 값은 Terraform state에도 저장되므로 state 접근 권한을 제한합니다.
 - 앱 secret은 기본 AWS 관리형 KMS 키로 암호화하는 구성을 가정합니다. 고객 관리형 KMS 키를 쓰면 ECS 실행 역할에 해당 키의 `kms:Decrypt` 권한을 정확히 추가해야 합니다.
 - 팀에서 확정한 월 예산과 알림 받을 이메일. 배포 권한에는 AWS Budgets 생성·조회·태그 권한이 있어야 합니다.
+- 결제 금액 불일치 같은 상황을 메일로 받을 담당자 이메일과 SMTP 서버. `app_environment`에 `ALERT_EMAILS`, `MAIL_HOST`, `MAIL_FROM`을, `application_secret_arns`에 `MAIL_USERNAME`, `MAIL_PASSWORD`를 넣습니다. 알림 기준은 README의 "담당자 알림"을 참고합니다.
 - 현재 앱은 운영에서 `ddl-auto: validate`를 사용합니다. 빈 RDS에 테이블을 만드는 마이그레이션이 먼저 필요합니다(Issue #27). 별도 DB 관리자 계정으로 스키마를 만들고 `shopping_app`에는 앱 구동에 필요한 SELECT/INSERT/UPDATE/DELETE 권한만 부여한 후 `enable_ecs_service=true`로 바꿉니다. Terraform은 이 준비가 끝날 때까지 ECS 서비스를 만들지 않습니다.
 
 Terraform은 리소스를 생성해 과금할 수 있습니다. 아래 `apply`는 비용 검토와 계정/리전 확인 뒤 운영자가 실행합니다. 이 저장소 변경에서는 AWS 리소스를 만들지 않습니다.

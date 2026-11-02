@@ -176,6 +176,12 @@ variable "image_tag" {
   type        = string
 }
 
+variable "app_environment" {
+  description = "앱에 넘길 추가 환경변수(ALERT_EMAILS, MAIL_HOST, LOG_FORMAT 등). 비밀 값은 application_secret_arns로 넘긴다."
+  type        = map(string)
+  default     = {}
+}
+
 variable "desired_count" {
   description = "실행할 ECS 태스크 수"
   type        = number
