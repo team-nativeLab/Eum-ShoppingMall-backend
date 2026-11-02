@@ -25,7 +25,7 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 | 개발 검증 배포 | 위 + `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service` | 약 $130 | 62개 |
 | 운영 예시 | 위 + `db_multi_az=true`, `desired_count=2` | 약 $173 | 62개 |
 
-기본 구성은 VPC와 서브넷·라우팅, 보안 그룹, DB·Redis 서브넷 그룹, IAM, ECS 클러스터, ECR, 업로드 S3와 CloudFront, 로그 그룹, 예산 경보만 만듭니다. 이 중 요금이 나오는 것은 ECR, S3, CloudFront, 로그처럼 쓴 만큼 내는 항목뿐입니다. 리소스 수는 `infra/aws/tests`와 같은 mock provider로 돌린 plan 결과입니다.
+기본 구성은 VPC와 서브넷·라우팅, 보안 그룹, DB·Redis 서브넷 그룹, IAM, ECS 클러스터, ECR, 업로드 S3와 CloudFront, 로그 그룹, 예산 경보만 만듭니다. 이 중 요금이 나오는 것은 ECR, S3, CloudFront, 로그처럼 쓴 만큼 내는 항목뿐입니다. 리소스 수는 `terraform/tests`와 같은 mock provider로 돌린 plan 결과입니다.
 
 고정 비용의 계산 근거는 다음과 같습니다. 서울 리전 온디맨드 가격을 AWS Price List(`https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/{서비스 코드}/current/ap-northeast-2/index.json`)에서 2026-11-02에 확인했고, 한 달을 730시간으로 계산했습니다. 프리 티어와 세금은 뺐습니다. 실제 요금은 적용 전에 다시 확인합니다.
 
@@ -75,11 +75,11 @@ Terraform은 리소스를 생성해 과금할 수 있습니다. 아래 `apply`�
 ## 배포 절차
 
 1. Docker와 Terraform 1.10 이상, AWS CLI를 설치합니다. SSO 프로파일로 로그인하고 `aws sts get-caller-identity`로 계정을 확인합니다.
-2. `infra/aws/terraform.tfvars.example`을 `infra/aws/terraform.tfvars`로 복사하고 인증서 ARN, 도메인 origin, secret ARN, 월 예산과 알림 이메일을 채웁니다. 실제 secret 값은 AWS Secrets Manager에 직접 넣습니다. `terraform.tfvars`는 Git에 추가하지 않습니다.
-3. `infra/aws/backend.hcl.example`을 `backend.hcl`로 복사해 상태 버킷명을 채웁니다. 셸에서 `TF_VAR_redis_auth_token`을 안전하게 주입한 뒤 실행합니다.
+2. `terraform/terraform.tfvars.example`을 `terraform/terraform.tfvars`로 복사하고 인증서 ARN, 도메인 origin, secret ARN, 월 예산과 알림 이메일을 채웁니다. 실제 secret 값은 AWS Secrets Manager에 직접 넣습니다. `terraform.tfvars`는 Git에 추가하지 않습니다.
+3. `terraform/backend.hcl.example`을 `backend.hcl`로 복사해 상태 버킷명을 채웁니다. 셸에서 `TF_VAR_redis_auth_token`을 안전하게 주입한 뒤 실행합니다.
 
    ```sh
-   cd infra/aws
+   cd terraform
    terraform init -backend-config=backend.hcl
    terraform validate
    terraform plan
@@ -95,7 +95,7 @@ Terraform은 리소스를 생성해 과금할 수 있습니다. 아래 `apply`�
 
    ```sh
    IMAGE_TAG=$(git rev-parse --short=12 HEAD)
-   ECR_REPOSITORY=$(cd infra/aws && terraform output -raw ecr_repository_url)
+   ECR_REPOSITORY=$(cd terraform && terraform output -raw ecr_repository_url)
    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
    AWS_REGION=ap-northeast-2
    aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"

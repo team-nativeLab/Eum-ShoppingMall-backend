@@ -34,7 +34,7 @@ S3를 쓰려면 `UPLOAD_STORAGE=s3`, `AWS_REGION`, `UPLOAD_S3_BUCKET`, `UPLOAD_C
 - **이미지 주소:** 상품과 배너의 `imageUrl`은 업로드 API가 돌려준 주소여야 합니다.
 - **직접 업로드:** S3에서는 관리자가 직접 올릴 수도 있습니다. `POST /api/v1/uploads/presigned-url`은 Presigned PUT URL과 함께 보낼 헤더를 돌려주고, `POST /api/v1/uploads/complete`는 올린 파일을 다시 검사(이미지 시그니처, 5MB)한 뒤 CDN 주소를 돌려줍니다.
 - **정리 작업:** 매일 한 번(`UPLOAD_CLEANUP_CRON`, 기본 04:30) 올린 지 24시간이 지났고 어떤 상품이나 배너도 쓰지 않는 이미지를 지웁니다.
-- **인프라:** 버킷, CloudFront OAC, 업로드 IAM 사용자와 정책, 버전 관리는 `infra/aws/uploads_s3.tf`에 정의되어 있습니다. `scripts/migrate-local-uploads-to-s3.sh`는 기존 로컬 파일을 복사합니다(`docs/deployment-aws.md` 참고).
+- **인프라:** 버킷, CloudFront OAC, 업로드 IAM 사용자와 정책, 버전 관리는 `terraform/uploads_s3.tf`에 정의되어 있습니다. `scripts/migrate-local-uploads-to-s3.sh`는 기존 로컬 파일을 복사합니다(`docs/deployment-aws.md` 참고).
 
 ## 관리자 회원 역할 API
 
