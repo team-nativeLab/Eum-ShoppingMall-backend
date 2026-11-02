@@ -24,6 +24,7 @@ import com.example.shopping.domain.payment.entity.PaymentStatus;
 import com.example.shopping.domain.payment.gateway.PgPayment;
 import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.global.monitoring.ManualCheckAlerts;
+import com.example.shopping.global.monitoring.OperatorAlerts;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -40,7 +41,7 @@ class VirtualAccountReconcilerTest {
 	private final OrderRepository orderRepository = mock(OrderRepository.class);
 	private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 	private final VirtualAccountReconciler reconciler = new VirtualAccountReconciler(orderTxService, orderRepository,
-			new ManualCheckAlerts(meters));
+			new ManualCheckAlerts(meters, mock(OperatorAlerts.class)));
 
 	@Test
 	void 입금_대기_주문에_입금되면_결제_완료로_반영한다() {

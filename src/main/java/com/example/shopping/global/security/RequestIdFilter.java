@@ -21,7 +21,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class RequestIdFilter extends OncePerRequestFilter {
 
 	public static final String HEADER = "X-Request-Id";
-	private static final String MDC_KEY = "requestId";
+	public static final String MDC_KEY = "requestId";
 	private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 
 	@Override

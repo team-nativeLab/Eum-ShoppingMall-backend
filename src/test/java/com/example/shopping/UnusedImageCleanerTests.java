@@ -24,6 +24,7 @@ import com.example.shopping.domain.upload.service.FileStorage;
 import com.example.shopping.domain.upload.service.ImageReferences;
 import com.example.shopping.domain.upload.service.LocalFileStorage;
 import com.example.shopping.domain.upload.service.UnusedImageCleaner;
+import com.example.shopping.global.monitoring.OperatorAlerts;
 import com.example.shopping.global.scheduling.ScheduledJobRunner;
 import com.example.shopping.global.scheduling.SchedulerLockService;
 
@@ -53,7 +54,9 @@ class UnusedImageCleanerTests {
 	private UnusedImageCleaner cleaner(int maxDeletesPerRun) throws IOException {
 		FileStorage storage = new LocalFileStorage(uploadDir.toString());
 		return new UnusedImageCleaner(storage, imageReferences,
-				new ScheduledJobRunner(schedulerLockService, new SimpleMeterRegistry()), 24, maxDeletesPerRun);
+				new ScheduledJobRunner(schedulerLockService, new SimpleMeterRegistry(),
+						org.mockito.Mockito.mock(OperatorAlerts.class)),
+				24, maxDeletesPerRun);
 	}
 
 	@Test
