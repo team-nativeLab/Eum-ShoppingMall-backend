@@ -8,8 +8,16 @@ public record AdminAuditLogResponse(Long id, Long actorMemberId, LocalDateTime c
 		String action, String targetType, String targetId, String summary, String details, int responseStatus) {
 
 	public static AdminAuditLogResponse from(AdminAuditLog log) {
-		return new AdminAuditLogResponse(log.getId(), log.getActorMemberId(), log.getCreatedAt(), log.getIpAddress(),
-				log.getAction(), log.getTargetType(), log.getTargetId(), log.getSummary(), log.getDetails(),
+		return new AdminAuditLogResponse(
+				log.getId(),
+				log.getActorMemberId(),
+				log.getCreatedAt(),
+				log.getIpAddress(),
+				log.getAction(),
+				log.getTargetType(),
+				log.getTargetId(),
+				log.getSummary(),
+				log.getDetails(),
 				log.getResponseStatus());
 	}
 }

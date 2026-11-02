@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: infra/aws
+        working-directory: terraform
     steps:
       - name: Check out source
         uses: actions/checkout@v6
