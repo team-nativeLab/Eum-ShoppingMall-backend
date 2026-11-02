@@ -55,6 +55,10 @@ spring:
 logging:
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] [requestId=%X{requestId:-}] %-5level %logger{36} - %msg%n%ex"
+  structured:
+    format:
+      # 로그 수집 도구가 읽을 한 줄 JSON 형식(ecs, logstash, gelf). 비워 두면 위 패턴으로 남긴다.
+      console: ${LOG_FORMAT:}
 
 server:
   shutdown: graceful

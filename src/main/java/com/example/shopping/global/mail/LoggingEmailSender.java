@@ -13,7 +13,7 @@ class LoggingEmailSender implements EmailSender {
 
 	@Override
 	public void send(String to, String subject, String text) {
-		log.warn("메일 서버 설정(MAIL_HOST)이 없어 메일을 보내지 않았습니다: to={}, subject={}", to, subject);
+		log.warn("메일 서버 설정(MAIL_HOST)이 없어 메일을 보내지 않았습니다: subject={}", subject);
 		log.debug("보내지 않은 메일 본문: {}", text);
 	}
 }

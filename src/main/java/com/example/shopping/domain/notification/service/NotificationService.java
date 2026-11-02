@@ -22,6 +22,7 @@ import com.example.shopping.domain.notification.entity.NotificationStatus;
 import com.example.shopping.domain.notification.repository.NotificationMessageRepository;
 import com.example.shopping.domain.notification.sender.AlimtalkSender;
 import com.example.shopping.global.monitoring.ManualCheckAlerts;
+import com.example.shopping.global.monitoring.MdcTaskDecorator;
 import com.example.shopping.global.scheduling.ScheduledJobRunner;
 
 import lombok.extern.slf4j.Slf4j;
@@ -58,6 +59,7 @@ public class NotificationService implements DisposableBean {
 		this.jobRunner = jobRunner;
 		this.alerts = alerts;
 		executor.setThreadNamePrefix("notification-");
+		executor.setTaskDecorator(new MdcTaskDecorator());
 		executor.setCorePoolSize(2);
 		executor.setMaxPoolSize(4);
 		executor.setQueueCapacity(500);
