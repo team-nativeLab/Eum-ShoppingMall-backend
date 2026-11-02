@@ -48,11 +48,11 @@ public class AdminAccountInitializer implements ApplicationRunner {
 				existing.changeRole(MemberRole.SUPER_ADMIN);
 				memberRepository.save(existing);
 				refreshTokenService.revokeAll(existing.getId());
-				log.info("초기 관리자 계정을 최고 관리자로 승격했습니다: {}", email);
+				log.info("초기 관리자 계정을 최고 관리자로 승격했습니다.");
 			}
 			return;
 		}
 		memberRepository.save(Member.createSuperAdmin(email, passwordEncoder.encode(properties.password()), "관리자"));
-		log.info("초기 관리자 계정을 만들었습니다: {}", email);
+		log.info("초기 관리자 계정을 만들었습니다.");
 	}
 }

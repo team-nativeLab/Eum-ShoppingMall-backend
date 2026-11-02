@@ -39,6 +39,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -62,12 +63,15 @@ import com.example.shopping.domain.payment.gateway.PgUnavailableException;
 import com.example.shopping.domain.payment.gateway.PgVirtualAccount;
 import com.example.shopping.domain.product.entity.ProductSku;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
+import com.example.shopping.global.monitoring.OperatorAlerts;
 import com.jayway.jsonpath.JsonPath;
 
 import jakarta.persistence.EntityManager;
 
 /** 주문·결제·취소 흐름. 실제 PG 대신 가짜 PaymentGateway를 끼워 PG의 응답 상황별 처리를 검증한다. */
-@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:orders;MODE=MySQL")
+@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:orders;MODE=MySQL",
+		"app.alert.emails=ops@eum-shopping.test, dev@eum-shopping.test"})
+@Import(RecordingEmailSender.Config.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
@@ -96,6 +100,12 @@ class OrderPaymentTests {
 
 	@Autowired
 	private TransactionTemplate transactionTemplate;
+
+	@Autowired
+	private OperatorAlerts operatorAlerts;
+
+	@Autowired
+	private RecordingEmailSender emails;
 
 	@MockitoBean
 	private PaymentGateway paymentGateway;
@@ -426,6 +436,44 @@ class OrderPaymentTests {
 		verify(paymentGateway).cancel(eq(PAYMENT_KEY), anyString(), anyString());
 		assertThat(statusOf(orderNo)).isEqualTo("PENDING");
 		assertThat(jdbcTemplate.queryForObject("select count(*) from payment", Long.class)).isZero();
+	}
+
+	@Test
+	void 보정_중_PG_승인_금액이_주문과_다르면_담당자_모두에게_메일로_알리고_반복해서_보내지_않는다() throws Exception {
+		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 1);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 35000)).thenThrow(new PgUnavailableException("timeout", null));
+		confirm(buyer, orderNo, 35000).andExpect(status().isAccepted());
+		jdbcTemplate.update("update orders set updated_at = ?", LocalDateTime.now().minusMinutes(10));
+		entityManager.clear();
+		doReturn(Optional.of(pg(orderNo, PgStatus.DONE, 100))).when(paymentGateway).findByOrderNo(orderNo);
+
+		scheduler.reconcileStuckPayments();
+		operatorAlerts.sendPending();
+
+		assertThat(emails.lastTo("ops@eum-shopping.test").subject()).contains("담당자 확인 필요");
+		assertThat(emails.lastTo("ops@eum-shopping.test").text())
+				.contains("pg_amount_mismatch").contains(orderNo).contains("서버 35000 / PG 100");
+		assertThat(emails.lastTo("dev@eum-shopping.test").text()).contains(orderNo);
+
+		// 1분마다 도는 보정 작업이 같은 주문을 다시 올려도 메일을 또 보내지 않는다.
+		emails.clear();
+		scheduler.reconcileStuckPayments();
+		operatorAlerts.sendPending();
+		assertThat(emails.sentTo("ops@eum-shopping.test")).isEmpty();
+	}
+
+	@Test
+	void 금액_불일치_결제를_자동_환불하지_못하면_담당자에게_메일로_알린다() throws Exception {
+		String orderNo = createOrder(buyer, insertProductWithSku("안전모", 30000, true, 5), 2);
+		when(paymentGateway.confirm(PAYMENT_KEY, orderNo, 65000)).thenReturn(pg(orderNo, PgStatus.DONE, 100));
+		when(paymentGateway.cancel(eq(PAYMENT_KEY), anyString(), anyString()))
+				.thenThrow(new PgUnavailableException("timeout", null));
+
+		confirm(buyer, orderNo, 65000).andExpect(status().isBadRequest());
+		operatorAlerts.sendPending();
+
+		assertThat(emails.lastTo("ops@eum-shopping.test").text()).contains("refund_failed").contains(PAYMENT_KEY)
+				.doesNotContain("timeout");
 	}
 
 	@Test

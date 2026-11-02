@@ -7,6 +7,8 @@ import org.springframework.core.task.TaskRejectedException;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 
+import com.example.shopping.global.monitoring.MdcTaskDecorator;
+
 /**
  * 응답을 메일 발송에 묶지 않을 때 쓴다. 예를 들어 비밀번호 재설정은 가입된 이메일인지와 상관없이 같은 속도로 응답해야
  * 응답 시간으로 가입 여부를 알아낼 수 없다. 발송에 실패하면 로그만 남긴다.
@@ -22,6 +24,7 @@ public class BackgroundEmailSender implements DisposableBean {
 	public BackgroundEmailSender(EmailSender emailSender) {
 		this.emailSender = emailSender;
 		executor.setThreadNamePrefix("mail-");
+		executor.setTaskDecorator(new MdcTaskDecorator());
 		executor.setCorePoolSize(2);
 		executor.setMaxPoolSize(4);
 		executor.setQueueCapacity(200);
@@ -36,11 +39,11 @@ public class BackgroundEmailSender implements DisposableBean {
 				try {
 					emailSender.send(to, subject, text);
 				} catch (RuntimeException e) {
-					log.error("메일을 보내지 못했습니다: to={}, subject={}", to, subject, e);
+					log.error("메일을 보내지 못했습니다: subject={}", subject, e);
 				}
 			});
 		} catch (TaskRejectedException e) {
-			log.error("보낼 메일이 너무 많이 밀려 보내지 못했습니다: to={}, subject={}", to, subject, e);
+			log.error("보낼 메일이 너무 많이 밀려 보내지 못했습니다: subject={}", subject, e);
 		}
 	}
 

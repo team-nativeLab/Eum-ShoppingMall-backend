@@ -2,8 +2,13 @@ package com.example.shopping.global.scheduling;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.UUID;
 
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
+
+import com.example.shopping.global.monitoring.OperatorAlerts;
+import com.example.shopping.global.security.RequestIdFilter;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +19,8 @@ import lombok.extern.slf4j.Slf4j;
  * - 다른 서버가 실행 중이면 건너뛴다.
  * - 작업이 던진 예외와 항목별 실패는 scheduled.job.failures{job} 지표로 센다.
  * - 끝났을 때 잠금이 이미 만료돼 다른 서버가 가져갔으면 오류 로그와 scheduled.job.lock.lost{job} 지표를 남긴다.
+ * - 실패하거나 잠금을 잃으면 담당자에게 메일로 알린다.
+ * - 실행마다 ID를 만들어 요청 ID 자리에 넣어, 한 번의 실행이 남긴 로그를 함께 찾을 수 있게 한다.
  * 처리하거나 실패한 것이 있을 때만 완료 로그를 info로 남겨, 1분마다 도는 작업이 로그를 채우지 않게 한다.
  */
 @Slf4j
@@ -21,8 +28,11 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class ScheduledJobRunner {
 
+	private static final Duration ALERT_REPEAT_AFTER = Duration.ofHours(1);
+
 	private final SchedulerLockService schedulerLockService;
 	private final MeterRegistry meterRegistry;
+	private final OperatorAlerts operatorAlerts;
 
 	public void run(String jobName, Duration lockDuration, Job job) {
 		run(jobName, jobName, lockDuration, job);
@@ -30,6 +40,12 @@ public class ScheduledJobRunner {
 
 	/** 같은 대상을 다루는 작업끼리 lockName을 같게 주면 동시에 돌지 않는다. */
 	public void run(String jobName, String lockName, Duration lockDuration, Job job) {
+		try (MDC.MDCCloseable ignored = MDC.putCloseable(RequestIdFilter.MDC_KEY, jobName + "-" + UUID.randomUUID())) {
+			runWithLock(jobName, lockName, lockDuration, job);
+		}
+	}
+
+	private void runWithLock(String jobName, String lockName, Duration lockDuration, Job job) {
 		Optional<String> owner = schedulerLockService.tryAcquire(lockName, lockDuration);
 		if (owner.isEmpty()) {
 			log.debug("정기 작업 {} 생략: 다른 서버가 실행 중입니다.", jobName);
@@ -45,9 +61,14 @@ public class ScheduledJobRunner {
 			if (!schedulerLockService.release(lockName, owner.get())) {
 				meterRegistry.counter("scheduled.job.lock.lost", "job", jobName).increment();
 				log.error("정기 작업 {} 잠금이 만료되었거나 소유권을 잃었습니다.", jobName);
+				operatorAlerts.add("job.lock.lost:" + jobName,
+						"[정기 작업: " + jobName + "] 작업이 끝나기 전에 잠금이 만료되었거나 소유권을 잃었습니다.", ALERT_REPEAT_AFTER);
 			}
 			if (stats.failed > 0) {
 				meterRegistry.counter("scheduled.job.failures", "job", jobName).increment(stats.failed);
+				operatorAlerts.add("job.failed:" + jobName,
+						"[정기 작업: " + jobName + "] 실패했습니다: 처리 " + stats.processed + "건, 실패 " + stats.failed + "건",
+						ALERT_REPEAT_AFTER);
 			}
 			long elapsedMs = Duration.ofNanos(System.nanoTime() - stats.startedAtNanos).toMillis();
 			if (stats.processed > 0 || stats.failed > 0) {

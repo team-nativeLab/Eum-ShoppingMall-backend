@@ -55,6 +55,10 @@ spring:
 logging:
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] [requestId=%X{requestId:-}] %-5level %logger{36} - %msg%n%ex"
+  structured:
+    format:
+      # 로그 수집 도구가 읽을 한 줄 JSON 형식(ecs, logstash, gelf). 비워 두면 위 패턴으로 남긴다.
+      console: ${LOG_FORMAT:}
 
 server:
   shutdown: graceful
@@ -149,6 +153,9 @@ upload:
     max-deletes-per-run: ${UPLOAD_CLEANUP_MAX_DELETES_PER_RUN:1000}
 
 app:
+  alert:
+    # 확인이 필요한 상황을 메일로 받을 담당자 이메일(쉼표로 구분). 비어 있으면 로그와 지표로만 남긴다. 메일 서버(MAIL_HOST)도 설정해야 보낸다.
+    emails: ${ALERT_EMAILS:}
   auth:
     # true면 회원가입에 이메일 인증 토큰이 필요하다. 프론트가 인증 화면을 붙이고 메일 서버(MAIL_HOST)를 설정한 뒤 켠다.
     signup-email-verification-required: ${SIGNUP_EMAIL_VERIFICATION_REQUIRED:false}

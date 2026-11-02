@@ -41,7 +41,7 @@ resource "aws_ecs_task_definition" "api" {
     image        = "${aws_ecr_repository.api.repository_url}:${var.image_tag}"
     essential    = true
     portMappings = [{ containerPort = local.api_port, protocol = "tcp" }]
-    environment = [
+    environment = concat([
       { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
       { name = "DB_URL", value = "jdbc:mysql://${aws_db_instance.main[0].address}:3306/${var.db_name}?sslMode=VERIFY_IDENTITY" },
       { name = "REDIS_HOST", value = aws_elasticache_replication_group.main[0].primary_endpoint_address },
@@ -56,7 +56,7 @@ resource "aws_ecs_task_definition" "api" {
       { name = "UPLOAD_S3_BUCKET", value = aws_s3_bucket.uploads.bucket },
       { name = "UPLOAD_CDN_BASE_URL", value = "https://${aws_cloudfront_distribution.uploads.domain_name}" },
       { name = "AWS_REGION", value = var.aws_region }
-    ]
+    ], [for name, value in var.app_environment : { name = name, value = value }])
     # 비밀 값은 environment에 넣지 않는다. ECS가 Secrets Manager에서 읽어 환경변수로 넣는다.
     secrets = concat([
       { name = "DB_USERNAME", valueFrom = "${var.database_app_secret_arn}:username::" },

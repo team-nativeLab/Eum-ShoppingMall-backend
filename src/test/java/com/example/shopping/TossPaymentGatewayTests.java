@@ -31,6 +31,9 @@ import com.example.shopping.domain.payment.gateway.PgUnavailableException;
 import com.example.shopping.domain.payment.gateway.TossPaymentGateway;
 import com.example.shopping.domain.payment.gateway.TossProperties;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 /**
  * 토스페이먼츠로 보내는 요청 형식과 응답 해석을 가짜 HTTP 서버로 확인한다.
  * 실제 토스 서버와 통신하는 테스트는 아니므로, 운영 전에 테스트 키로 실제 결제를 한 번 해 봐야 한다.
@@ -44,12 +47,13 @@ class TossPaymentGatewayTests {
 
 	private MockRestServiceServer server;
 	private TossPaymentGateway gateway;
+	private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
 	@BeforeEach
 	void setUp() {
 		RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
 		server = MockRestServiceServer.bindTo(builder).build();
-		gateway = new TossPaymentGateway(builder.build(), new TossProperties(SECRET_KEY, BASE_URL));
+		gateway = new TossPaymentGateway(builder.build(), new TossProperties(SECRET_KEY, BASE_URL), meters);
 	}
 
 	@Test
@@ -170,7 +174,7 @@ class TossPaymentGatewayTests {
 	@Test
 	void 시크릿_키가_없으면_PG를_호출하지_않고_확실한_실패로_다룬다() {
 		TossPaymentGateway unconfigured = new TossPaymentGateway(RestClient.builder().baseUrl(BASE_URL).build(),
-				new TossProperties("", BASE_URL));
+				new TossProperties("", BASE_URL), meters);
 
 		// 승인·취소는 아무 일도 일어나지 않았으므로 실패가 확실하다.
 		assertThatThrownBy(() -> unconfigured.confirm("pay-key", "ORDER-1", 60000))
@@ -178,5 +182,32 @@ class TossPaymentGatewayTests {
 						e -> assertThat(e.getCode()).isEqualTo("PG_NOT_CONFIGURED"));
 		// 조회는 "결제 기록이 없다"고 답하면 안 된다 (실제로는 결제됐을 수 있다).
 		assertThatThrownBy(() -> unconfigured.findByOrderNo("ORDER-1")).isInstanceOf(PgUnavailableException.class);
+		// 설정 오류로 결제를 못 하는 상황이므로 PG 실패 비율 알림에 잡히게 센다.
+		assertThat(requests("unavailable")).isEqualTo(2);
+	}
+
+	@Test
+	void 호출_결과를_성공_거절_장애로_나눠_센다() {
+		server.expect(requestTo(BASE_URL + "/v1/payments/confirm")).andRespond(withSuccess("""
+				{"paymentKey":"pay-key","orderId":"ORDER-1","status":"DONE","totalAmount":60000,
+				 "balanceAmount":60000,"method":"카드","approvedAt":"2026-10-13T10:16:02+09:00",
+				 "card":{"issuerCode":"61"}}
+				""", MediaType.APPLICATION_JSON));
+		server.expect(requestTo(BASE_URL + "/v1/payments/confirm")).andRespond(withStatus(HttpStatus.BAD_REQUEST)
+				.contentType(MediaType.APPLICATION_JSON).body("{\"code\":\"REJECT_CARD_COMPANY\"}"));
+		server.expect(requestTo(BASE_URL + "/v1/payments/confirm")).andRespond(withStatus(HttpStatus.BAD_GATEWAY));
+
+		gateway.confirm("pay-key", "ORDER-1", 60000);
+		assertThatThrownBy(() -> gateway.confirm("pay-key", "ORDER-1", 60000)).isInstanceOf(PgRejectedException.class);
+		assertThatThrownBy(() -> gateway.confirm("pay-key", "ORDER-1", 60000)).isInstanceOf(PgUnavailableException.class);
+
+		assertThat(requests("success")).isEqualTo(1);
+		assertThat(requests("rejected")).isEqualTo(1);
+		assertThat(requests("unavailable")).isEqualTo(1);
+	}
+
+	private double requests(String outcome) {
+		Counter counter = meters.find("pg.requests").tag("outcome", outcome).counter();
+		return counter == null ? 0 : counter.count();
 	}
 }
