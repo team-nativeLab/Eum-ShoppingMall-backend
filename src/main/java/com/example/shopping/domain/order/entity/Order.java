@@ -7,7 +7,6 @@ import java.util.List;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import com.example.shopping.domain.order.OrderAmounts;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.global.entity.BaseTimeEntity;
 import com.example.shopping.global.exception.BusinessException;
@@ -95,6 +94,7 @@ public class Order extends BaseTimeEntity {
 	@Column(nullable = false)
 	private long itemAmount;
 
+	// 할인 정책이 없어 새 주문은 0이다. 이전 주문에 저장된 할인을 그대로 보여 주려고 남긴다.
 	@Column(nullable = false)
 	private long discountAmount;
 
@@ -146,18 +146,16 @@ public class Order extends BaseTimeEntity {
 		items.add(OrderItem.create(this, skuId, productName, optionName, price, quantity));
 	}
 
-	/** 품목을 다 담은 뒤 금액과 주문명을 확정한다. 금액이 상한을 넘으면 거절한다. */
-	public void finalizeAmounts() {
+	/** 품목을 다 담은 뒤 금액과 주문명을 확정한다. 배송비는 주문 시점의 정책으로 정해 저장한다. 금액이 상한을 넘으면 거절한다. */
+	public void finalizeAmounts(ShippingPolicy shippingPolicy) {
 		try {
 			long sum = 0;
 			for (OrderItem item : items) {
 				sum = Math.addExact(sum, Math.multiplyExact(item.getOrderPrice(), item.getQuantity()));
 			}
-			OrderAmounts amounts = OrderAmounts.calculate(sum);
-			this.itemAmount = amounts.itemAmount();
-			this.discountAmount = amounts.discountAmount();
-			this.shippingFee = amounts.shippingFee();
-			this.totalAmount = amounts.totalAmount();
+			this.itemAmount = sum;
+			this.shippingFee = shippingPolicy.shippingFeeFor(sum);
+			this.totalAmount = Math.addExact(sum, shippingFee);
 		} catch (ArithmeticException e) {
 			throw new BusinessException(ErrorCode.ORDER_AMOUNT_TOO_LARGE);
 		}

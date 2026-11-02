@@ -1,6 +1,6 @@
-# Uploaded product and banner images: a private S3 bucket served only through CloudFront (OAC).
-# The app signs in as a dedicated IAM user. Create its access key outside Terraform (so the secret never
-# lands in state), store it in Secrets Manager, and pass the ARNs as UPLOAD_S3_ACCESS_KEY/UPLOAD_S3_SECRET_KEY.
+# upload_storage = "s3"일 때 업로드 이미지(상품·배너)를 저장하는 비공개 S3 버킷. CloudFront(OAC)로만 내려준다.
+# 앱은 전용 IAM 사용자로 접속한다. 비밀 값이 상태 파일에 남지 않도록 액세스 키는 Terraform 밖에서 만들어
+# Secrets Manager에 넣고, 그 ARN을 application_secret_arns의 UPLOAD_S3_ACCESS_KEY·UPLOAD_S3_SECRET_KEY로 넘긴다.
 
 resource "aws_s3_bucket" "uploads" {
   bucket_prefix = "${var.name}-uploads-"
@@ -30,7 +30,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "uploads" {
   }
 }
 
-# The unused-image cleanup job deletes objects; versioning keeps them recoverable for 30 days.
+# 미사용 이미지 정리 작업이 파일을 지운다. 버전 관리를 켜 두어 지운 파일을 30일 동안 되살릴 수 있다.
 resource "aws_s3_bucket_versioning" "uploads" {
   bucket = aws_s3_bucket.uploads.id
   versioning_configuration {
@@ -60,7 +60,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
   depends_on = [aws_s3_bucket_versioning.uploads]
 }
 
-# Admin browsers upload directly with presigned PUT URLs.
+# 관리자 화면의 브라우저가 Presigned URL로 직접 PUT 업로드한다.
 resource "aws_s3_bucket_cors_configuration" "uploads" {
   bucket = aws_s3_bucket.uploads.id
   cors_rule {
@@ -83,7 +83,7 @@ data "aws_cloudfront_cache_policy" "caching_optimized" {
   name = "Managed-CachingOptimized"
 }
 
-# Includes X-Content-Type-Options: nosniff, so browsers never treat an uploaded object as HTML or script.
+# X-Content-Type-Options: nosniff가 들어 있어 브라우저가 업로드 파일을 HTML이나 스크립트로 해석하지 않는다.
 data "aws_cloudfront_response_headers_policy" "security_headers" {
   name = "Managed-SecurityHeadersPolicy"
 }
@@ -92,7 +92,7 @@ resource "aws_cloudfront_distribution" "uploads" {
   enabled      = true
   comment      = "${var.name} uploaded images"
   http_version = "http2and3"
-  # Edge locations in North America, Europe, and Asia (including Korea).
+  # 북미·유럽·아시아(한국 포함) 엣지를 쓴다.
   price_class = "PriceClass_200"
 
   origin {
@@ -144,7 +144,7 @@ resource "aws_iam_user" "uploads" {
   name = "${var.name}-uploads"
 }
 
-# Only the image prefix of this bucket; a leaked key cannot touch anything else.
+# 이 버킷의 이미지 경로(products/)만 허용한다. 키가 유출돼도 다른 곳은 건드릴 수 없다.
 resource "aws_iam_user_policy" "uploads" {
   name = "${var.name}-uploads-s3"
   user = aws_iam_user.uploads.name
@@ -157,7 +157,7 @@ resource "aws_iam_user_policy" "uploads" {
         Resource = "${aws_s3_bucket.uploads.arn}/products/*"
       },
       {
-        # Listing is needed by the cleanup job, and lets HeadObject return 404 instead of 403 for missing uploads.
+        # 정리 작업이 목록을 읽어야 하고, 이 권한이 있어야 없는 파일의 HeadObject가 403이 아닌 404를 돌려준다.
         Effect   = "Allow"
         Action   = "s3:ListBucket"
         Resource = aws_s3_bucket.uploads.arn

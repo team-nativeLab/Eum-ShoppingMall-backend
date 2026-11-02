@@ -7,6 +7,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+    # 요청 하나가 SQL을 몇 번 실행하는지 테스트에서 확인할 수 있게 한다(Statistics.getPrepareStatementCount).
+    properties:
+      hibernate.generate_statistics: true
   flyway:
     # H2 테스트는 JPA가 스키마를 만들고, MySQL 전용 Flyway SQL은 CI의 MySQL 검증에서 실행한다.
     enabled: false
@@ -50,3 +53,8 @@ app:
   seed:
     # 테스트는 빈 DB에서 시작한다. 기본 카테고리 생성은 테스트에서 직접 호출해 검증한다.
     default-categories: false
+
+logging:
+  level:
+    # generate_statistics가 세션마다 남기는 통계 로그는 끈다.
+    org.hibernate.engine.internal.StatisticalLoggingSessionEventListener: warn

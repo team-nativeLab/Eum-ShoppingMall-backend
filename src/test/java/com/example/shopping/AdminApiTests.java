@@ -706,8 +706,15 @@ class AdminApiTests {
 		mockMvc.perform(get("/api/v1/admin/orders").param("status", "PAID"))
 				.andExpect(jsonPath("$.data.totalElements").value(1))
 				.andExpect(jsonPath("$.data.content[0].orderNo").value("ORD-0001"));
-		mockMvc.perform(get("/api/v1/admin/orders").param("orderNo", "0002"))
+		// 주문번호는 전체나 앞부분으로 찾는다. 중간 일부로는 찾지 않는다(주문번호 인덱스를 쓰기 위해).
+		mockMvc.perform(get("/api/v1/admin/orders").param("orderNo", "ORD-0002"))
 				.andExpect(jsonPath("$.data.totalElements").value(1));
+		mockMvc.perform(get("/api/v1/admin/orders").param("orderNo", "ORD-000"))
+				.andExpect(jsonPath("$.data.totalElements").value(2));
+		mockMvc.perform(get("/api/v1/admin/orders").param("orderNo", "0002"))
+				.andExpect(jsonPath("$.data.totalElements").value(0));
+		mockMvc.perform(get("/api/v1/admin/orders").param("orderNo", "ORD_0002"))
+				.andExpect(jsonPath("$.data.totalElements").value(0));
 		mockMvc.perform(get("/api/v1/admin/orders").param("memberId", String.valueOf(memberId)))
 				.andExpect(jsonPath("$.data.totalElements").value(2));
 		mockMvc.perform(get("/api/v1/admin/orders").param("memberId", "999999"))

@@ -34,7 +34,7 @@ public class AdminOrderController {
 
 	private final AdminOrderService adminOrderService;
 
-	/** ADM-010 전체 주문 목록·검색 (?status=&memberId=&orderNo=) */
+	/** ADM-010 전체 주문 목록·검색 (?status=&memberId=&orderNo=). 주문번호는 전체나 앞부분(예: 주문일 20261028)으로 찾는다. */
 	@GetMapping
 	public ApiResponse<PageResponse<AdminOrderSummaryResponse>> orders(
 			@RequestParam(required = false) OrderStatus status,

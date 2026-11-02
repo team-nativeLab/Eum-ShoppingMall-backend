@@ -20,12 +20,16 @@ public interface ProductSearchRepository {
 
 	long count(ProductSearchCondition condition);
 
-	/** 카테고리 ID별 상품 수. 카테고리가 없는 상품은 세지 않는다. */
-	Map<Long, Long> countByCategory(ProductSearchCondition condition);
-
-	/** 브랜드별 상품 수. 브랜드가 없는 상품은 세지 않는다. */
-	Map<String, Long> countByBrand(ProductSearchCondition condition);
+	/**
+	 * (카테고리, 브랜드)별 상품 수. 카테고리·브랜드가 없는 상품도 null 묶음으로 센다.
+	 * 필터 개수 화면이 전체·카테고리별·브랜드별 개수를 이 결과 한 번으로 합쳐 구한다.
+	 */
+	List<CategoryBrandCount> countByCategoryAndBrand(ProductSearchCondition condition);
 
 	/** 인증 종류별 상품 수. 인증을 여러 개 받은 상품은 각 인증에 한 번씩 센다. */
 	Map<Certification, Long> countByCertification(ProductSearchCondition condition);
+
+	/** @param categoryId 카테고리가 없는 상품이면 null, brand도 같다 */
+	record CategoryBrandCount(Long categoryId, String brand, long count) {
+	}
 }

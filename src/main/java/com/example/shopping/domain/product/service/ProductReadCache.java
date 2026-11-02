@@ -17,11 +17,19 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import com.example.shopping.global.redis.RedisCircuitBreaker;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 공유 Redis를 이용하는 짧은 상품 검색 캐시. Redis가 끊기면 캐시를 건너뛰고 원래 조회를 실행한다. */
+/**
+ * 공유 Redis를 이용하는 짧은 상품 조회 캐시(홈, 카테고리, 목록·검색, 필터 개수, 자동 완성). Redis가 끊기면 캐시를 건너뛰고 원래 조회를 실행한다.
+ * 관리자가 상품·카테고리·배너를 바꿀 때만 전체를 무효화한다. 주문·결제·취소로 바뀌는 재고(품절 표시)와 판매 수량(인기순)은
+ * 무효화하지 않고 TTL(기본 60초) 안에 반영한다. 자주 바뀌는 값 때문에 전체를 비우면 주문이 몰릴수록 캐시가 맞지 않기 때문이다.
+ * 상품 상세는 캐시하지 않고, 장바구니·주문은 재고를 다시 확인한다. 적중률은 product.read.cache 지표(result=hit/miss/unavailable)로 본다.
+ */
 @Component
 public class ProductReadCache {
 
@@ -32,19 +40,30 @@ public class ProductReadCache {
 	private final JsonMapper jsonMapper;
 	private final Duration ttl;
 	private final RedisCircuitBreaker redisCircuitBreaker;
+	private final Counter hits;
+	private final Counter misses;
+	private final Counter unavailable;
 
 	public ProductReadCache(StringRedisTemplate redis, JsonMapper jsonMapper, long ttlSeconds) {
-		this(redis, jsonMapper, ttlSeconds, new RedisCircuitBreaker());
+		this(redis, jsonMapper, ttlSeconds, new RedisCircuitBreaker(), new SimpleMeterRegistry());
 	}
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public ProductReadCache(StringRedisTemplate redis, JsonMapper jsonMapper,
 			@org.springframework.beans.factory.annotation.Value("${app.cache.product-ttl-seconds:60}") long ttlSeconds,
-			RedisCircuitBreaker redisCircuitBreaker) {
+			RedisCircuitBreaker redisCircuitBreaker, MeterRegistry meterRegistry) {
 		this.redis = redis;
 		this.jsonMapper = jsonMapper;
 		this.ttl = Duration.ofSeconds(Math.max(0, ttlSeconds));
 		this.redisCircuitBreaker = redisCircuitBreaker;
+		this.hits = counter(meterRegistry, "hit");
+		this.misses = counter(meterRegistry, "miss");
+		this.unavailable = counter(meterRegistry, "unavailable");
+	}
+
+	private static Counter counter(MeterRegistry meterRegistry, String result) {
+		return Counter.builder("product.read.cache").tag("result", result)
+				.description("Product read cache lookups by result").register(meterRegistry);
 	}
 
 	public <T> T getOrLoad(Object key, Class<T> type, Supplier<T> loader) {
@@ -66,12 +85,16 @@ public class ProductReadCache {
 					+ hash(jsonMapper.writeValueAsString(key));
 			String cached = redisCircuitBreaker.execute(() -> redis.opsForValue().get(cacheKey));
 			if (cached != null) {
-				return reader.read(cached);
+				T value = reader.read(cached);
+				hits.increment();
+				return value;
 			}
 		} catch (DataAccessException | JacksonException | IllegalArgumentException ex) {
 			log.debug("Product read cache unavailable; reading from the database", ex);
+			unavailable.increment();
 			return loader.get();
 		}
+		misses.increment();
 
 		T value = loader.get();
 		try {

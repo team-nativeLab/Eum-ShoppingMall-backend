@@ -34,6 +34,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Payment extends BaseTimeEntity {
 
+	/** Toss가 가상계좌 결제에 주는 결제 수단 이름 */
+	public static final String VIRTUAL_ACCOUNT_METHOD = "가상계좌";
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -134,6 +137,10 @@ public class Payment extends BaseTimeEntity {
 		status = PaymentStatus.WAITING_DEPOSIT;
 		balanceAmount = pg.balanceAmount();
 		pgRaw = pg.secret() == null ? pg.raw() : null;
+	}
+
+	public boolean isVirtualAccount() {
+		return VIRTUAL_ACCOUNT_METHOD.equals(method);
 	}
 
 	public boolean matchesWebhookSecret(String secret) {

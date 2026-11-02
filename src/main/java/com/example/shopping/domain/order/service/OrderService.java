@@ -27,7 +27,6 @@ import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
 import com.example.shopping.domain.product.entity.ProductSku;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
-import com.example.shopping.domain.product.service.ProductReadCache;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.response.PageResponse;
@@ -48,10 +47,10 @@ public class OrderService {
 
 	private final OrderRepository orderRepository;
 	private final ProductSkuRepository productSkuRepository;
-	private final ProductReadCache productReadCache;
 	private final PaymentRepository paymentRepository;
 	private final MemberRepository memberRepository;
 	private final OrderTxService orderTxService;
+	private final ShippingPolicyService shippingPolicyService;
 	private final SecureRandom secureRandom = new SecureRandom();
 
 	/**
@@ -85,8 +84,8 @@ public class OrderService {
 			order.addItem(sku.getId(), sku.getProduct().getName(), sku.getOptionName(), sku.getPrice(),
 					line.quantity());
 		}
-		// 상품 합계에 배송비·할인 정책을 적용하고 주문 시점의 금액을 저장한다.
-		order.finalizeAmounts();
+		// 상품 합계에 지금의 배송비 정책을 적용하고 주문 시점의 금액을 저장한다.
+		order.finalizeAmounts(shippingPolicyService.current());
 		if (order.getItemAmount() <= 0 || order.getTotalAmount() <= 0) {
 			// 결제할 수 없는 주문이 재고만 잡아 두지 않도록 만들지 않는다.
 			throw new BusinessException(ErrorCode.ORDER_AMOUNT_INVALID);
@@ -98,7 +97,6 @@ public class OrderService {
 				throw new BusinessException(ErrorCode.OUT_OF_STOCK);
 			}
 		}
-		productReadCache.invalidateAfterCommit();
 		return OrderCreateResponse.from(orderRepository.save(order));
 	}
 

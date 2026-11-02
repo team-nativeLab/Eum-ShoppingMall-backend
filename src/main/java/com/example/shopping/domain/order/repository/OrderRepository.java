@@ -30,15 +30,18 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
 	Page<Order> findByMemberId(Long memberId, Pageable pageable);
 
-	/** 세 조건 모두 선택이다. 주문번호는 일부만 입력해도 찾는다. */
+	/**
+	 * 세 조건 모두 선택이다. 주문번호는 앞부분 일치(orderNoPrefix = "20261028%" 같은 LIKE 패턴)로 찾는다.
+	 * 앞부분 일치라야 주문번호 유니크 인덱스를 써서 주문이 쌓여도 전체를 읽지 않는다.
+	 */
 	@Query("""
 			select o from Order o
 			where (:status is null or o.status = :status)
 			  and (:memberId is null or o.memberId = :memberId)
-			  and (:orderNo is null or o.orderNo like concat('%', :orderNo, '%'))
+			  and (:orderNoPrefix is null or o.orderNo like :orderNoPrefix escape '\\')
 			""")
 	Page<Order> search(@Param("status") OrderStatus status, @Param("memberId") Long memberId,
-			@Param("orderNo") String orderNo, Pageable pageable);
+			@Param("orderNoPrefix") String orderNoPrefix, Pageable pageable);
 
 	/** 기간 내에 결제된 주문 수. 전체 취소된 주문은 뺀다. */
 	@Query("""
@@ -247,17 +250,25 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 			""")
 	List<Long> findStuckProcessingIds(@Param("before") LocalDateTime before, Pageable pageable);
 
-	/** 취소 요청 중 멈췄거나 과거에 취소 상태만 먼저 반영된 주문. */
+	/** 취소 확인 중에 멈춘 주문. (status, updated_at) 인덱스로 해당 주문만 읽는다. */
 	@Query("""
 			select o.id from Order o
-			where o.updatedAt < :before and (
-			    o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED
-			    or (o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCELED and exists (
-			        select p.id from Payment p where p.orderId = o.id
-			          and p.status = com.example.shopping.domain.payment.entity.PaymentStatus.DONE
-			    ))
-			)
+			where o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCEL_REQUESTED
+			  and o.updatedAt < :before
 			order by o.updatedAt asc
 			""")
-	List<Long> findStuckCancellationIds(@Param("before") LocalDateTime before, Pageable pageable);
+	List<Long> findStuckCancelRequestIds(@Param("before") LocalDateTime before, Pageable pageable);
+
+	/** 주문은 취소인데 결제는 완료로 남은 예전 불일치 주문. 취소된 주문을 모두 확인하므로 하루 한 번만 부른다. */
+	@Query("""
+			select o.id from Order o
+			where o.status = com.example.shopping.domain.order.entity.OrderStatus.CANCELED
+			  and o.updatedAt < :before
+			  and exists (
+			      select p.id from Payment p where p.orderId = o.id
+			        and p.status = com.example.shopping.domain.payment.entity.PaymentStatus.DONE
+			  )
+			order by o.updatedAt asc
+			""")
+	List<Long> findCanceledWithDonePaymentIds(@Param("before") LocalDateTime before, Pageable pageable);
 }

@@ -101,6 +101,9 @@ jobs:
       - name: Validate Terraform configuration
         run: terraform validate
 
+      - name: Test Terraform plans with a mocked AWS provider
+        run: terraform test
+
   container-image:
     name: Build production container
     runs-on: ubuntu-latest

@@ -56,13 +56,19 @@ public class ProductSearchRepositoryImpl implements ProductSearchRepository {
 	}
 
 	@Override
-	public Map<Long, Long> countByCategory(ProductSearchCondition condition) {
-		return countBy(condition, product -> product.get("category").get("id"));
-	}
-
-	@Override
-	public Map<String, Long> countByBrand(ProductSearchCondition condition) {
-		return countBy(condition, product -> product.get("brand"));
+	public List<CategoryBrandCount> countByCategoryAndBrand(ProductSearchCondition condition) {
+		CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+		CriteriaQuery<Tuple> query = cb.createTupleQuery();
+		Root<Product> product = query.from(Product.class);
+		Expression<Long> category = product.get("category").get("id");
+		Expression<String> brand = product.get("brand");
+		query.multiselect(category, brand, cb.count(product))
+				.where(predicates(cb, query, product, condition))
+				.groupBy(category, brand);
+		return entityManager.createQuery(query).getResultList().stream()
+				.map(row -> new CategoryBrandCount(row.get(0, Long.class), row.get(1, String.class),
+						row.get(2, Long.class)))
+				.toList();
 	}
 
 	@Override
@@ -83,7 +89,7 @@ public class ProductSearchRepositoryImpl implements ProductSearchRepository {
 				.getResultList();
 	}
 
-	/** 조건에 맞는 상품을 key별로 센다. key가 null인 상품(카테고리·브랜드 없음)은 결과에서 뺀다. */
+	/** 조건에 맞는 상품을 key별로 센다. key가 null인 상품은 결과에서 뺀다. */
 	private <T> Map<T, Long> countBy(ProductSearchCondition condition, Function<Root<Product>, Expression<T>> key) {
 		CriteriaBuilder cb = entityManager.getCriteriaBuilder();
 		CriteriaQuery<Tuple> query = cb.createTupleQuery();

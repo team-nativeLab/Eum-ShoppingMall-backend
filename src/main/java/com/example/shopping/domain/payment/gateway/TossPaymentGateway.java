@@ -19,6 +19,7 @@ import org.springframework.web.client.RestClientException;
 import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
@@ -28,14 +29,17 @@ import tools.jackson.databind.json.JsonMapper;
 public class TossPaymentGateway implements PaymentGateway {
 
 	private static final ZoneId BUSINESS_TIME_ZONE = ZoneId.of("Asia/Seoul");
+	private static final String NOT_CONFIGURED = "PG_NOT_CONFIGURED";
 
 	private final RestClient restClient;
 	private final TossProperties properties;
+	private final MeterRegistry meterRegistry;
 	private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
-	public TossPaymentGateway(RestClient restClient, TossProperties properties) {
+	public TossPaymentGateway(RestClient restClient, TossProperties properties, MeterRegistry meterRegistry) {
 		this.restClient = restClient;
 		this.properties = properties;
+		this.meterRegistry = meterRegistry;
 	}
 
 	@Override
@@ -64,12 +68,32 @@ public class TossPaymentGateway implements PaymentGateway {
 				Map.of("cancelReason", reason), paymentKey);
 	}
 
+	/** 호출 결과를 pg.requests{outcome} 지표로 센다. 카드 거절 같은 업무 거절(rejected)은 PG 장애(unavailable)가 아니다. */
 	private PgPayment call(HttpMethod method, String uri, String idempotencyKey, Map<String, Object> body,
+			Object... uriVariables) {
+		try {
+			PgPayment payment = send(method, uri, idempotencyKey, body, uriVariables);
+			countRequest("success");
+			return payment;
+		} catch (PgRejectedException e) {
+			countRequest(NOT_CONFIGURED.equals(e.getCode()) ? "unavailable" : "rejected");
+			throw e;
+		} catch (PgUnavailableException e) {
+			countRequest("unavailable");
+			throw e;
+		}
+	}
+
+	private void countRequest(String outcome) {
+		meterRegistry.counter("pg.requests", "outcome", outcome).increment();
+	}
+
+	private PgPayment send(HttpMethod method, String uri, String idempotencyKey, Map<String, Object> body,
 			Object... uriVariables) {
 		if (!StringUtils.hasText(properties.secretKey())) {
 			// PG를 부르지도 않았으므로 "결과를 알 수 없음"이 아니라 확실한 실패다. (고객에게 '확인 중'으로 안내하지 않는다.)
 			log.error("토스페이먼츠 시크릿 키(TOSS_SECRET_KEY)가 설정되지 않아 결제를 처리할 수 없습니다.");
-			throw new PgRejectedException("PG_NOT_CONFIGURED", null);
+			throw new PgRejectedException(NOT_CONFIGURED, null);
 		}
 		String basicAuth = Base64.getEncoder()
 				.encodeToString((properties.secretKey() + ":").getBytes(StandardCharsets.UTF_8));

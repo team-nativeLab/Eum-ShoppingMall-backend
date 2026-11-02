@@ -19,8 +19,10 @@ import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.gateway.PgRejectedException;
 import com.example.shopping.domain.payment.gateway.PgUnavailableException;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
+import com.example.shopping.domain.payment.service.PgPaymentMatcher;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
+import com.example.shopping.global.monitoring.ManualCheckAlerts;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +42,7 @@ public class OrderCancelService {
 	private final OrderTxService orderTxService;
 	private final PaymentRepository paymentRepository;
 	private final PaymentGateway paymentGateway;
+	private final ManualCheckAlerts alerts;
 
 	public OrderDetailResponse cancel(Long memberId, String orderNo) {
 		Order order = orderService.findOwned(memberId, orderNo);
@@ -151,7 +154,7 @@ public class OrderCancelService {
 		if (payment == null || (payment.getStatus() != PaymentStatus.DONE
 				&& payment.getStatus() != PaymentStatus.WAITING_DEPOSIT)) {
 			if (order.getStatus() == OrderStatus.CANCEL_REQUESTED) {
-				log.error("주문 {} 취소 보정에 필요한 완료 결제 기록이 없습니다. 수동 확인이 필요합니다.", order.getOrderNo());
+				alerts.raise("cancel_payment_missing", "주문 {} 취소 보정에 필요한 완료 결제 기록이 없습니다.", order.getOrderNo());
 			}
 			return;
 		}
@@ -169,13 +172,13 @@ public class OrderCancelService {
 			return;
 		}
 		if (actual.isEmpty() || !isUncanceledPayment(order, actual.get(), payment)) {
-			log.error("주문 {} PG 상태가 취소 보정 조건과 일치하지 않습니다. 수동 확인이 필요합니다.", order.getOrderNo());
+			alerts.raise("cancel_pg_mismatch", "주문 {} PG 상태가 취소 보정 조건과 맞지 않습니다.", order.getOrderNo());
 			return;
 		}
 		LocalDateTime cancelRequestedAt = order.getCancelRequestedAt() == null
 				? order.getUpdatedAt() : order.getCancelRequestedAt();
 		if (cancelRequestedAt.isBefore(now.minusDays(IDEMPOTENCY_RETRY_CUTOFF_DAYS))) {
-			log.error("주문 {} 취소 요청이 멱등 키 15일 유효기간에 근접했습니다. 자동 재요청을 중단하고 수동 확인이 필요합니다.",
+			alerts.raise("cancel_retry_expiring", "주문 {} 취소 요청이 멱등 키 15일 유효기간에 가까워 자동 재요청을 멈췄습니다.",
 					order.getOrderNo());
 			return;
 		}
@@ -187,7 +190,7 @@ public class OrderCancelService {
 			if (isFullyCanceled(order, payment, result)) {
 				completeConfirmedCancellation(order, payment);
 			} else {
-				log.error("주문 {} 재취소 응답이 전액 취소 상태가 아닙니다: status={}, balance={}",
+				alerts.raise("cancel_incomplete", "주문 {} 재취소 응답이 전액 취소 상태가 아닙니다: status={}, balance={}",
 						order.getOrderNo(), result.status(), result.balanceAmount());
 			}
 		} catch (PgRejectedException e) {
@@ -200,7 +203,7 @@ public class OrderCancelService {
 				log.warn("주문 {} PG가 취소를 확실히 거절해 이전 주문 상태로 복구했습니다: {}",
 						order.getOrderNo(), e.getMessage());
 			} else {
-				log.error("과거 주문 {} PG가 취소 재요청을 거절했습니다. 수동 확인이 필요합니다: {}",
+				alerts.raise("cancel_rejected", "과거 주문 {} PG가 취소 재요청을 거절했습니다: {}",
 						order.getOrderNo(), e.getMessage());
 			}
 		} catch (PgUnavailableException e) {
@@ -230,18 +233,14 @@ public class OrderCancelService {
 
 	private boolean isFullyCanceled(Order order, Payment payment, PgPayment pg) {
 		return pg.status() == PgStatus.CANCELED && pg.balanceAmount() == 0
-				&& pg.totalAmount() == order.getTotalAmount()
-				&& order.getOrderNo().equals(pg.orderNo())
-				&& payment.getPaymentKey().equals(pg.paymentKey());
+				&& PgPaymentMatcher.isSamePayment(order, payment, pg);
 	}
 
 	private boolean isUncanceledPayment(Order order, PgPayment pg, Payment payment) {
 		PgStatus expectedStatus = payment.getStatus() == PaymentStatus.WAITING_DEPOSIT
 				? PgStatus.WAITING_FOR_DEPOSIT : PgStatus.DONE;
 		return pg.status() == expectedStatus && pg.balanceAmount() == order.getTotalAmount()
-				&& pg.totalAmount() == order.getTotalAmount()
-				&& order.getOrderNo().equals(pg.orderNo())
-				&& payment.getPaymentKey().equals(pg.paymentKey());
+				&& PgPaymentMatcher.isSamePayment(order, payment, pg);
 	}
 
 	private String newCancelIdempotencyKey() {

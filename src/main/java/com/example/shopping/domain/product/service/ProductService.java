@@ -33,6 +33,7 @@ import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.CategoryRepository;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.product.repository.ProductSearchCondition;
+import com.example.shopping.domain.product.repository.ProductSearchRepository.CategoryBrandCount;
 import com.example.shopping.domain.product.repository.ProductSort;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
@@ -109,19 +110,34 @@ public class ProductService {
 				() -> loadFacets(categoryId, keyword));
 	}
 
+	/**
+	 * 상품을 두 번만 읽는다. 검색어 조건으로 (카테고리, 브랜드)별 개수를 한 번 세어 전체·카테고리 범위·카테고리별·브랜드별 개수를
+	 * 모두 합쳐 구하고, 인증별 개수만 따로 센다(상품 하나가 인증 여러 개를 가질 수 있어서).
+	 */
 	private ProductFacetsResponse loadFacets(Long categoryId, String keyword) {
 		List<Category> all = categoryRepository.findAll();
-		ProductSearchCondition keywordOnly = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE, null, keyword);
-		ProductSearchCondition scoped = ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE,
-				withDescendants(all, categoryId), keyword);
+		Set<Long> scope = withDescendants(all, categoryId);
+		List<CategoryBrandCount> counts = productRepository.countByCategoryAndBrand(
+				ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE, null, keyword));
+		List<CategoryBrandCount> scoped = scope == null ? counts
+				: counts.stream().filter(count -> scope.contains(count.categoryId())).toList();
 
-		long keywordTotalCount = productRepository.count(keywordOnly);
-		long totalCount = categoryId == null ? keywordTotalCount : productRepository.count(scoped);
-		return new ProductFacetsResponse(totalCount, keywordTotalCount,
-				rootCategoryFacets(all, productRepository.countByCategory(keywordOnly)),
-				facets(productRepository.countByBrand(scoped), Function.identity(), Function.identity()),
-				facets(productRepository.countByCertification(scoped), Certification::name,
-						Certification::getLabel));
+		Map<Long, Long> byCategory = new HashMap<>();
+		counts.stream().filter(count -> count.categoryId() != null)
+				.forEach(count -> byCategory.merge(count.categoryId(), count.count(), Long::sum));
+		Map<String, Long> byBrand = new HashMap<>();
+		scoped.stream().filter(count -> count.brand() != null)
+				.forEach(count -> byBrand.merge(count.brand(), count.count(), Long::sum));
+		Map<Certification, Long> byCertification = productRepository.countByCertification(
+				ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE, scope, keyword));
+
+		return new ProductFacetsResponse(total(scoped), total(counts), rootCategoryFacets(all, byCategory),
+				facets(byBrand, Function.identity(), Function.identity()),
+				facets(byCertification, Certification::name, Certification::getLabel));
+	}
+
+	private static long total(List<CategoryBrandCount> counts) {
+		return counts.stream().mapToLong(CategoryBrandCount::count).sum();
 	}
 
 	/** 검색창 자동 완성. 상품명이나 브랜드에 검색어가 든 상품을 추천순으로 최대 5개 */

@@ -18,7 +18,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import com.example.shopping.domain.product.service.ProductReadCache;
+import com.example.shopping.global.redis.RedisCircuitBreaker;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -45,7 +47,9 @@ class ProductReadCacheTests {
 			return null;
 		}).when(values).set(anyString(), anyString(), any(Duration.class));
 
-		ProductReadCache cache = new ProductReadCache(redis, JsonMapper.builder().build(), 60);
+		SimpleMeterRegistry meters = new SimpleMeterRegistry();
+		ProductReadCache cache = new ProductReadCache(redis, JsonMapper.builder().build(), 60, new RedisCircuitBreaker(),
+				meters);
 		AtomicInteger loads = new AtomicInteger();
 		TypeReference<List<String>> type = new TypeReference<>() {};
 		Object key = new TestKey("brands", 10L);
@@ -65,6 +69,9 @@ class ProductReadCacheTests {
 		})).containsExactly("new brand");
 
 		assertThat(loads).hasValue(2);
+		// 적중률을 지표로 남긴다: 처음·무효화 뒤 두 번은 실패, 그 사이 한 번은 적중
+		assertThat(meters.get("product.read.cache").tag("result", "miss").counter().count()).isEqualTo(2);
+		assertThat(meters.get("product.read.cache").tag("result", "hit").counter().count()).isEqualTo(1);
 	}
 
 	private record TestKey(String operation, Long categoryId) {

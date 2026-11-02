@@ -9,6 +9,7 @@ import com.example.shopping.domain.cart.dto.response.CartResponse;
 import com.example.shopping.domain.cart.entity.CartItem;
 import com.example.shopping.domain.cart.repository.CartItemRepository;
 import com.example.shopping.domain.member.repository.MemberRepository;
+import com.example.shopping.domain.order.service.ShippingPolicyService;
 import com.example.shopping.domain.product.entity.ProductSku;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
@@ -26,10 +27,11 @@ public class CartService {
 	private final CartItemRepository cartItemRepository;
 	private final ProductSkuRepository productSkuRepository;
 	private final MemberRepository memberRepository;
+	private final ShippingPolicyService shippingPolicyService;
 
 	@Transactional(readOnly = true)
 	public CartResponse getCart(Long memberId) {
-		return CartResponse.from(cartItemRepository.findAllWithProduct(memberId));
+		return CartResponse.from(cartItemRepository.findAllWithProduct(memberId), shippingPolicyService.current());
 	}
 
 	/** 이미 담긴 옵션이면 수량을 더한다. 금액 미표시 상품도 담을 수는 있다(주문은 불가). */

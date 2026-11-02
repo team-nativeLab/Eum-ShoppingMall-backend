@@ -1,7 +1,6 @@
 package com.example.shopping.domain.audit.web;
 
 import java.util.Map;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +16,7 @@ import org.springframework.web.util.WebUtils;
 
 import com.example.shopping.domain.audit.service.AdminAuditLogService;
 import com.example.shopping.domain.audit.service.AuditDetails;
+import com.example.shopping.global.security.ApiPolicy;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -33,9 +33,6 @@ import jakarta.servlet.http.HttpServletResponse;
 public class AdminAuditInterceptor implements HandlerInterceptor {
 
 	private static final Logger log = LoggerFactory.getLogger(AdminAuditInterceptor.class);
-	private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
-	// 관리자 로그인은 AuthService가 성공·실패를 따로 남긴다. 본문에 비밀번호가 있으므로 여기서는 다루지 않는다.
-	private static final String ADMIN_AUTH_PATH = "/api/v1/admin/auth/";
 
 	private final AdminAuditLogService auditLogService;
 	private final Counter recordFailures;
@@ -105,16 +102,9 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
 	record Target(String type, String id) {
 	}
 
-	private boolean isAuditedPath(String path) {
-		// 이미지 업로드는 서버를 거치는 업로드와 직접 업로드의 완료 요청을 남긴다.
-		return path.startsWith("/api/v1/admin/") || "/api/v1/uploads".equals(path)
-				|| "/api/v1/uploads/complete".equals(path);
-	}
-
-	/** 감사 대상 요청인지: 관리자 API(로그인 제외)와 이미지 업로드의 변경 요청 */
+	/** 감사 대상 요청인지. 기준(관리자 API의 변경 요청, 로그인·직접 업로드 주소 발급 제외)은 ApiPolicy에 둔다. */
 	boolean isAudited(HttpServletRequest request) {
-		String path = request.getRequestURI();
-		return WRITE_METHODS.contains(request.getMethod()) && !path.startsWith(ADMIN_AUTH_PATH) && isAuditedPath(path);
+		return ApiPolicy.isAudited(request.getMethod(), request.getRequestURI());
 	}
 
 	private String details(HttpServletRequest request) {
