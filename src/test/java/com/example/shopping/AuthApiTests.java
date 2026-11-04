@@ -221,6 +221,8 @@ class AuthApiTests {
 		String body = phone == null
 				? json("email", email, "password", password, "name", name)
 				: json("email", email, "password", password, "name", name, "phone", phone);
+		// 필수 동의(#21)를 함께 보낸다.
+		body = body.substring(0, body.length() - 1) + ",\"termsAgreed\":true,\"privacyAgreed\":true}";
 		return mockMvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 

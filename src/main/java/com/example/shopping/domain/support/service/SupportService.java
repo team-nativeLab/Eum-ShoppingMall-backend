@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import org.springframework.util.StringUtils;
 
+import com.example.shopping.domain.consent.service.ConsentService;
+import com.example.shopping.domain.consent.service.ConsentService.PrivacyConsent;
 import com.example.shopping.domain.support.dto.response.FaqResponse;
 import com.example.shopping.domain.support.dto.request.InquiryCreateRequest;
 import com.example.shopping.domain.support.dto.response.InquiryResponse;
@@ -33,6 +35,7 @@ public class SupportService {
 	private final NoticeRepository noticeRepository;
 	private final FaqRepository faqRepository;
 	private final InquiryRepository inquiryRepository;
+	private final ConsentService consentService;
 
 	public PageResponse<NoticeResponse> getNotices(Pageable pageable) {
 		// 공지는 항상 고정 공지 먼저, 최신순으로 내려주므로 다른 정렬 기준은 받지 않는다.
@@ -62,8 +65,12 @@ public class SupportService {
 			// 비회원은 로그인해서 답변을 확인할 수 없으므로 연락처가 없으면 답변을 전달할 방법이 없다.
 			throw new BusinessException(ErrorCode.INVALID_INPUT);
 		}
+		PrivacyConsent consent = consentService.privacyConsentForSubmission(memberId, request.privacyAgreed());
 		Inquiry inquiry = Inquiry.create(memberId, request.inquiryType().trim(), request.title().trim(),
 				request.content(), phone, email);
+		if (consent != null) {
+			inquiry.recordPrivacyConsent(consent.agreedAt(), consent.policyVersion());
+		}
 		return InquiryResponse.from(inquiryRepository.save(inquiry));
 	}
 

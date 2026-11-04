@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import com.example.shopping.domain.consent.service.ConsentService;
+import com.example.shopping.domain.consent.service.ConsentService.PrivacyConsent;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.quote.dto.request.QuoteCreateRequest;
@@ -28,6 +30,7 @@ public class QuoteService {
 
 	private final QuoteInquiryRepository quoteInquiryRepository;
 	private final ProductRepository productRepository;
+	private final ConsentService consentService;
 
 	/** @param memberId 로그인한 회원의 ID. 비회원이면 null */
 	@Transactional
@@ -38,9 +41,13 @@ public class QuoteService {
 					.filter(product -> ProductStatus.CUSTOMER_VISIBLE.contains(product.getStatus()))
 					.orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
 		}
+		PrivacyConsent consent = consentService.privacyConsentForSubmission(memberId, request.privacyAgreed());
 		String email = StringUtils.hasText(request.email()) ? request.email().trim() : null;
 		QuoteInquiry quote = QuoteInquiry.create(memberId, request.productId(), request.companyName().trim(),
 				request.managerName().trim(), ContactFormats.phone(request.phone()), email, request.content());
+		if (consent != null) {
+			quote.recordPrivacyConsent(consent.agreedAt(), consent.policyVersion());
+		}
 		return QuoteResponse.from(quoteInquiryRepository.save(quote));
 	}
 

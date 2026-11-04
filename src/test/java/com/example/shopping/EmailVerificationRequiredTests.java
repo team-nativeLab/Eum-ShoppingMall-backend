@@ -28,13 +28,13 @@ class EmailVerificationRequiredTests {
 	@Test
 	void 이메일_인증_토큰_없이는_가입할_수_없다() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content("""
-				{"email":"new-member@example.com","password":"test-pass-1234","name":"홍길동"}
+				{"email":"new-member@example.com","password":"test-pass-1234","name":"홍길동","termsAgreed":true,"privacyAgreed":true}
 				"""))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("EMAIL_VERIFICATION_REQUIRED"));
 		mockMvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content("""
 				{"email":"new-member@example.com","password":"test-pass-1234","name":"홍길동",
-				 "emailVerificationToken":"made-up-token"}
+				 "termsAgreed":true,"privacyAgreed":true,"emailVerificationToken":"made-up-token"}
 				"""))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("EMAIL_VERIFICATION_REQUIRED"));

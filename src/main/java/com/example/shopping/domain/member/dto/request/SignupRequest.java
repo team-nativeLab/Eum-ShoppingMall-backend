@@ -2,8 +2,10 @@ package com.example.shopping.domain.member.dto.request;
 
 import com.example.shopping.global.validation.ValidationPatterns;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -29,12 +31,22 @@ public record SignupRequest(
 		// 이메일 인증(POST /api/v1/auth/email-verifications/confirm)으로 받은 토큰.
 		// SIGNUP_EMAIL_VERIFICATION_REQUIRED=true면 필수다.
 		@Size(max = 100, message = "이메일 인증 토큰이 올바르지 않습니다.")
-		String emailVerificationToken) {
+		String emailVerificationToken,
+		// 이용약관·개인정보 수집·이용 동의는 필수, 마케팅 수신 동의는 선택이다(#21).
+		@NotNull(message = "이용약관에 동의해 주세요.")
+		@AssertTrue(message = "이용약관에 동의해 주세요.")
+		Boolean termsAgreed,
+		@NotNull(message = "개인정보 수집·이용에 동의해 주세요.")
+		@AssertTrue(message = "개인정보 수집·이용에 동의해 주세요.")
+		Boolean privacyAgreed,
+		Boolean marketingAgreed) {
 
 	/** 요청 객체가 로그에 찍히더라도 비밀번호는 남지 않게 한다. */
 	@Override
 	public String toString() {
 		return "SignupRequest[email=" + email + ", password=****, name=" + name + ", phone=" + phone
-				+ ", emailVerificationToken=" + (emailVerificationToken == null ? null : "****") + "]";
+				+ ", emailVerificationToken=" + (emailVerificationToken == null ? null : "****")
+				+ ", termsAgreed=" + termsAgreed + ", privacyAgreed=" + privacyAgreed
+				+ ", marketingAgreed=" + marketingAgreed + "]";
 	}
 }

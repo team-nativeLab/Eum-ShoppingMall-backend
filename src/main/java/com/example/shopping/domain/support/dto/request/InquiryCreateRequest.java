@@ -26,5 +26,7 @@ public record InquiryCreateRequest(
 
 		@Email(message = "이메일 형식이 올바르지 않습니다.")
 		@Size(max = 255, message = "이메일은 255자 이하여야 합니다.")
-		String contactEmail) {
+		String contactEmail,
+		// 개인정보 수집·이용 동의. 비회원은 필수다(#21).
+		Boolean privacyAgreed) {
 }
