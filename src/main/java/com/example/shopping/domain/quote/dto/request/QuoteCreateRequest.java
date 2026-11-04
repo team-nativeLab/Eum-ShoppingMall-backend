@@ -31,5 +31,7 @@ public record QuoteCreateRequest(
 
 		@NotBlank(message = "문의 내용을 입력해 주세요.")
 		@Size(max = 5000, message = "문의 내용은 5000자 이하여야 합니다.")
-		String content) {
+		String content,
+		// 개인정보 수집·이용 동의. 비회원은 필수다(#21).
+		Boolean privacyAgreed) {
 }

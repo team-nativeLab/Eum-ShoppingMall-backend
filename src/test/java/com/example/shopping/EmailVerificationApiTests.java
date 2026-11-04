@@ -282,7 +282,7 @@ class EmailVerificationApiTests {
 	private ResultActions signup(String email, String token) throws Exception {
 		String tokenField = token == null ? "" : ",\"emailVerificationToken\":\"" + token + "\"";
 		return postJson("/api/v1/auth/signup",
-				"{\"email\":\"%s\",\"password\":\"%s\",\"name\":\"홍길동\"%s}".formatted(email, PASSWORD, tokenField));
+				"{\"email\":\"%s\",\"password\":\"%s\",\"name\":\"홍길동\",\"termsAgreed\":true,\"privacyAgreed\":true%s}".formatted(email, PASSWORD, tokenField));
 	}
 
 	private ResultActions resetPassword(String email, String code, String newPassword) throws Exception {

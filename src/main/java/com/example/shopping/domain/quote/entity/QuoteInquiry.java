@@ -1,5 +1,7 @@
 package com.example.shopping.domain.quote.entity;
 
+import java.time.LocalDateTime;
+
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -52,6 +54,12 @@ public class QuoteInquiry extends BaseTimeEntity {
 	@Column(nullable = false, length = 20)
 	private QuoteStatus status = QuoteStatus.RECEIVED;
 
+	// 개인정보 수집·이용 동의 시각과 그때의 개인정보 처리방침 버전. 동의 없이 접수한 회원 견적은 null이다.
+	private LocalDateTime privacyAgreedAt;
+
+	@Column(length = 40)
+	private String privacyPolicyVersion;
+
 	/** memberId는 비회원이면 null, productId는 특정 상품에 대한 문의가 아니면 null */
 	public static QuoteInquiry create(Long memberId, Long productId, String companyName, String managerName,
 			String phone, String email, String content) {
@@ -64,6 +72,11 @@ public class QuoteInquiry extends BaseTimeEntity {
 		quote.email = email;
 		quote.content = content;
 		return quote;
+	}
+
+	public void recordPrivacyConsent(LocalDateTime agreedAt, String policyVersion) {
+		this.privacyAgreedAt = agreedAt;
+		this.privacyPolicyVersion = policyVersion;
 	}
 
 	public void changeStatus(QuoteStatus status) {
