@@ -15,14 +15,14 @@ resource "aws_efs_access_point" "uploads" {
   count          = var.enable_efs ? 1 : 0
   file_system_id = aws_efs_file_system.uploads[0].id
   posix_user {
-    uid = local.app_posix_id
-    gid = local.app_posix_id
+    uid = var.app_posix_id
+    gid = var.app_posix_id
   }
   root_directory {
     path = "/uploads"
     creation_info {
-      owner_uid   = local.app_posix_id
-      owner_gid   = local.app_posix_id
+      owner_uid   = var.app_posix_id
+      owner_gid   = var.app_posix_id
       permissions = "0750"
     }
   }
@@ -31,6 +31,6 @@ resource "aws_efs_access_point" "uploads" {
 resource "aws_efs_mount_target" "uploads" {
   count           = var.enable_efs ? 2 : 0
   file_system_id  = aws_efs_file_system.uploads[0].id
-  subnet_id       = aws_subnet.app[count.index].id
-  security_groups = [aws_security_group.efs.id]
+  subnet_id       = var.app_subnet_ids[count.index]
+  security_groups = [var.efs_security_group_id]
 }

@@ -1,4 +1,9 @@
-# terraform.tfvars로 복사해 값을 채운다. terraform.tfvars는 커밋하지 않는다.
+# stacks/app 운영 환경 값. 실제 값으로 바꿔 커밋한다. ARN과 설정만 적고 비밀 값은 넣지 않는다.
+#
+# 사용법:
+#   cd terraform/stacks/app
+#   terraform init -backend-config=backend.hcl
+#   terraform plan -var-file=../../envs/app/prod.tfvars
 aws_region           = "ap-northeast-2"
 name                 = "eum-shopping"
 certificate_arn      = "arn:aws:acm:ap-northeast-2:123456789012:certificate/replace-me"

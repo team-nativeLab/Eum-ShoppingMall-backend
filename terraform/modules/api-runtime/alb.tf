@@ -5,17 +5,17 @@ resource "aws_lb" "api" {
   name               = "${var.name}-alb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+  security_groups    = [var.alb_security_group_id]
+  subnets            = var.public_subnet_ids
 }
 
 resource "aws_lb_target_group" "api" {
   count       = var.enable_alb ? 1 : 0
   name        = "${var.name}-api"
-  port        = local.api_port
+  port        = var.api_port
   protocol    = "HTTP"
   target_type = "ip"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = var.vpc_id
   health_check {
     enabled             = true
     path                = "/actuator/health/readiness"

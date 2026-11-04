@@ -21,8 +21,8 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   egress {
-    from_port   = local.api_port
-    to_port     = local.api_port
+    from_port   = var.api_port
+    to_port     = var.api_port
     protocol    = "tcp"
     cidr_blocks = var.app_subnet_cidrs
   }
@@ -34,8 +34,8 @@ resource "aws_security_group" "app" {
   description = "Private ECS tasks; only ALB can reach the application"
   vpc_id      = aws_vpc.main.id
   ingress {
-    from_port       = local.api_port
-    to_port         = local.api_port
+    from_port       = var.api_port
+    to_port         = var.api_port
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }

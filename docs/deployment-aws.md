@@ -25,7 +25,7 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 | 개발 검증 배포 | 위 + `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service` | 약 $130 | 62개 |
 | 운영 예시 | 위 + `db_multi_az=true`, `desired_count=2` | 약 $173 | 62개 |
 
-기본 구성은 VPC와 서브넷·라우팅, 보안 그룹, DB·Redis 서브넷 그룹, IAM, ECS 클러스터, ECR, 업로드 S3와 CloudFront, 로그 그룹, 예산 경보만 만듭니다. 이 중 요금이 나오는 것은 ECR, S3, CloudFront, 로그처럼 쓴 만큼 내는 항목뿐입니다. 리소스 수는 `terraform/tests`와 같은 mock provider로 돌린 plan 결과입니다.
+기본 구성은 VPC와 서브넷·라우팅, 보안 그룹, DB·Redis 서브넷 그룹, IAM, ECS 클러스터, ECR, 업로드 S3와 CloudFront, 로그 그룹, 예산 경보만 만듭니다. 이 중 요금이 나오는 것은 ECR, S3, CloudFront, 로그처럼 쓴 만큼 내는 항목뿐입니다. 리소스 수는 `terraform/stacks/app/tests`와 같은 mock provider로 돌린 plan 결과입니다.
 
 고정 비용의 계산 근거는 다음과 같습니다. 서울 리전 온디맨드 가격을 AWS Price List(`https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/{서비스 코드}/current/ap-northeast-2/index.json`)에서 2026-11-02에 확인했고, 한 달을 730시간으로 계산했습니다. 프리 티어와 세금은 뺐습니다. 실제 요금은 적용 전에 다시 확인합니다.
 
@@ -64,7 +64,7 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 - AWS 계정의 배포 전용 IAM Identity Center/SSO 권한과 AWS CLI. 액세스 키를 저장소나 채팅에 넣지 않습니다.
 - `ap-northeast-2`의 검증 완료된 ACM 인증서와 그 인증서에 포함된 API 도메인 DNS 권한.
 - AWS Secrets Manager의 `JWT_SECRET`(강한 랜덤 32바이트 이상), `{"username":"shopping_app","password":"..."}` JSON DB 앱 계정 secret, 실제 프론트 CORS origin, 결제 사용 시 Toss secret.
-- Terraform 상태를 보관할 비공개 S3 버킷. 버전 관리, 기본 암호화, 퍼블릭 액세스 차단을 켜고 `backend.hcl.example`을 복사해 실제 버킷명으로 채웁니다. Redis AUTH 값은 Terraform state에도 저장되므로 state 접근 권한을 제한합니다.
+- Terraform 상태를 보관할 비공개 S3 버킷. `terraform/bootstrap`을 한 번 apply하면 버전 관리, 기본 암호화, 퍼블릭 액세스 차단을 켠 버킷이 만들어집니다. 그 이름을 `terraform/stacks/app/backend.hcl`에 채웁니다. Redis AUTH 값은 Terraform state에도 저장되므로 state 접근 권한을 제한합니다.
 - 앱 secret은 기본 AWS 관리형 KMS 키로 암호화하는 구성을 가정합니다. 고객 관리형 KMS 키를 쓰면 ECS 실행 역할에 해당 키의 `kms:Decrypt` 권한을 정확히 추가해야 합니다.
 - 팀에서 확정한 월 예산과 알림 받을 이메일. 배포 권한에는 AWS Budgets 생성·조회·태그 권한이 있어야 합니다.
 - 결제 금액 불일치 같은 상황을 메일로 받을 담당자 이메일과 SMTP 서버. `app_environment`에 `ALERT_EMAILS`, `MAIL_HOST`, `MAIL_FROM`을, `application_secret_arns`에 `MAIL_USERNAME`, `MAIL_PASSWORD`를 넣습니다. 알림 기준은 README의 "담당자 알림"을 참고합니다.
@@ -75,27 +75,27 @@ Terraform은 리소스를 생성해 과금할 수 있습니다. 아래 `apply`�
 ## 배포 절차
 
 1. Docker와 Terraform 1.10 이상, AWS CLI를 설치합니다. SSO 프로파일로 로그인하고 `aws sts get-caller-identity`로 계정을 확인합니다.
-2. `terraform/terraform.tfvars.example`을 `terraform/terraform.tfvars`로 복사하고 인증서 ARN, 도메인 origin, secret ARN, 월 예산과 알림 이메일을 채웁니다. 실제 secret 값은 AWS Secrets Manager에 직접 넣습니다. `terraform.tfvars`는 Git에 추가하지 않습니다.
-3. `terraform/backend.hcl.example`을 `backend.hcl`로 복사해 상태 버킷명을 채웁니다. 셸에서 `TF_VAR_redis_auth_token`을 안전하게 주입한 뒤 실행합니다.
+2. `terraform/envs/app/prod.tfvars`에 인증서 ARN, 도메인 origin, secret ARN, 월 예산과 알림 이메일을 채웁니다. 실제 secret 값은 AWS Secrets Manager에 직접 넣습니다. `terraform.tfvars`는 Git에 추가하지 않습니다.
+3. `terraform/stacks/app/backend.hcl.example`을 `backend.hcl`로 복사해 상태 버킷명을 채웁니다. 버킷이 없으면 먼저 `terraform/bootstrap`을 apply합니다. 셸에서 `TF_VAR_redis_auth_token`을 안전하게 주입한 뒤 실행합니다.
 
    ```sh
-   cd terraform
+   cd terraform/stacks/app
    terraform init -backend-config=backend.hcl
    terraform validate
-   terraform plan
+   terraform plan -var-file=../../envs/app/prod.tfvars
    ```
 
 4. 첫 배포는 모든 `enable_*`를 `false`로 둔 채 실행합니다. ECR 저장소, 네트워크, 업로드 버킷, 예산 경보처럼 고정 비용이 없는 리소스만 만듭니다. 이 명령은 AWS 계정에 리소스를 생성합니다.
 
    ```sh
-   terraform apply
+   terraform apply -var-file=../../envs/app/prod.tfvars
    ```
 
 5. 저장소 루트에서 이미지 빌드 후 해당 ECR 저장소에 Git commit SHA 태그로 push합니다. ECR 로그인 명령에서 출력하는 비밀번호를 파일에 저장하지 않습니다.
 
    ```sh
    IMAGE_TAG=$(git rev-parse --short=12 HEAD)
-   ECR_REPOSITORY=$(cd terraform && terraform output -raw ecr_repository_url)
+   ECR_REPOSITORY=$(cd terraform/stacks/app && terraform output -raw ecr_repository_url)
    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
    AWS_REGION=ap-northeast-2
    aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
@@ -103,9 +103,9 @@ Terraform은 리소스를 생성해 과금할 수 있습니다. 아래 `apply`�
    docker push "$ECR_REPOSITORY:$IMAGE_TAG"
    ```
 
-6. `terraform.tfvars`의 `image_tag`를 같은 SHA로 설정하고 `enable_data_layer=true`로 바꿉니다. 다시 `terraform plan`을 검토한 뒤에만 `terraform apply`를 실행합니다. Terraform이 Secret Manager에 Redis AUTH 값을 저장하고 ElastiCache/ECS에 전달합니다.
+6. `envs/app/prod.tfvars`의 `image_tag`를 같은 SHA로 설정하고 `enable_data_layer=true`로 바꿉니다. 다시 `terraform plan`을 검토한 뒤에만 `terraform apply`를 실행합니다. Terraform이 Secret Manager에 Redis AUTH 값을 저장하고 ElastiCache/ECS에 전달합니다.
 7. RDS가 생성되면 AWS가 관리하는 `rds_master_secret_arn`으로 승인된 비공개 DB 접속 경로에서 스키마와 제한된 앱 DB 계정을 준비합니다. DB 앱 secret에는 `username`, `password` 키를 넣습니다. `shopping_app`에는 `shopping` 데이터베이스의 `SELECT, INSERT, UPDATE, DELETE` 권한만 주고, 관리자 계정은 앱에 전달하지 않습니다. SQL 마이그레이션(Issue #27) 없이 앱 서비스를 켜지 않습니다.
-8. `terraform.tfvars`에서 `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service`를 `true`로 바꾸고 `terraform plan`을 검토한 뒤 `terraform apply`를 실행합니다.
+8. `envs/app/prod.tfvars`에서 `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service`를 `true`로 바꾸고 `terraform plan`을 검토한 뒤 `terraform apply`를 실행합니다.
 9. ALB DNS를 API 도메인으로 연결하고 `/actuator/health/readiness`, HTTPS 리다이렉트, 로그, 업로드 유지, 신뢰하지 않는 X-Forwarded-For 위조 차단을 실제 AWS에서 확인합니다.
 
 ## 업로드 이미지를 S3로 옮기기
@@ -121,9 +121,9 @@ EFS에 쌓인 이미지를 S3로 옮기고 DB의 `/files/...` 주소를 CloudFro
    ```
 
 3. CloudFront 주소로 이미지 몇 개가 열리는지 확인한 뒤, 승인된 DB 접속 경로에서 `rewrite-local-image-urls.sql`을 실행합니다. 마지막 SELECT에 남는 행은 앱이 만들지 않은 형식의 주소이므로 직접 확인해 바꿉니다.
-4. 업로드 IAM 사용자의 액세스 키를 만들어 Secrets Manager에 넣고 `application_secret_arns`에 `UPLOAD_S3_ACCESS_KEY`, `UPLOAD_S3_SECRET_KEY`를 추가합니다. `terraform.tfvars`에서 `upload_storage = "s3"`로 바꾸고 `terraform plan` 검토 후 `terraform apply`로 배포합니다. 새 업로드가 CloudFront 주소로 나오고 기존 상품·배너 이미지가 보이는지 확인합니다.
+4. 업로드 IAM 사용자의 액세스 키를 만들어 Secrets Manager에 넣고 `application_secret_arns`에 `UPLOAD_S3_ACCESS_KEY`, `UPLOAD_S3_SECRET_KEY`를 추가합니다. `envs/app/prod.tfvars`에서 `upload_storage = "s3"`로 바꾸고 `terraform plan` 검토 후 `terraform apply`로 배포합니다. 새 업로드가 CloudFront 주소로 나오고 기존 상품·배너 이미지가 보이는지 확인합니다.
 5. 문제가 없으면 `enable_efs=false`로 바꿔 EFS 볼륨과 마운트 설정을 지웁니다. EFS의 파일도 함께 지워지므로 모든 파일을 옮겼는지 먼저 확인하고 `terraform plan`을 검토합니다.
 
 관리자 화면은 지금처럼 `POST /api/v1/uploads`(multipart)로 올려도 되고, S3에서는 서버를 거치지 않는 직접 업로드도 쓸 수 있습니다. `POST /api/v1/uploads/presigned-url`로 받은 주소에 응답의 `headers`를 그대로 넣어 PUT으로 올린 뒤 `POST /api/v1/uploads/complete`에 `fileKey`를 보내면 이미지 주소를 돌려줍니다. 버킷 CORS는 `cors_allowed_origins`의 PUT만 허용합니다.
 
-저장소 `.gitignore`는 `terraform.tfvars`, `*.tfstate*`, `.terraform/`, `backend.hcl`을 제외합니다. 운영 파일을 만들기 전에 `git status`로 비밀값과 상태 파일이 추적되지 않는지 확인합니다.
+저장소 `.gitignore`는 `terraform.tfvars`, `*.tfstate*`, `.terraform/`, `backend.hcl`을 제외합니다. `envs/app/prod.tfvars`는 커밋하므로 ARN과 설정만 적고 비밀 값은 넣지 않습니다. 운영 파일을 만들기 전에 `git status`로 비밀값과 상태 파일이 추적되지 않는지 확인합니다.

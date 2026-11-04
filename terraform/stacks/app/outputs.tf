@@ -5,40 +5,40 @@ output "api_url" {
 
 output "alb_dns_name" {
   description = "ALB DNS 이름. api_domain이 가리켜야 하는 대상. ALB를 끄면 null이다."
-  value       = one(aws_lb.api[*].dns_name)
+  value       = module.api_runtime.alb_dns_name
 }
 
 output "ecr_repository_url" {
   description = "이미지를 푸시할 ECR 저장소 주소"
-  value       = aws_ecr_repository.api.repository_url
+  value       = module.api_runtime.ecr_repository_url
 }
 
 output "rds_endpoint" {
   description = "RDS 접속 주소. 데이터 계층을 끄면 null이다."
-  value       = one(aws_db_instance.main[*].address)
+  value       = module.database.db_address
 }
 
 output "redis_endpoint" {
   description = "Redis 접속 주소. 데이터 계층을 끄면 null이다."
-  value       = one(aws_elasticache_replication_group.main[*].primary_endpoint_address)
+  value       = module.database.redis_endpoint
 }
 
 output "rds_master_secret_arn" {
   description = "AWS가 관리하는 RDS 마스터 계정 시크릿의 ARN. 데이터 계층을 끄면 null이다."
-  value       = one(aws_db_instance.main[*].master_user_secret[0].secret_arn)
+  value       = module.database.db_master_secret_arn
 }
 
 output "uploads_bucket" {
   description = "업로드 이미지 S3 버킷 이름"
-  value       = aws_s3_bucket.uploads.bucket
+  value       = module.photo_storage.bucket
 }
 
 output "uploads_cdn_url" {
   description = "업로드 이미지의 기본 주소(UPLOAD_CDN_BASE_URL)"
-  value       = "https://${aws_cloudfront_distribution.uploads.domain_name}"
+  value       = module.photo_storage.cdn_url
 }
 
 output "uploads_iam_user" {
   description = "업로드용 IAM 사용자. 이 사용자의 액세스 키를 만들어 Secrets Manager에 넣고 application_secret_arns에 추가한다."
-  value       = aws_iam_user.uploads.name
+  value       = module.photo_storage.iam_user_name
 }
