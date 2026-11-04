@@ -1,5 +1,7 @@
 package com.example.shopping.domain.support.entity;
 
+import java.time.LocalDateTime;
+
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -52,6 +54,12 @@ public class Inquiry extends BaseTimeEntity {
 	@Column(nullable = false, length = 20)
 	private InquiryStatus status = InquiryStatus.RECEIVED;
 
+	// 개인정보 수집·이용 동의 시각과 그때의 개인정보 처리방침 버전. 동의 없이 접수한 회원 문의는 null이다.
+	private LocalDateTime privacyAgreedAt;
+
+	@Column(length = 40)
+	private String privacyPolicyVersion;
+
 	/** memberId가 null이면 비회원 문의 */
 	public static Inquiry create(Long memberId, String inquiryType, String title, String content,
 			String contactPhone, String contactEmail) {
@@ -63,6 +71,11 @@ public class Inquiry extends BaseTimeEntity {
 		inquiry.contactPhone = contactPhone;
 		inquiry.contactEmail = contactEmail;
 		return inquiry;
+	}
+
+	public void recordPrivacyConsent(LocalDateTime agreedAt, String policyVersion) {
+		this.privacyAgreedAt = agreedAt;
+		this.privacyPolicyVersion = policyVersion;
 	}
 
 	/** 답변을 등록(또는 수정)하고 답변완료로 바꾼다. */

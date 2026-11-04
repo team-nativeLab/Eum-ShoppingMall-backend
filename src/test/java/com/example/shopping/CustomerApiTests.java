@@ -353,7 +353,8 @@ class CustomerApiTests {
 						.content(withoutContact))
 				.andExpect(status().isBadRequest());
 		mockMvc.perform(post("/api/v1/support/inquiries").contentType(MediaType.APPLICATION_JSON).content("""
-						{"inquiryType":"배송","title":"비회원 문의","content":"언제 오나요?","contactEmail":"guest@example.com"}
+						{"inquiryType":"배송","title":"비회원 문의","content":"언제 오나요?","contactEmail":"guest@example.com",
+						 "privacyAgreed":true}
 						"""))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.status").value("RECEIVED"));
@@ -379,7 +380,8 @@ class CustomerApiTests {
 		long privateProduct = productIdOf(insertProductWithSku("비공개 상품", 500000, true, "HIDDEN", 1));
 
 		mockMvc.perform(post("/api/v1/quotes").contentType(MediaType.APPLICATION_JSON).content("""
-						{"companyName":"이음건설","managerName":"김담당","phone":"02-1234-5678","content":"견적 요청"}
+						{"companyName":"이음건설","managerName":"김담당","phone":"02-1234-5678","content":"견적 요청",
+						 "privacyAgreed":true}
 						"""))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.phone").value("0212345678"))

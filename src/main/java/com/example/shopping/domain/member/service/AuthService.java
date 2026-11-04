@@ -11,6 +11,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import com.example.shopping.domain.audit.service.AdminAuditLogService;
+import com.example.shopping.domain.consent.service.ConsentService;
 import com.example.shopping.domain.member.dto.AuthTokens;
 import com.example.shopping.domain.member.dto.request.LoginRequest;
 import com.example.shopping.domain.member.dto.request.SignupRequest;
@@ -44,6 +45,7 @@ public class AuthService {
 	private final AccessTokenService accessTokenService;
 	private final AdminAuditLogService auditLogService;
 	private final LoginAttemptLimiter loginAttemptLimiter;
+	private final ConsentService consentService;
 
 	// 없는 이메일로 로그인해도 해시 비교를 한 번 수행해, 응답 시간으로 가입 여부를 추측하지 못하게 한다.
 	private final String dummyPasswordHash;
@@ -54,7 +56,7 @@ public class AuthService {
 			MemberRepository memberRepository, PasswordEncoder passwordEncoder,
 			JwtTokenProvider jwtTokenProvider, RefreshTokenService refreshTokenService,
 			AccessTokenService accessTokenService, AdminAuditLogService auditLogService,
-			LoginAttemptLimiter loginAttemptLimiter) {
+			LoginAttemptLimiter loginAttemptLimiter, ConsentService consentService) {
 		this.memberRepository = memberRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.emailVerificationService = emailVerificationService;
@@ -65,6 +67,7 @@ public class AuthService {
 		this.accessTokenService = accessTokenService;
 		this.auditLogService = auditLogService;
 		this.loginAttemptLimiter = loginAttemptLimiter;
+		this.consentService = consentService;
 		this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-timing");
 	}
 
@@ -90,7 +93,9 @@ public class AuthService {
 					emailVerificationService.consumeSignupToken(email, token);
 					member.markEmailVerified(LocalDateTime.now());
 				}
-				return SignupResponse.from(memberRepository.saveAndFlush(member));
+				Member saved = memberRepository.saveAndFlush(member);
+				consentService.recordSignup(saved.getId(), Boolean.TRUE.equals(request.marketingAgreed()));
+				return SignupResponse.from(saved);
 			});
 		} catch (DataIntegrityViolationException e) {
 			// 같은 이메일로 동시에 가입 요청이 들어오면 위의 중복 검사를 둘 다 통과하므로 유니크 제약이 최종 방어선이다.

@@ -118,3 +118,10 @@ IP별 요청 제한(`RATE_LIMIT_PER_MINUTE`)과 별도로 로그인 이메일마
 ## 상품 조회 캐시
 
 공개 상품 조회(홈, 카테고리, 목록·검색, 필터 개수, 자동 완성)는 Redis에 `PRODUCT_READ_CACHE_TTL_SECONDS`(기본 60)초 동안 캐시합니다. 관리자가 상품 정보를 바꿀 때만 캐시 전체를 지웁니다. 주문으로 바뀐 재고와 판매량은 TTL 안에 반영되고, 상품 상세, 장바구니, 주문 확인은 항상 데이터베이스를 읽습니다. `product.read.cache{result=hit|miss|unavailable}`로 조회 결과를 집계합니다.
+
+## 약관 동의
+
+- **회원가입:** `POST /api/v1/auth/signup`에 `termsAgreed`(이용약관), `privacyAgreed`(개인정보 수집·이용)를 `true`로 보내야 합니다. 빠지거나 `false`면 400입니다. `marketingAgreed`(마케팅 수신)는 선택이고, 보내지 않으면 동의하지 않은 것으로 기록합니다.
+- **비회원 문의·견적:** `POST /api/v1/support/inquiries`, `POST /api/v1/quotes`에 `privacyAgreed: true`가 없으면 `400 PRIVACY_CONSENT_REQUIRED`입니다. 회원은 가입할 때 동의했으므로 보내지 않아도 됩니다.
+- **기록:** 회원 동의는 `member_consent`에 항목별로 동의 여부와 시각을 남깁니다. 비회원 동의는 문의·견적 행의 `privacy_agreed_at`에 남깁니다. 둘 다 그때의 약관·개인정보 처리방침 버전(고정 콘텐츠 `terms`, `privacy-policy`의 수정 시각)을 함께 남기며, 문서가 아직 등록되지 않았으면 버전은 비워 둡니다. 동의 기록은 탈퇴해도 지우지 않습니다.
+

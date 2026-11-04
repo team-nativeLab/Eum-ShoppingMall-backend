@@ -12,6 +12,7 @@ public enum ErrorCode {
 
 	// 공통
 	INVALID_INPUT(HttpStatus.BAD_REQUEST, "입력값이 올바르지 않습니다."),
+	PRIVACY_CONSENT_REQUIRED(HttpStatus.BAD_REQUEST, "개인정보 수집·이용에 동의해 주세요."),
 	UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
 	LOGIN_REQUIRED(HttpStatus.UNAUTHORIZED, "로그인이나 회원가입을 해주세요."),
 	TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "토큰이 만료되었습니다."),
