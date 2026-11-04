@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: terraform
+        working-directory: terraform/stacks/app
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -93,13 +93,18 @@ jobs:
           terraform_version: 1.10.5
 
       - name: Check Terraform formatting
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -recursive ../..
 
       - name: Initialize providers without AWS credentials
         run: terraform init -backend=false -input=false
 
       - name: Validate Terraform configuration
         run: terraform validate
+
+      - name: Validate the state bucket bootstrap
+        run: |
+          terraform -chdir=../../bootstrap init -backend=false -input=false
+          terraform -chdir=../../bootstrap validate
 
       - name: Test Terraform plans with a mocked AWS provider
         run: terraform test

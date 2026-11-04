@@ -1,4 +1,4 @@
-# ECS가 쓰는 IAM 역할. 업로드 S3에 접근하는 IAM 사용자는 uploads_s3.tf에 있다.
+# ECS가 쓰는 IAM 역할. 업로드 S3에 접근하는 IAM 사용자는 modules/photo-storage/s3.tf에 있다.
 
 # 실행 역할: ECS가 태스크를 띄울 때 쓴다(이미지 받기, 로그 쓰기, 시크릿 읽기).
 resource "aws_iam_role" "execution" {
@@ -21,7 +21,7 @@ resource "aws_iam_role_policy" "secrets" {
       Action = ["secretsmanager:GetSecretValue"]
       Resource = concat(
         [var.database_app_secret_arn],
-        aws_secretsmanager_secret.redis[*].arn,
+        var.redis_secret_arns,
         values(var.application_secret_arns)
       )
     }]
@@ -43,9 +43,9 @@ resource "aws_iam_role_policy" "efs" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite"]
-      Resource = aws_efs_file_system.uploads[0].arn
+      Resource = var.efs_file_system_arn
       Condition = {
-        StringEquals = { "elasticfilesystem:AccessPointArn" = aws_efs_access_point.uploads[0].arn }
+        StringEquals = { "elasticfilesystem:AccessPointArn" = var.efs_access_point_arn }
       }
     }]
   })
