@@ -158,6 +158,9 @@ upload:
     max-deletes-per-run: ${UPLOAD_CLEANUP_MAX_DELETES_PER_RUN:1000}
 
 app:
+  audit:
+    # 관리자 감사 로그 보존 기간(일). 지난 로그는 매일 05:15에 지운다. 접속기록 보관 기준에 맞춰 365 이상만 받는다.
+    retention-days: ${AUDIT_LOG_RETENTION_DAYS:730}
   alert:
     # 확인이 필요한 상황을 메일로 받을 담당자 이메일(쉼표로 구분). 비어 있으면 로그와 지표로만 남긴다. 메일 서버(MAIL_HOST)도 설정해야 보낸다.
     emails: ${ALERT_EMAILS:}
