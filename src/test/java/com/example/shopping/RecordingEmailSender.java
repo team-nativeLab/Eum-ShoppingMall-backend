@@ -14,7 +14,7 @@ import com.example.shopping.global.mail.EmailSender;
 /** 보낸 메일을 메모리에 남겨 테스트에서 인증번호를 꺼내 쓴다. */
 class RecordingEmailSender implements EmailSender {
 
-	private static final Pattern CODE = Pattern.compile("인증번호: (\\d{6})");
+	private static final Pattern CODE = Pattern.compile("인증번호: ([A-Za-z0-9]{6})");
 
 	record SentMail(String to, String subject, String text) {
 

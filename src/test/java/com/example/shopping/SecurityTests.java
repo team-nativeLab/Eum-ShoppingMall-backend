@@ -32,6 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.shopping.domain.member.dto.request.EmailVerificationConfirmRequest;
 import com.example.shopping.domain.member.dto.request.LoginRequest;
 import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
 import com.example.shopping.domain.member.dto.request.PasswordResetConfirmRequest;
@@ -356,9 +357,14 @@ class SecurityTests {
 		assertThat(new SignupRequest(EMAIL, PASSWORD, "홍길동", null, "verification-token", true, true, false).toString())
 				.doesNotContain(PASSWORD)
 				.doesNotContain("verification-token");
-		assertThat(new PasswordResetConfirmRequest(EMAIL, "123456", "new-pass-5678").toString())
-				.doesNotContain("123456")
-				.doesNotContain("new-pass-5678");
+		assertThat(new PasswordResetConfirmRequest(EMAIL, "Ab3dE9", "new-pass-5678", "captcha-token").toString())
+				.doesNotContain("Ab3dE9")
+				.doesNotContain("new-pass-5678")
+				.doesNotContain("captcha-token");
+		assertThat(new EmailVerificationConfirmRequest(EMAIL, "Ab3dE9", "captcha-token").toString())
+				.contains(EMAIL)
+				.doesNotContain("Ab3dE9")
+				.doesNotContain("captcha-token");
 		assertThat(new PasswordChangeRequest(PASSWORD, "new-pass-5678").toString())
 				.doesNotContain(PASSWORD)
 				.doesNotContain("new-pass-5678");

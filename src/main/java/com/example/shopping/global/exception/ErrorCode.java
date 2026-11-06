@@ -48,6 +48,10 @@ public enum ErrorCode {
 	VERIFICATION_ATTEMPTS_EXCEEDED(HttpStatus.BAD_REQUEST, "인증번호를 여러 번 틀렸습니다. 인증번호를 다시 받아 주세요."),
 	VERIFICATION_RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "인증번호는 1분에 한 번만 받을 수 있습니다. 잠시 후 다시 시도해 주세요."),
 	VERIFICATION_DAILY_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "인증번호 요청·입력 횟수가 하루 한도를 넘었습니다. 24시간 뒤에 다시 시도해 주세요."),
+	VERIFICATION_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "인증번호를 여러 번 틀려 1시간 동안 인증할 수 없습니다. 1시간 뒤에 다시 시도해 주세요."),
+	CAPTCHA_REQUIRED(HttpStatus.BAD_REQUEST, "인증번호를 여러 번 틀렸습니다. 로봇이 아님을 확인해 주세요."),
+	CAPTCHA_INVALID(HttpStatus.BAD_REQUEST, "로봇이 아님을 확인하지 못했습니다. 다시 확인해 주세요."),
+	CAPTCHA_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "로봇 확인을 할 수 없습니다. 잠시 후 다시 시도해 주세요."),
 	EMAIL_SEND_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요."),
 
 	// 상품

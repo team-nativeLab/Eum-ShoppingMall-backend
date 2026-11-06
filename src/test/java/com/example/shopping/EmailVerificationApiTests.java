@@ -7,8 +7,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -91,6 +94,27 @@ class EmailVerificationApiTests {
 		signup("other@example.com", token)
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("EMAIL_VERIFICATION_REQUIRED"));
+	}
+
+	@Test
+	void 인증번호는_대소문자를_구분하는_영문과_숫자_6자리이고_DB_값만으로는_알아낼_수_없다() throws Exception {
+		postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}").andExpect(status().isOk());
+		RecordingEmailSender.SentMail mail = mailbox.lastTo(EMAIL);
+		String code = mail.code();
+		assertThat(code).matches("^[A-HJ-NP-Za-km-z2-9]{6}$");
+		assertThat(mail.text()).contains("대소문자를 구분");
+
+		// DB에는 서버 비밀 키를 섞은 해시만 남아, 키 없이 계산한 해시로는 맞혀 볼 수 없다. (#130)
+		entityManager.flush();
+		String stored = jdbcTemplate.queryForObject("select code_hash from email_verification where email = ?",
+				String.class, EMAIL);
+		assertThat(stored).hasSize(64).isNotEqualTo(sha256("SIGNUP:" + EMAIL + ":" + code));
+
+		String swapped = swapCase(code);
+		if (!swapped.equals(code)) {
+			confirm(EMAIL, swapped).andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
+		}
+		confirm(EMAIL, code).andExpect(status().isOk());
 	}
 
 	@Test
@@ -313,8 +337,21 @@ class EmailVerificationApiTests {
 		entityManager.clear();
 	}
 
-	/** 맞는 인증번호와 다른 6자리 숫자 */
+	private static String sha256(String value) throws Exception {
+		return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+				.digest(value.getBytes(StandardCharsets.UTF_8)));
+	}
+
+	private static String swapCase(String value) {
+		StringBuilder swapped = new StringBuilder(value.length());
+		for (char c : value.toCharArray()) {
+			swapped.append(Character.isUpperCase(c) ? Character.toLowerCase(c) : Character.toUpperCase(c));
+		}
+		return swapped.toString();
+	}
+
+	/** 맞는 인증번호와 다른 6자리. 인증번호에는 0과 1을 쓰지 않으므로 000000은 언제나 틀린 번호다. */
 	private String wrong(String code) {
-		return code.equals("000000") ? "111111" : "000000";
+		return "000000";
 	}
 }

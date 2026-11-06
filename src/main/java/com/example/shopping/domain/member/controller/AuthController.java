@@ -25,6 +25,7 @@ import com.example.shopping.domain.member.service.EmailVerificationService;
 import com.example.shopping.domain.member.service.PasswordResetService;
 import com.example.shopping.global.response.ApiResponse;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -52,11 +53,15 @@ public class AuthController {
 		return ApiResponse.ok(emailVerificationService.sendSignupCode(request.email()));
 	}
 
-	/** 인증번호를 확인하고 회원가입 요청에 넣을 확인 토큰을 준다. 5번 틀리면 인증번호를 다시 받아야 한다. */
+	/**
+	 * 인증번호를 확인하고 회원가입 요청에 넣을 확인 토큰을 준다.
+	 * 3번 틀리면 다음부터 로봇 확인 토큰(captchaToken)이 필요하고(CAPTCHA_REQUIRED), 5번 틀리면 1시간 동안 막힌다(429).
+	 */
 	@PostMapping("/email-verifications/confirm")
 	public ApiResponse<EmailVerificationConfirmResponse> confirmEmailVerification(
-			@Valid @RequestBody EmailVerificationConfirmRequest request) {
-		return ApiResponse.ok(emailVerificationService.confirmSignupCode(request.email(), request.code()));
+			@Valid @RequestBody EmailVerificationConfirmRequest request, HttpServletRequest httpRequest) {
+		return ApiResponse.ok(emailVerificationService.confirmSignupCode(request.email(), request.code(),
+				request.captchaToken(), httpRequest.getRemoteAddr()));
 	}
 
 	/** 비밀번호 재설정 인증번호를 보낸다. 가입 여부가 드러나지 않도록 가입되지 않은 이메일이어도 똑같이 성공으로 응답한다. */
@@ -66,10 +71,12 @@ public class AuthController {
 		return ApiResponse.ok(null);
 	}
 
-	/** 인증번호를 확인하고 비밀번호를 바꾼다. 다른 기기의 로그인은 모두 끊긴다. */
+	/** 인증번호를 확인하고 비밀번호를 바꾼다. 다른 기기의 로그인은 모두 끊긴다. 틀렸을 때의 제한은 가입 인증번호와 같다. */
 	@PostMapping("/password-reset/confirm")
-	public ApiResponse<Void> resetPassword(@Valid @RequestBody PasswordResetConfirmRequest request) {
-		passwordResetService.resetPassword(request.email(), request.code(), request.newPassword());
+	public ApiResponse<Void> resetPassword(@Valid @RequestBody PasswordResetConfirmRequest request,
+			HttpServletRequest httpRequest) {
+		passwordResetService.resetPassword(request.email(), request.code(), request.newPassword(),
+				request.captchaToken(), httpRequest.getRemoteAddr());
 		return ApiResponse.ok(null);
 	}
 
