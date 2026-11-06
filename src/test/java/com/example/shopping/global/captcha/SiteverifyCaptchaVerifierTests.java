@@ -22,7 +22,7 @@ import org.springframework.web.client.RestClient;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 
-/** 로봇 확인 토큰 확인 (#130). Turnstile·reCAPTCHA·hCaptcha가 함께 쓰는 siteverify 형식 */
+/** 로봇 확인 토큰 확인 (#130). Cloudflare Turnstile의 siteverify 형식 */
 class SiteverifyCaptchaVerifierTests {
 
 	private static final String VERIFY_URL = CaptchaProperties.TURNSTILE_VERIFY_URL;

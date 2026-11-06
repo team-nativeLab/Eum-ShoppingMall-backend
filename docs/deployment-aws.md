@@ -67,7 +67,7 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 - Terraform 상태를 보관할 비공개 S3 버킷. `terraform/bootstrap`을 한 번 apply하면 버전 관리, 기본 암호화, 퍼블릭 액세스 차단을 켠 버킷이 만들어집니다. 그 이름을 `terraform/stacks/app/backend.hcl`에 채웁니다. Redis AUTH 값은 Terraform state에도 저장되므로 state 접근 권한을 제한합니다.
 - 앱 secret은 기본 AWS 관리형 KMS 키로 암호화하는 구성을 가정합니다. 고객 관리형 KMS 키를 쓰면 ECS 실행 역할에 해당 키의 `kms:Decrypt` 권한을 정확히 추가해야 합니다.
 - 팀에서 확정한 월 예산과 알림 받을 이메일. 배포 권한에는 AWS Budgets 생성·조회·태그 권한이 있어야 합니다.
-- 인증번호를 여러 번 틀린 요청에 로봇 확인을 붙이려면 CAPTCHA(기본 Cloudflare Turnstile)의 비밀 키. 프론트 위젯을 붙인 뒤 `app_environment`에 `CAPTCHA_ENABLED=true`를, `application_secret_arns`에 `CAPTCHA_SECRET_KEY`를 넣습니다. 앱이 확인 서비스를 호출하므로 NAT를 통한 HTTPS 외부 연결이 필요합니다.
+- 인증번호를 여러 번 틀린 요청에 로봇 확인을 붙이려면 Cloudflare Turnstile 위젯의 비밀 키. Cloudflare 대시보드에서 위젯을 만들 때 허용 도메인에 프론트 도메인을 넣습니다. 사이트 키는 프론트에 넣고, 프론트가 위젯을 붙인 뒤 `app_environment`에 `CAPTCHA_ENABLED=true`를, `application_secret_arns`에 `CAPTCHA_SECRET_KEY`를 넣습니다. 앱이 Turnstile에 토큰을 확인하므로 NAT를 통한 HTTPS 외부 연결이 필요합니다. 키가 없으면 로봇 확인 없이 틀린 횟수 차단만 동작합니다.
 - 결제 금액 불일치 같은 상황을 메일로 받을 담당자 이메일과 SMTP 서버. `app_environment`에 `ALERT_EMAILS`, `MAIL_HOST`, `MAIL_FROM`을, `application_secret_arns`에 `MAIL_USERNAME`, `MAIL_PASSWORD`를 넣습니다. 알림 기준은 README의 "담당자 알림"을 참고합니다.
 - 현재 앱은 운영에서 `ddl-auto: validate`를 사용합니다. 빈 RDS에 테이블을 만드는 마이그레이션이 먼저 필요합니다(Issue #27). 별도 DB 관리자 계정으로 스키마를 만들고 `shopping_app`에는 앱 구동에 필요한 SELECT/INSERT/UPDATE/DELETE 권한만 부여한 후 `enable_ecs_service=true`로 바꿉니다. Terraform은 이 준비가 끝날 때까지 ECS 서비스를 만들지 않습니다.
 

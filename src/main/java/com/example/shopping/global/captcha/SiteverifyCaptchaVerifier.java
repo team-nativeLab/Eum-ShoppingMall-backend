@@ -16,8 +16,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * siteverify 형식(secret·response·remoteip를 폼으로 보내고 {"success": true|false}를 받음)으로 토큰을 확인한다.
- * Cloudflare Turnstile, Google reCAPTCHA, hCaptcha가 모두 이 형식이라 확인 주소만 바꿔 쓸 수 있다.
+ * Cloudflare Turnstile의 siteverify API(secret·response·remoteip를 폼으로 보내고 {"success": true|false}를 받음)로
+ * 토큰을 확인한다.
  */
 @Slf4j
 public class SiteverifyCaptchaVerifier implements CaptchaVerifier {

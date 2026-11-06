@@ -173,12 +173,12 @@ app:
     # true면 회원가입에 이메일 인증 토큰이 필요하다. 프론트가 인증 화면을 붙이고 메일 서버(MAIL_HOST)를 설정한 뒤 켠다.
     signup-email-verification-required: ${SIGNUP_EMAIL_VERIFICATION_REQUIRED:false}
   captcha:
-    # 인증번호를 여러 번 틀린 요청에 로봇 확인(CAPTCHA)을 요구한다. 프론트가 위젯을 붙이고 비밀 키를 넣은 뒤 켠다.
-    # 꺼 두면 로봇 확인 없이 틀린 횟수 차단(security.verification-lock)만 동작한다.
+    # 인증번호를 여러 번 틀린 요청에 로봇 확인(Cloudflare Turnstile)을 요구한다.
+    # 프론트가 Turnstile 위젯(사이트 키)을 붙이고 서버에 비밀 키를 넣은 뒤 켠다. 꺼 두면 틀린 횟수 차단(security.verification-lock)만 동작한다.
     enabled: ${CAPTCHA_ENABLED:false}
     secret-key: ${CAPTCHA_SECRET_KEY:}
-    # 토큰 확인 주소. 기본은 Cloudflare Turnstile이다. Google reCAPTCHA·hCaptcha도 같은 형식이라 주소만 바꾸면 된다.
-    verify-url: ${CAPTCHA_VERIFY_URL:https://challenges.cloudflare.com/turnstile/v0/siteverify}
+    # Turnstile 토큰 확인 주소
+    verify-url: https://challenges.cloudflare.com/turnstile/v0/siteverify
   mail:
     host: ${MAIL_HOST:}
     port: ${MAIL_PORT:587}
