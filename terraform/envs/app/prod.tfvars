@@ -33,6 +33,8 @@ application_secret_arns = {
   # upload_storage = "s3"이면 필수: uploads_iam_user 출력에 나오는 사용자의 액세스 키
   # UPLOAD_S3_ACCESS_KEY = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/s3-access-key-replace"
   # UPLOAD_S3_SECRET_KEY = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/s3-secret-key-replace"
+  # 인증번호 로봇 확인을 켜면(app_environment의 CAPTCHA_ENABLED = "true") 필수
+  # CAPTCHA_SECRET_KEY = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/captcha-replace"
 }
 database_app_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/db-app-replace"
 
