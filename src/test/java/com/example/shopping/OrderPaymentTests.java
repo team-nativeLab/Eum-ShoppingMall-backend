@@ -706,6 +706,10 @@ class OrderPaymentTests {
 
 		assertThat(statusOf(orderNo)).isEqualTo("PAID");
 		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("DONE");
+		// 입금이 끝난 가상계좌는 번호 끝 4자리와 입금자명 첫 글자만 남긴다(#144).
+		assertThat(jdbcTemplate.queryForObject(
+				"select concat(virtual_account_number, '/', virtual_account_customer_name) from payment", String.class))
+				.isEqualTo("****5678/홍**");
 		assertThat(stockOf(sku)).isEqualTo(4);
 		assertThat(salesCountOf(sku)).isEqualTo(1);
 		verify(paymentGateway, times(2)).findByOrderNo(orderNo);
@@ -742,6 +746,9 @@ class OrderPaymentTests {
 
 		assertThat(statusOf(orderNo)).isEqualTo("EXPIRED");
 		assertThat(jdbcTemplate.queryForObject("select status from payment", String.class)).isEqualTo("FAILED");
+		assertThat(jdbcTemplate.queryForObject(
+				"select concat(virtual_account_number, '/', virtual_account_customer_name) from payment", String.class))
+				.isEqualTo("****5678/홍**");
 		assertThat(stockOf(sku)).isEqualTo(5);
 	}
 
@@ -1087,12 +1094,12 @@ class OrderPaymentTests {
 
 	private PgPayment pg(String orderNo, PgStatus status, long amount) {
 		long balance = status == PgStatus.CANCELED ? 0 : amount;
-		return new PgPayment(PAYMENT_KEY, orderNo, status, amount, balance, "CARD", LocalDateTime.now(), "{}");
+		return new PgPayment(PAYMENT_KEY, orderNo, status, amount, balance, "CARD", LocalDateTime.now());
 	}
 
 	private PgPayment virtualAccountPg(String orderNo, PgStatus status, long amount, LocalDateTime dueDate) {
 		long balance = status == PgStatus.CANCELED ? 0 : amount;
-		return new PgPayment(PAYMENT_KEY, orderNo, status, amount, balance, "가상계좌", LocalDateTime.now(), "{}",
+		return new PgPayment(PAYMENT_KEY, orderNo, status, amount, balance, "가상계좌", LocalDateTime.now(),
 				new PgVirtualAccount("004", "12345678", "홍길동", dueDate), "webhook-secret");
 	}
 

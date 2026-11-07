@@ -139,7 +139,7 @@ class VirtualAccountReconcilerTest {
 	}
 
 	private static PgPayment pg(PgStatus status, long amount) {
-		return new PgPayment("pay-1", "ORD-1", status, amount, amount, Payment.VIRTUAL_ACCOUNT_METHOD, null, "{}", null,
+		return new PgPayment("pay-1", "ORD-1", status, amount, amount, Payment.VIRTUAL_ACCOUNT_METHOD, null, null,
 				"secret");
 	}
 }

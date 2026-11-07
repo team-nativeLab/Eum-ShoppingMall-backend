@@ -78,7 +78,6 @@ class TossPaymentGatewayTests {
 		assertThat(payment.totalAmount()).isEqualTo(60000);
 		assertThat(payment.method()).isEqualTo("카드");
 		assertThat(payment.approvedAt()).isEqualTo(LocalDateTime.of(2026, 10, 13, 10, 16, 2));
-		assertThat(payment.raw()).contains("issuerCode");
 		server.verify();
 	}
 

@@ -22,6 +22,13 @@ MySQL 스키마는 Flyway로 관리합니다. 빈 데이터베이스는 Hibernat
 
 취소에 성공하면 관리자 주문 상세 응답에 `cancelReason`, `cancelledByMemberId`, `cancelledAt`이 들어갑니다.
 
+## 결제 정보 보관
+
+결제 기록은 법정 보관 기간(5년) 동안 남으므로 필요한 값만 저장합니다(#144).
+
+- **PG 응답 원문:** 저장하지 않습니다. 카드 번호 일부·승인번호 같은 결제 수단 정보가 들어 있고, 화면과 정산에 쓰는 값은 따로 저장합니다. 결제 분쟁 때는 Toss 결제 조회 API(`paymentKey`)로 원문을 다시 받습니다. 예전에 저장한 `payment.pg_raw` 값은 남아 있습니다.
+- **가상계좌:** 입금이 끝나거나 입금 기한이 지나면 계좌 번호는 끝 4자리만, 입금자명은 첫 글자만 남깁니다(예: `********5678`, `홍**`). 입금이 취소돼 다시 입금 대기가 되면 Toss가 알려 준 계좌 정보로 되살립니다.
+
 ## 고정 콘텐츠 API
 
 지원하는 콘텐츠 코드는 `company`, `terms`, `privacy-policy`입니다. 고객은 `GET /api/v1/contents/{code}`로 읽습니다(예: `GET /api/v1/contents/company`). 관리자는 `GET /api/v1/admin/contents`와 `GET /api/v1/admin/contents/{code}`로 저장된 콘텐츠를 조회하고, `PUT /api/v1/admin/contents/{code}`에 `{ "title": "...", "body": "..." }`를 보내 만들거나 수정합니다. 본문은 일반 텍스트이고 HTML 태그는 거절합니다. 서버는 법적 문구를 미리 넣어 두지 않습니다.
