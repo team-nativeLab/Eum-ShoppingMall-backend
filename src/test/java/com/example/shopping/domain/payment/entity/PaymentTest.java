@@ -14,6 +14,7 @@ import com.example.shopping.domain.payment.gateway.PgVirtualAccount;
 class PaymentTest {
 
 	private static final LocalDateTime DUE = LocalDateTime.of(2026, 11, 8, 23, 59);
+	private static final String WEBHOOK_SECRET_HASH = "a".repeat(64);
 
 	@Test
 	void 입금이_끝나면_계좌번호_끝_4자리와_입금자명_첫_글자만_남긴다() {
@@ -26,7 +27,7 @@ class PaymentTest {
 		// 웹훅·보정이 같은 가상계좌인지 확인할 때 쓰는 값은 남는다.
 		assertThat(payment.getVirtualAccountBankCode()).isEqualTo("004");
 		assertThat(payment.getVirtualAccountDueAt()).isEqualTo(DUE);
-		assertThat(payment.matchesWebhookSecret("webhook-secret")).isTrue();
+		assertThat(payment.getWebhookSecretHash()).isEqualTo(WEBHOOK_SECRET_HASH);
 	}
 
 	@Test
@@ -59,7 +60,7 @@ class PaymentTest {
 	}
 
 	private static Payment waitingDeposit() {
-		return Payment.of(1L, pg(PgStatus.WAITING_FOR_DEPOSIT), PaymentStatus.WAITING_DEPOSIT);
+		return Payment.of(1L, pg(PgStatus.WAITING_FOR_DEPOSIT), PaymentStatus.WAITING_DEPOSIT, WEBHOOK_SECRET_HASH);
 	}
 
 	private static PgPayment pg(PgStatus status) {
