@@ -37,7 +37,7 @@ import com.example.shopping.global.exception.ErrorCode;
 import jakarta.persistence.EntityManager;
 
 /**
- * 인증번호를 3번 틀리면 로봇 확인, 5번 틀리면 1시간 차단 (#130).
+ * 인증번호를 3번 틀리면 로봇 확인(#130). 로봇 확인을 켜면 막지 않고, 끄면 5번 틀렸을 때 1시간 차단한다(#141).
  * 테스트 설정은 이 제한을 끄므로 여기서만 켠다. 틀린 횟수는 테스트 사이에도 남으므로 테스트마다 다른 이메일을 쓴다.
  */
 @SpringBootTest(properties = {
@@ -77,6 +77,7 @@ class VerificationLockTests {
 	void clear() {
 		mailbox.clear();
 		captcha.calls.clear();
+		captcha.enabled = true;
 	}
 
 	@Test
@@ -105,21 +106,47 @@ class VerificationLockTests {
 	}
 
 	@Test
-	void 인증번호를_5번_틀리면_1시간_동안_인증번호를_받거나_확인할_수_없다() throws Exception {
+	void 로봇_확인을_켜면_여러_번_틀려도_막지_않아_남이_일부러_틀려도_주인은_인증할_수_있다() throws Exception {
 		String email = uniqueEmail();
 		sendSignupCode(email).andExpect(status().isOk());
-		String code = mailbox.lastTo(email).code();
+		// 남이 일부러 틀린다. 3번 뒤부터는 로봇 확인을 해야 하고, 인증번호 하나는 5번까지만 틀릴 수 있다.
 		for (int i = 0; i < 3; i++) {
 			confirm(email, WRONG_CODE, null).andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
 		}
 		confirm(email, WRONG_CODE, FakeCaptchaVerifier.HUMAN)
 				.andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
 		confirm(email, WRONG_CODE, FakeCaptchaVerifier.HUMAN)
+				.andExpect(jsonPath("$.code").value("VERIFICATION_ATTEMPTS_EXCEEDED"));
+		pretendResendIntervalPassed(email);
+		sendSignupCode(email).andExpect(status().isOk());
+		for (int i = 0; i < 4; i++) {
+			confirm(email, WRONG_CODE, FakeCaptchaVerifier.HUMAN)
+					.andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
+		}
+		confirm(email, WRONG_CODE, FakeCaptchaVerifier.HUMAN)
+				.andExpect(jsonPath("$.code").value("VERIFICATION_ATTEMPTS_EXCEEDED"));
+
+		// 1시간 차단도, 하루 틀린 횟수(10번) 한도도 없으므로 주인은 새 인증번호를 받아 로봇 확인과 함께 인증할 수 있다(#141).
+		pretendResendIntervalPassed(email);
+		sendSignupCode(email).andExpect(status().isOk());
+		confirm(email, mailbox.lastTo(email).code(), FakeCaptchaVerifier.HUMAN).andExpect(status().isOk());
+	}
+
+	@Test
+	void 로봇_확인을_끄면_5번_틀렸을_때_1시간_동안_인증번호를_받거나_확인할_수_없다() throws Exception {
+		captcha.enabled = false;
+		String email = uniqueEmail();
+		sendSignupCode(email).andExpect(status().isOk());
+		String code = mailbox.lastTo(email).code();
+		for (int i = 0; i < 4; i++) {
+			confirm(email, WRONG_CODE, null).andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
+		}
+		confirm(email, WRONG_CODE, null)
 				.andExpect(status().isTooManyRequests())
 				.andExpect(jsonPath("$.code").value("VERIFICATION_LOCKED"));
 
 		// 맞는 번호도, 새 인증번호 요청도 받지 않는다.
-		confirm(email, code, FakeCaptchaVerifier.HUMAN)
+		confirm(email, code, null)
 				.andExpect(status().isTooManyRequests())
 				.andExpect(jsonPath("$.code").value("VERIFICATION_LOCKED"));
 		pretendResendIntervalPassed(email);
@@ -127,6 +154,7 @@ class VerificationLockTests {
 				.andExpect(status().isTooManyRequests())
 				.andExpect(jsonPath("$.code").value("VERIFICATION_LOCKED"));
 		assertThat(mailbox.sentTo(email)).hasSize(1);
+		assertThat(captcha.calls).isEmpty();
 	}
 
 	@Test
@@ -145,24 +173,47 @@ class VerificationLockTests {
 	}
 
 	@Test
-	void 비밀번호_재설정도_같은_제한을_받고_막힌_동안에는_메일을_보내지_않는다() throws Exception {
+	void 로봇_확인을_켜면_남이_재설정_인증번호를_일부러_틀려도_주인은_재설정할_수_있다() throws Exception {
+		String email = uniqueEmail();
+		insertMember(email);
+		requestReset(email).andExpect(status().isOk());
+		await().atMost(Duration.ofSeconds(5)).until(() -> mailbox.sentTo(email).size() == 1);
+
+		for (int i = 0; i < 3; i++) {
+			resetPassword(email, WRONG_CODE, null).andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
+		}
+		resetPassword(email, WRONG_CODE, null).andExpect(jsonPath("$.code").value("CAPTCHA_REQUIRED"));
+		resetPassword(email, WRONG_CODE, FakeCaptchaVerifier.HUMAN)
+				.andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
+		resetPassword(email, WRONG_CODE, FakeCaptchaVerifier.HUMAN)
+				.andExpect(jsonPath("$.code").value("VERIFICATION_ATTEMPTS_EXCEEDED"));
+
+		// 막히지 않았으므로 주인은 새 인증번호를 받아 로봇 확인과 함께 비밀번호를 바꿀 수 있다(#141).
+		pretendResendIntervalPassed(email);
+		requestReset(email).andExpect(status().isOk());
+		await().atMost(Duration.ofSeconds(5)).until(() -> mailbox.sentTo(email).size() == 2);
+		resetPassword(email, mailbox.lastTo(email).code(), FakeCaptchaVerifier.HUMAN).andExpect(status().isOk());
+		String passwordHash = jdbcTemplate.queryForObject("select password_hash from member where email = ?",
+				String.class, email);
+		assertThat(passwordEncoder.matches("new-pass-5678", passwordHash)).isTrue();
+	}
+
+	@Test
+	void 로봇_확인을_끄면_비밀번호_재설정도_같은_제한을_받고_막힌_동안에는_메일을_보내지_않는다() throws Exception {
+		captcha.enabled = false;
 		String email = uniqueEmail();
 		insertMember(email);
 		requestReset(email).andExpect(status().isOk());
 		await().atMost(Duration.ofSeconds(5)).until(() -> mailbox.sentTo(email).size() == 1);
 		String code = mailbox.lastTo(email).code();
 
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < 4; i++) {
 			resetPassword(email, WRONG_CODE, null).andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
 		}
-		resetPassword(email, code, null).andExpect(jsonPath("$.code").value("CAPTCHA_REQUIRED"));
-		resetPassword(email, WRONG_CODE, FakeCaptchaVerifier.HUMAN)
-				.andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
-		resetPassword(email, WRONG_CODE, FakeCaptchaVerifier.HUMAN)
+		resetPassword(email, WRONG_CODE, null)
 				.andExpect(status().isTooManyRequests())
 				.andExpect(jsonPath("$.code").value("VERIFICATION_LOCKED"));
-		resetPassword(email, code, FakeCaptchaVerifier.HUMAN)
-				.andExpect(jsonPath("$.code").value("VERIFICATION_LOCKED"));
+		resetPassword(email, code, null).andExpect(jsonPath("$.code").value("VERIFICATION_LOCKED"));
 
 		// 재설정 요청 응답은 그대로 성공이지만 막힌 동안에는 인증번호를 만들지도 보내지도 않는다.
 		pretendResendIntervalPassed(email);
@@ -177,14 +228,12 @@ class VerificationLockTests {
 
 	@Test
 	void 가입되지_않은_이메일도_똑같이_세어_재설정_인증에서_가입_여부가_드러나지_않는다() throws Exception {
+		captcha.enabled = false;
 		String email = uniqueEmail();
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < 4; i++) {
 			resetPassword(email, WRONG_CODE, null).andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
 		}
-		resetPassword(email, WRONG_CODE, null).andExpect(jsonPath("$.code").value("CAPTCHA_REQUIRED"));
-		resetPassword(email, WRONG_CODE, FakeCaptchaVerifier.HUMAN)
-				.andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
-		resetPassword(email, WRONG_CODE, FakeCaptchaVerifier.HUMAN)
+		resetPassword(email, WRONG_CODE, null)
 				.andExpect(status().isTooManyRequests())
 				.andExpect(jsonPath("$.code").value("VERIFICATION_LOCKED"));
 	}
@@ -256,10 +305,11 @@ class VerificationLockTests {
 		static final String UNAVAILABLE = "unavailable-token";
 
 		final List<String> calls = new CopyOnWriteArrayList<>();
+		volatile boolean enabled = true;
 
 		@Override
 		public boolean isEnabled() {
-			return true;
+			return enabled;
 		}
 
 		@Override

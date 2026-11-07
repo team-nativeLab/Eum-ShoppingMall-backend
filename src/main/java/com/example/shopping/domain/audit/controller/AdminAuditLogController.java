@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.shopping.domain.audit.dto.response.AdminAuditLogResponse;
 import com.example.shopping.domain.audit.service.AdminAuditLogService;
+import com.example.shopping.domain.audit.service.AuditLogKind;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.response.ApiResponse;
@@ -34,15 +35,17 @@ public class AdminAuditLogController {
 	/**
 	 * fromDate·toDate는 날짜(2026-10-01)나 날짜·시간(2026-10-01T09:00:00)으로 받는다.
 	 * 날짜만 주면 fromDate는 그날 0시부터, toDate는 그날이 끝날 때까지로 본다.
+	 * kind로 개인정보 조회(READ)·변경(CHANGE)·관리자 로그인(LOGIN)만 따로 볼 수 있다.
 	 */
 	@GetMapping
 	public ApiResponse<PageResponse<AdminAuditLogResponse>> search(@AuthenticationPrincipal Jwt jwt,
 			@RequestParam(required = false) Long actorMemberId,
 			@RequestParam(required = false) String targetType,
+			@RequestParam(required = false) AuditLogKind kind,
 			@RequestParam(required = false) String fromDate,
 			@RequestParam(required = false) String toDate,
 			@PageableDefault(size = 20) Pageable pageable) {
-		return ApiResponse.ok(service.search(CurrentMember.id(jwt), actorMemberId, targetType,
+		return ApiResponse.ok(service.search(CurrentMember.id(jwt), actorMemberId, targetType, kind,
 				parseDate(fromDate, false), parseDate(toDate, true), pageable));
 	}
 

@@ -51,8 +51,9 @@ public class AdminAuditLogService {
 	}
 
 	@Transactional(readOnly = true)
+	/** @param kind 조회(READ)·변경(CHANGE)·관리자 로그인(LOGIN) 중 하나만 볼 때. null이면 모두 */
 	public PageResponse<AdminAuditLogResponse> search(Long actorMemberId, Long filterActorId, String targetType,
-			LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable) {
+			AuditLogKind kind, LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable) {
 		Member actor = memberRepository.findById(actorMemberId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
 		if (actor.getRole() != MemberRole.SUPER_ADMIN) {
@@ -63,7 +64,8 @@ public class AdminAuditLogService {
 		if (fromDate != null && toDate != null && !fromDate.isBefore(toDate)) {
 			throw new BusinessException(ErrorCode.INVALID_INPUT);
 		}
-		return PageResponse.from(repository.search(filterActorId, type, fromDate, toDate, pageable)
+		return PageResponse.from(repository.search(filterActorId, type, kind == null ? null : kind.name(), fromDate,
+				toDate, pageable)
 				.map(AdminAuditLogResponse::from));
 	}
 }

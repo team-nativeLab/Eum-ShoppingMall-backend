@@ -378,7 +378,7 @@ class SecurityTests {
 
 	@Test
 	void 비밀번호가_담긴_요청_객체는_문자열로_바꿔도_비밀번호가_드러나지_않는다() {
-		assertThat(new LoginRequest(EMAIL, PASSWORD).toString()).contains(EMAIL).doesNotContain(PASSWORD);
+		assertThat(new LoginRequest(EMAIL, PASSWORD, "captcha-token").toString()).contains(EMAIL).doesNotContain(PASSWORD, "captcha-token");
 		assertThat(new SignupRequest(EMAIL, PASSWORD, "홍길동", null, "verification-token", true, true, false).toString())
 				.doesNotContain(PASSWORD)
 				.doesNotContain("verification-token");
