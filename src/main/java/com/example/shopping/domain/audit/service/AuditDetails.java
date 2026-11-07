@@ -1,14 +1,16 @@
 package com.example.shopping.domain.audit.service;
 
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
-/** 감사 로그에 남길 변경 내용을 만든다. 민감한 값은 가리고 길이를 제한한다. */
+/** 감사 로그에 남길 변경 내용·조회 조건을 만든다. 민감한 값은 가리고 길이를 제한한다. */
 public final class AuditDetails {
 
 	static final int MAX_LENGTH = 2000;
@@ -44,6 +46,26 @@ public final class AuditDetails {
 		if (node == null || node.isMissingNode()) {
 			return null;
 		}
+		mask(node);
+		return truncate(JSON.writeValueAsString(node));
+	}
+
+	/** 조회 요청의 검색 조건·쪽 번호(쿼리 문자열)를 남긴다. 응답(개인정보)은 남기지 않는다. 조건이 없으면 null */
+	public static String fromQueryParameters(Map<String, String[]> parameters) {
+		if (parameters == null || parameters.isEmpty()) {
+			return null;
+		}
+		ObjectNode node = JSON.createObjectNode();
+		parameters.forEach((name, values) -> {
+			if (values.length == 1) {
+				node.put(name, values[0]);
+			} else {
+				ArrayNode array = node.putArray(name);
+				for (String value : values) {
+					array.add(value);
+				}
+			}
+		});
 		mask(node);
 		return truncate(JSON.writeValueAsString(node));
 	}

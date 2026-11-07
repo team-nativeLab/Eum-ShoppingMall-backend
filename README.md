@@ -111,15 +111,22 @@ IP별 요청 제한(`RATE_LIMIT_PER_MINUTE`)과 별도로 로그인 이메일마
 
 관리자의 `POST`, `PUT`, `PATCH`, `DELETE` 요청(이미지 업로드 포함)은 성공했거나 권한 부족(403)으로 거절됐을 때 기록합니다. 검증 오류 같은 다른 실패는 기록하지 않습니다.
 
+개인정보가 보이는 관리자 조회도 같은 방식으로 기록합니다(#138). 개인정보의 안전성 확보조치 기준 제8조의 접속기록입니다.
+
+- **대상:** 회원 목록·상세(`/admin/users`), 주문 목록·상세(`/admin/orders`), 문의 목록·상세(`/admin/inquiries`), 견적 목록(`/admin/quotes`), 감사 로그 조회(`/admin/audit-logs`). 목록은 대상 ID 없이, 상세는 대상 ID와 함께 남깁니다. 상품·대시보드처럼 개인정보가 없는 조회는 남기지 않습니다(`ApiPolicy.AUDITED_READS`).
+- **기록 내용:** 요청한 회원, IP, 시각, 대상, 검색 조건·쪽 번호(쿼리 문자열)를 남깁니다. 응답 본문(개인정보)은 남기지 않습니다.
+- **대량 조회 알림:** 관리자 한 명이 10분 안에 개인정보 조회 API를 `ADMIN_BULK_READ_ALERT_THRESHOLD`(기본 100)번 부르면 담당자에게 알립니다(`manual.check.required{reason=admin_bulk_personal_data_read}`, #32).
+- **정기 점검:** `SUPER_ADMIN`이 매월 `GET /api/v1/admin/audit-logs?kind=READ`로 지난달 조회 기록을 보고, 업무와 관계없는 회원 조회나 근무 시간 밖의 대량 조회가 없는지 확인합니다.
+
 - **기록 내용:** 요청한 회원, 서버가 확인한 클라이언트 IP, HTTP 메서드, 대상 종류와 식별자, 경로 요약, 응답 상태, JSON 요청 본문이 남습니다. 본문에서 이름에 아래 단어가 들어간 필드는 가리고, 2,000자로 자릅니다. 감사 로그는 원래 데이터를 지운 뒤에도 2년 동안 남기 때문입니다.
   - 비밀 값: `password`, `secret`, `token`, `card`
   - 연락처: `email`, `phone`, `mobile`, `address`, `zipcode`, `recipient`
   - 고객 정보가 섞일 수 있는 글: `reason`(정지·취소·재고 조정 사유), `answer`(문의·FAQ 답변), `memo`, `note`, `comment`
 - **저장 실패:** 기록을 저장하지 못하면 앱 로그에는 요청한 회원·IP·경로·대상만 ERROR로 남기고 본문은 남기지 않습니다.
 - **대상:** 매칭된 경로에서 가장 안쪽의 `name/{id}`입니다. `/api/v1/admin/products/{productId}/skus/{skuId}/stock-adjustments`는 `skus`와 SKU ID를, 이미지 업로드는 `uploads`를 기록합니다.
-- **조회:** `GET /api/v1/admin/audit-logs`는 요청한 회원, 대상 종류, 시간으로 거를 수 있고 `SUPER_ADMIN`만 쓸 수 있습니다. `fromDate`·`toDate`는 `2026-10-01`이나 `2026-10-01T09:00:00`을 받고, 날짜만 넣은 `toDate`는 그날 전체를 포함합니다.
+- **조회:** `GET /api/v1/admin/audit-logs`는 요청한 회원, 대상 종류, 시간, 종류(`kind`: 개인정보 조회 `READ`·변경 `CHANGE`·관리자 로그인 `LOGIN`)로 거를 수 있고 `SUPER_ADMIN`만 쓸 수 있습니다. `fromDate`·`toDate`는 `2026-10-01`이나 `2026-10-01T09:00:00`을 받고, 날짜만 넣은 `toDate`는 그날 전체를 포함합니다.
 
-감사 로그 API에는 수정과 삭제가 없습니다. 로그는 2년(`AUDIT_LOG_RETENTION_DAYS`, 기본 730일) 보관한 뒤 매일 05:15에 1,000건씩 나눠 지웁니다. 개인정보 처리시스템 접속기록 보관 기준에 맞춰 365일보다 짧게는 설정할 수 없습니다. 선택 사항인 관리자 2FA와 회원 개인정보 열람 감사는 별도 후속 작업으로 남아 있습니다.
+감사 로그 API에는 수정과 삭제가 없습니다. 로그는 2년(`AUDIT_LOG_RETENTION_DAYS`, 기본 730일) 보관한 뒤 매일 05:15에 1,000건씩 나눠 지웁니다. 개인정보 처리시스템 접속기록 보관 기준에 맞춰 365일보다 짧게는 설정할 수 없습니다. 조회 기록이 더해져 변경 기록보다 훨씬 많아지지만, `created_at` 인덱스(V18)로 나눠 지우므로 정리 시간은 늘어난 건수에 비례합니다. 관리자 2FA는 별도 후속 작업으로 남아 있습니다.
 
 ## 해시 저장 원칙
 

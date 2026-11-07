@@ -134,6 +134,9 @@ security:
     captcha-after-failures: 3
     # 이만큼 틀리면 그때부터 1시간 동안 그 이메일로 인증번호를 받거나 확인할 수 없다.
     max-failures: 5
+  audit:
+    # 관리자 한 명이 10분 안에 개인정보 조회 API(ApiPolicy.AUDITED_READS)를 이만큼 부르면 담당자에게 알린다(#138).
+    bulk-read-alert-threshold: ${ADMIN_BULK_READ_ALERT_THRESHOLD:100}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
     max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}
