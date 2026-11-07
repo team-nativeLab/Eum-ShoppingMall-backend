@@ -1,6 +1,7 @@
 package com.example.shopping.domain.member.service;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import org.springframework.data.domain.PageRequest;
@@ -21,6 +22,7 @@ import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.repository.OrderRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
+import com.example.shopping.global.persistence.LikePatterns;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.validation.SortValidator;
 import com.example.shopping.global.security.MemberTokenStateCache;
@@ -43,7 +45,10 @@ public class AdminMemberService {
 	public PageResponse<AdminMemberSummaryResponse> search(String keyword, Pageable pageable) {
 		SortValidator.requireAllowed(pageable, SORTABLE);
 		String trimmed = StringUtils.hasText(keyword) ? keyword.trim() : null;
-		return PageResponse.from(memberRepository.search(trimmed, pageable).map(AdminMemberSummaryResponse::from));
+		String emailPattern = trimmed == null ? null : LikePatterns.contains(trimmed.toLowerCase(Locale.ROOT));
+		String namePattern = trimmed == null ? null : LikePatterns.contains(trimmed);
+		return PageResponse.from(memberRepository.search(emailPattern, namePattern, pageable)
+				.map(AdminMemberSummaryResponse::from));
 	}
 
 	public AdminMemberDetailResponse getDetail(Long memberId) {

@@ -30,6 +30,8 @@ public class VerificationAttemptGuard {
 
 	static final Duration FAILURE_WINDOW = Duration.ofHours(1);
 	static final Duration LOCK_DURATION = Duration.ofHours(1);
+	/** 인증번호 확인 화면의 Turnstile 위젯에 프론트가 넣는 action 이름. 다른 용도의 위젯에서 받은 토큰은 받지 않는다. */
+	public static final String CAPTCHA_ACTION = "verify-code";
 	private static final String FAILURE_KEY_PREFIX = "auth:verification-failures:";
 	private static final String LOCK_KEY_PREFIX = "auth:verification-lock:";
 	private static final int MAX_LOCAL_KEYS = 10_000;
@@ -77,7 +79,7 @@ public class VerificationAttemptGuard {
 		if (!StringUtils.hasText(captchaToken)) {
 			throw new BusinessException(ErrorCode.CAPTCHA_REQUIRED);
 		}
-		if (!captchaVerifier.verify(captchaToken, remoteIp)) {
+		if (!captchaVerifier.verify(captchaToken, CAPTCHA_ACTION, remoteIp)) {
 			throw new BusinessException(ErrorCode.CAPTCHA_INVALID);
 		}
 	}
