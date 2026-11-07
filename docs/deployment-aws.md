@@ -21,9 +21,9 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 | 구성 | 켜는 변수 | 고정 비용(월) | plan이 만드는 리소스 |
 |---|---|---|---|
 | 기본 | 없음 | $0 | 42개 |
-| 데이터 준비(스키마 작업) | `enable_data_layer` | 약 $39 | 51개 |
-| 개발 검증 배포 | 위 + `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service` | 약 $130 | 71개 |
-| 운영 예시 | 위 + `db_multi_az=true`, `desired_count=2` | 약 $173 | 71개 |
+| 데이터 준비(스키마 작업) | `enable_data_layer` | 약 $40 | 61개 |
+| 개발 검증 배포 | 위 + `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service` | 약 $131 | 81개 |
+| 운영 예시 | 위 + `db_multi_az=true`, `desired_count=2` | 약 $173 | 81개 |
 
 기본 구성은 VPC와 서브넷·라우팅, 보안 그룹, DB·Redis 서브넷 그룹, IAM, ECS 클러스터, ECR, 업로드 S3와 CloudFront, 로그 그룹, 예산 경보만 만듭니다. 이 중 요금이 나오는 것은 ECR, S3, CloudFront, 로그처럼 쓴 만큼 내는 항목뿐입니다. 리소스 수는 `terraform/stacks/app/tests`와 같은 mock provider로 돌린 plan 결과입니다.
 
@@ -37,6 +37,7 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 | RDS `db.t4g.micro` Multi-AZ, gp3 20GB | `db_multi_az` | $0.051 × 730시간 + $0.262 × 20GB | $42.47 |
 | Redis `cache.t4g.micro` 1개 | `enable_data_layer` | $0.024 × 730시간 | $17.52 |
 | 시크릿 2개(Redis, RDS 마스터) | `enable_data_layer` | $0.40 × 2개 | $0.80 |
+| CloudWatch 경보 6개(#145) | `enable_data_layer` | $0.10 × 6개 | $0.60 |
 | Fargate 태스크 1개(0.5 vCPU, 1GB) | `enable_ecs_service` | ($0.04656 × 0.5 + $0.00511) × 730시간 | $20.72 |
 
 - **쓴 만큼 더 나오는 항목:** NAT 처리량($0.059/GB), ALB LCU($0.008/LCU-시간), EFS($0.33/GB-월), ECR($0.10/GB-월), S3, CloudFront, CloudWatch Logs. EFS는 최소 요금이 없어 비어 있으면 저장 비용이 없습니다.
@@ -52,6 +53,19 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 - 예산과 알림은 무료입니다. 예산은 쓰려는 구성의 고정 비용보다 높게 잡습니다.
 
 참고: [AWS Budgets 요금](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/), [AWS Budgets 권장 사항](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-best-practices.html)
+
+### DB·Redis 경보
+
+데이터 계층을 켜면 RDS·Redis 이상 징후 경보를 만들고, 예산 알림과 같은 담당자(`budget_alert_emails`)에게 SNS 메일로 보냅니다(#145). 받는 사람은 처음 오는 "AWS Notification - Subscription Confirmation" 메일에서 구독을 확인해야 합니다. 경보가 풀리면 다시 알립니다.
+
+| 경보 | 기준 | 먼저 볼 것 |
+|---|---|---|
+| RDS CPU | 15분 평균 80% 이상 | 느린 쿼리 로그, 관리자 대량 조회 알림(#138) |
+| RDS 남은 저장 공간 | 2GiB 이하 | 저장 공간 자동 확장(최대 100GB), 정리 작업 |
+| RDS 연결 수 | 10분 동안 50개 이상(`db_connection_alarm_threshold`) | 작업 수·커넥션 풀, 감사 로그의 직접 접속 |
+| Redis 메모리 | 10분 동안 80% 이상 | 계속 쌓이는 키(요청 제한·잠금·캐시) |
+| Redis CPU | 15분 평균 80% 이상 | 요청량 |
+| RDS 마스터 계정 사용 | 감사 로그에 마스터 계정이 한 번이라도 나오면 | 계정 만들기 같은 예정된 작업인지(#132) |
 
 ### 켜고 끌 때 주의할 점
 

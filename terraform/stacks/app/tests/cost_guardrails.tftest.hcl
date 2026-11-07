@@ -419,6 +419,11 @@ run "budget_alerts_every_recipient_at_each_threshold" {
   }
 
   assert {
+    condition     = length(aws_sns_topic.alarms) + length(aws_cloudwatch_metric_alarm.rds_cpu) == 0
+    error_message = "데이터 계층을 끄면 RDS·Redis 경보를 만들면 안 됩니다."
+  }
+
+  assert {
     condition     = aws_budgets_budget.monthly.limit_amount == "200"
     error_message = "월 예산이 입력값과 같아야 합니다."
   }
@@ -443,5 +448,40 @@ run "budget_alerts_every_recipient_at_each_threshold" {
       notification.notification_type == "FORECASTED" && notification.threshold == 100
     ])
     error_message = "예측 비용 100% 알림이 있어야 합니다."
+  }
+}
+
+run "database_alarms_when_data_layer_is_on" {
+  command = plan
+
+  module {
+    source = "../../modules/observability"
+  }
+
+  variables {
+    name                    = "eum-test"
+    limit_usd               = 200
+    alert_emails            = ["ops@eum-shopping.test", "dev@eum-shopping.test"]
+    alert_thresholds        = [50, 80, 100]
+    data_layer_enabled      = true
+    db_instance_identifier  = "eum-test-mysql"
+    db_master_username      = "eum_admin"
+    db_audit_log_group_name = "/aws/rds/instance/eum-test-mysql/audit"
+    redis_cluster_id        = "eum-test-redis-001"
+  }
+
+  assert {
+    condition = alltrue([
+      length(aws_sns_topic_subscription.alarm_email) == 2,
+      length(aws_cloudwatch_metric_alarm.rds_cpu) == 1,
+      length(aws_cloudwatch_metric_alarm.rds_free_storage) == 1,
+      length(aws_cloudwatch_metric_alarm.rds_connections) == 1,
+      length(aws_cloudwatch_metric_alarm.redis_memory) == 1,
+      length(aws_cloudwatch_metric_alarm.redis_cpu) == 1,
+      length(aws_cloudwatch_metric_alarm.db_master_user) == 1,
+      aws_cloudwatch_log_metric_filter.db_master_user[0].pattern == "\",eum_admin,\"",
+      aws_cloudwatch_metric_alarm.rds_cpu[0].dimensions["DBInstanceIdentifier"] == "eum-test-mysql",
+    ])
+    error_message = "데이터 계층을 켜면 RDS·Redis 경보와 마스터 계정 사용 알림이 담당자에게 가야 합니다(#145)."
   }
 }
