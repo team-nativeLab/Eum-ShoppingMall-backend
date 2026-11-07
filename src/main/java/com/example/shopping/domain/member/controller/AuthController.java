@@ -82,8 +82,9 @@ public class AuthController {
 
 	/** WEB-018 로그인. Access 토큰은 응답 본문으로, Refresh 토큰은 HttpOnly 쿠키로 내려준다. */
 	@PostMapping("/login")
-	public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
-		return responder.withTokens(authService.login(request));
+	public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request,
+			HttpServletRequest httpRequest) {
+		return responder.withTokens(authService.login(request, httpRequest.getRemoteAddr()));
 	}
 
 	/** Refresh 쿠키로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. */

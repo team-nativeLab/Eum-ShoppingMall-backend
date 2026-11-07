@@ -153,7 +153,7 @@ public class EmailVerificationService {
 
 	/**
 	 * 가장 최근에 보낸 인증번호와 비교한다. 틀리면 횟수를 올리고, 5번 틀리면 다시 받아야 한다.
-	 * 24시간 동안 틀린 횟수가 모두 합쳐 10번이면 맞는 번호도 받지 않는다(429).
+	 * 24시간 동안 틀린 횟수가 모두 합쳐 10번이면 맞는 번호도 받지 않는다(429). 로봇 확인을 켜면 이 한도는 두지 않는다(#141).
 	 * 인증번호가 없는 경우와 만료된 경우, 틀린 경우를 구분해 알려 주지 않고 모두 틀린 횟수로 센다.
 	 * 이번 실패로 VerificationAttemptGuard의 한도에 닿으면 VERIFICATION_LOCKED(429)로 알린다.
 	 * 막힘·로봇 확인은 호출하는 쪽이 트랜잭션 밖에서 먼저 확인한다(VerificationAttemptGuard.checkAttemptAllowed).
@@ -169,7 +169,8 @@ public class EmailVerificationService {
 			throw failure(email, purpose, ErrorCode.VERIFICATION_ATTEMPTS_EXCEEDED);
 		}
 		LocalDateTime now = LocalDateTime.now();
-		if (verificationRepository.sumAttemptsSince(email, purpose, now.minus(DAILY_WINDOW)) >= DAILY_FAILURE_LIMIT) {
+		if (!attemptGuard.isCaptchaProtected()
+				&& verificationRepository.sumAttemptsSince(email, purpose, now.minus(DAILY_WINDOW)) >= DAILY_FAILURE_LIMIT) {
 			throw new BusinessException(ErrorCode.VERIFICATION_DAILY_LIMIT_EXCEEDED);
 		}
 		if (!verification.isCodeUsable(now)) {

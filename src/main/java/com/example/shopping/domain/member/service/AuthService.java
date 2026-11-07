@@ -103,8 +103,9 @@ public class AuthService {
 		}
 	}
 
-	public AuthTokens login(LoginRequest request) {
-		return issueTokens(authenticate(request));
+	/** @param clientIp 서버가 확인한 클라이언트 IP. 로봇 확인 서비스가 토큰을 받은 IP와 비교한다. */
+	public AuthTokens login(LoginRequest request, String clientIp) {
+		return issueTokens(authenticate(request, clientIp));
 	}
 
 	/**
@@ -114,7 +115,7 @@ public class AuthService {
 	public AuthTokens adminLogin(LoginRequest request, String clientIp) {
 		Member member;
 		try {
-			member = authenticate(request);
+			member = authenticate(request, clientIp);
 			if (!member.getRole().canAccessAdminApi()) {
 				throw new BusinessException(ErrorCode.LOGIN_FAILED);
 			}
@@ -153,9 +154,9 @@ public class AuthService {
 		refreshTokenService.revoke(refreshToken);
 	}
 
-	private Member authenticate(LoginRequest request) {
+	private Member authenticate(LoginRequest request, String clientIp) {
 		String email = ContactFormats.loginEmail(request.email());
-		loginAttemptLimiter.checkAllowed(email);
+		loginAttemptLimiter.checkAllowed(email, request.captchaToken(), clientIp);
 		Member member = memberRepository.findByEmail(email).orElse(null);
 
 		String passwordHash = member == null ? dummyPasswordHash : member.getPasswordHash();
