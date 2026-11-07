@@ -17,7 +17,8 @@ import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.mail.EmailSender;
 import com.example.shopping.global.mail.EmailSender.EmailSendException;
-import com.example.shopping.global.security.JwtProperties;
+import com.example.shopping.global.security.KeyedHash;
+import com.example.shopping.global.security.SecretHashes;
 import com.example.shopping.global.validation.ContactFormats;
 
 /**
@@ -37,27 +38,27 @@ public class EmailVerificationService {
 	static final Duration DAILY_WINDOW = Duration.ofDays(1);
 	static final int DAILY_SEND_LIMIT = 5;
 	static final int DAILY_FAILURE_LIMIT = 10;
-	/** JWT 서명 키에서 인증번호 해시용 키를 따로 뽑을 때 쓰는 이름 */
-	private static final String CODE_KEY_PURPOSE = "email-verification-code";
 
 	private final EmailVerificationRepository verificationRepository;
 	private final MemberRepository memberRepository;
 	private final EmailSender emailSender;
 	private final TransactionTemplate transactionTemplate;
 	private final VerificationAttemptGuard attemptGuard;
-	private final byte[] codeKey;
+	private final KeyedHash codeHashes;
+	private final KeyedHash tokenHashes;
 	private final String serviceName;
 
 	public EmailVerificationService(EmailVerificationRepository verificationRepository,
 			MemberRepository memberRepository, EmailSender emailSender, TransactionTemplate transactionTemplate,
-			VerificationAttemptGuard attemptGuard, JwtProperties jwtProperties,
+			VerificationAttemptGuard attemptGuard, SecretHashes secretHashes,
 			@Value("${app.mail.service-name:이음 쇼핑몰}") String serviceName) {
 		this.verificationRepository = verificationRepository;
 		this.memberRepository = memberRepository;
 		this.emailSender = emailSender;
 		this.transactionTemplate = transactionTemplate;
 		this.attemptGuard = attemptGuard;
-		this.codeKey = VerificationCodes.deriveKey(jwtProperties.secret(), CODE_KEY_PURPOSE);
+		this.codeHashes = secretHashes.forPurpose(SecretHashes.EMAIL_VERIFICATION_CODE);
+		this.tokenHashes = secretHashes.forPurpose(SecretHashes.EMAIL_VERIFICATION_TOKEN);
 		this.serviceName = serviceName;
 	}
 
@@ -101,7 +102,7 @@ public class EmailVerificationService {
 		BusinessException failure = transactionTemplate.execute(status -> {
 			try {
 				verifyCode(email, VerificationPurpose.SIGNUP, code)
-						.issueToken(VerificationCodes.hash(token), tokenExpiresAt);
+						.issueToken(tokenHashes.hash(token), tokenExpiresAt);
 				return null;
 			} catch (BusinessException e) {
 				// 틀린 횟수는 커밋해 남기고, 응답만 실패로 돌려준다.
@@ -122,7 +123,7 @@ public class EmailVerificationService {
 	public void consumeSignupToken(String email, String token) {
 		LocalDateTime now = LocalDateTime.now();
 		EmailVerification verification = verificationRepository
-				.findByTokenHashAndPurpose(VerificationCodes.hash(token), VerificationPurpose.SIGNUP)
+				.findByTokenHashAndPurpose(tokenHashes.hash(token), VerificationPurpose.SIGNUP)
 				.filter(v -> v.getEmail().equals(email) && v.isTokenUsable(now))
 				.orElseThrow(() -> new BusinessException(ErrorCode.EMAIL_VERIFICATION_REQUIRED));
 		verification.consume(now);
@@ -174,7 +175,7 @@ public class EmailVerificationService {
 		if (!verification.isCodeUsable(now)) {
 			throw failure(email, purpose, ErrorCode.VERIFICATION_CODE_INVALID);
 		}
-		if (!VerificationCodes.matches(verification.getCodeHash(), codeHash(purpose, email, code))) {
+		if (!codeHashes.matches(verification.getCodeHash(), purpose.name(), email, code)) {
 			verification.recordFailedAttempt();
 			throw failure(email, purpose, verification.isAttemptsExceeded() ? ErrorCode.VERIFICATION_ATTEMPTS_EXCEEDED
 					: ErrorCode.VERIFICATION_CODE_INVALID);
@@ -188,7 +189,7 @@ public class EmailVerificationService {
 
 	/** 같은 인증번호라도 이메일·용도가 다르면 해시가 달라진다. 서버 비밀 키가 없으면 DB 값으로 인증번호를 맞혀 볼 수 없다. */
 	private String codeHash(VerificationPurpose purpose, String email, String code) {
-		return VerificationCodes.keyedHash(codeKey, purpose.name(), email, code);
+		return codeHashes.hash(purpose.name(), email, code);
 	}
 
 	/** 틀린 횟수를 세고, 이번에 막혔으면 VERIFICATION_LOCKED를 돌려준다. */

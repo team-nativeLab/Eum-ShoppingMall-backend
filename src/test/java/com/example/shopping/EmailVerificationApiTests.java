@@ -118,6 +118,19 @@ class EmailVerificationApiTests {
 	}
 
 	@Test
+	void 가입_확인_토큰도_서버_키로_해시해_저장한다() throws Exception {
+		String token = verifiedToken(EMAIL);
+
+		// 키 없는 SHA-256과 다르므로 DB 값만으로는 토큰을 알아낼 수 없다(#136).
+		entityManager.flush();
+		String stored = jdbcTemplate.queryForObject(
+				"select token_hash from email_verification where email = ? and token_hash is not null", String.class,
+				EMAIL);
+		assertThat(stored).hasSize(64).isNotEqualTo(sha256(token));
+		signup(EMAIL, token).andExpect(status().isCreated());
+	}
+
+	@Test
 	void 다른_이메일로_받은_토큰으로는_가입할_수_없다() throws Exception {
 		String token = verifiedToken("first@example.com");
 

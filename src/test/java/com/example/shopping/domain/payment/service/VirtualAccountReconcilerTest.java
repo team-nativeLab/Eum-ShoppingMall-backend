@@ -25,6 +25,8 @@ import com.example.shopping.domain.payment.gateway.PgPayment;
 import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.global.monitoring.ManualCheckAlerts;
 import com.example.shopping.global.monitoring.OperatorAlerts;
+import com.example.shopping.global.security.KeyedHash;
+import com.example.shopping.global.security.SecretHashes;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -40,8 +42,10 @@ class VirtualAccountReconcilerTest {
 	private final OrderTxService orderTxService = mock(OrderTxService.class);
 	private final OrderRepository orderRepository = mock(OrderRepository.class);
 	private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+	private static final PaymentWebhookSecrets WEBHOOK_SECRETS = new PaymentWebhookSecrets(
+			KeyedHash.derive("test-secret-0123456789abcdef0123", SecretHashes.PAYMENT_WEBHOOK_SECRET));
 	private final VirtualAccountReconciler reconciler = new VirtualAccountReconciler(orderTxService, orderRepository,
-			new ManualCheckAlerts(meters, mock(OperatorAlerts.class)));
+			new ManualCheckAlerts(meters, mock(OperatorAlerts.class)), WEBHOOK_SECRETS);
 
 	@Test
 	void 입금_대기_주문에_입금되면_결제_완료로_반영한다() {
@@ -134,7 +138,7 @@ class VirtualAccountReconcilerTest {
 		when(payment.isVirtualAccount()).thenReturn(true);
 		when(payment.getVirtualAccountNumber()).thenReturn("110-123-456789");
 		when(payment.getVirtualAccountDueAt()).thenReturn(dueAt);
-		when(payment.matchesWebhookSecret("secret")).thenReturn(true);
+		when(payment.getWebhookSecretHash()).thenReturn(WEBHOOK_SECRETS.hash("secret"));
 		return payment;
 	}
 

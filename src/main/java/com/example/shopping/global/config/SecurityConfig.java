@@ -50,6 +50,7 @@ import com.example.shopping.global.security.JwtTokenProvider;
 import com.example.shopping.global.security.RateLimitFilter;
 import com.example.shopping.global.security.RefreshCookieOriginFilter;
 import com.example.shopping.global.security.RequestSizeLimitFilter;
+import com.example.shopping.global.security.SecretHashes;
 import com.example.shopping.global.security.SecurityErrorHandler;
 
 @Configuration
@@ -61,7 +62,7 @@ public class SecurityConfig {
 	SecurityFilterChain filterChain(HttpSecurity http, SecurityErrorHandler errorHandler,
 			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
 			@Value("${cors.allowed-origins}") List<String> allowedOrigins,
-			StringRedisTemplate redisTemplate, RedisCircuitBreaker redisCircuitBreaker,
+			StringRedisTemplate redisTemplate, RedisCircuitBreaker redisCircuitBreaker, SecretHashes secretHashes,
 			@Value("${security.rate-limit.requests-per-minute}") int requestsPerMinute,
 			@Value("${security.rate-limit.public-product-requests-per-minute:300}") int publicProductRequestsPerMinute,
 			@Value("${security.request.max-body-bytes}") long maxBodyBytes) throws Exception {
@@ -92,7 +93,8 @@ public class SecurityConfig {
 				.addFilterBefore(new RequestSizeLimitFilter(maxBodyBytes, exceptionResolver),
 						BearerTokenAuthenticationFilter.class)
 				.addFilterBefore(new RateLimitFilter(requestsPerMinute, publicProductRequestsPerMinute,
-						exceptionResolver, Clock.systemUTC(), redisTemplate, redisCircuitBreaker),
+						exceptionResolver, Clock.systemUTC(), redisTemplate, redisCircuitBreaker,
+						secretHashes.forPurpose(SecretHashes.RATE_LIMIT_KEY)),
 						BearerTokenAuthenticationFilter.class)
 				.addFilterBefore(new RefreshCookieOriginFilter(allowedOrigins, exceptionResolver),
 						BearerTokenAuthenticationFilter.class);

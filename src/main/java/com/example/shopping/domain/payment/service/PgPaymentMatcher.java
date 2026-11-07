@@ -18,12 +18,13 @@ public final class PgPaymentMatcher {
 	}
 
 	/** 같은 결제이고, 저장된 결제와 PG 결과가 모두 가상계좌이며, 발급 때 받은 계좌 정보와 웹훅 비밀값이 그대로인지 */
-	public static boolean isSameVirtualAccount(Order order, Payment payment, PgPayment pg) {
+	public static boolean isSameVirtualAccount(Order order, Payment payment, PgPayment pg,
+			PaymentWebhookSecrets webhookSecrets) {
 		return isSamePayment(order, payment, pg)
 				&& payment.isVirtualAccount()
 				&& Payment.VIRTUAL_ACCOUNT_METHOD.equals(pg.method())
 				&& payment.getVirtualAccountNumber() != null
 				&& payment.getVirtualAccountDueAt() != null
-				&& payment.matchesWebhookSecret(pg.secret());
+				&& webhookSecrets.matches(payment, pg.secret());
 	}
 }

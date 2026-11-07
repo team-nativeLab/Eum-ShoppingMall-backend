@@ -24,6 +24,8 @@ import org.springframework.data.redis.core.script.RedisScript;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.redis.RedisCircuitBreaker;
+import com.example.shopping.global.security.KeyedHash;
+import com.example.shopping.global.security.SecretHashes;
 
 class LoginAttemptLimiterTests {
 
@@ -46,6 +48,7 @@ class LoginAttemptLimiterTests {
 			return this;
 		}
 	};
+	private static final KeyedHash KEY_HASHES = KeyedHash.derive("test-secret-0123456789abcdef0123", SecretHashes.LOGIN_LOCK_KEY);
 	private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
 
 	@Test
@@ -54,7 +57,8 @@ class LoginAttemptLimiterTests {
 		ValueOperations<String, String> values = mock(ValueOperations.class);
 		when(redis.opsForValue()).thenReturn(values);
 		when(values.get(anyString())).thenReturn(String.valueOf(MAX_FAILURES));
-		LoginAttemptLimiter limiter = new LoginAttemptLimiter(redis, new RedisCircuitBreaker(clock), MAX_FAILURES, clock);
+		LoginAttemptLimiter limiter = new LoginAttemptLimiter(redis, new RedisCircuitBreaker(clock), KEY_HASHES, MAX_FAILURES,
+				clock);
 
 		assertLocked(limiter, "member@example.com");
 		limiter.reset("member@example.com");
@@ -67,7 +71,8 @@ class LoginAttemptLimiterTests {
 		when(redis.opsForValue()).thenThrow(new RedisConnectionFailureException("down"));
 		when(redis.execute(ArgumentMatchers.<RedisScript<Long>>any(), ArgumentMatchers.<String>anyList(),
 				ArgumentMatchers.<Object[]>any())).thenThrow(new RedisConnectionFailureException("down"));
-		LoginAttemptLimiter limiter = new LoginAttemptLimiter(redis, new RedisCircuitBreaker(clock), MAX_FAILURES, clock);
+		LoginAttemptLimiter limiter = new LoginAttemptLimiter(redis, new RedisCircuitBreaker(clock), KEY_HASHES, MAX_FAILURES,
+				clock);
 
 		for (int i = 0; i < MAX_FAILURES; i++) {
 			limiter.checkAllowed("member@example.com");

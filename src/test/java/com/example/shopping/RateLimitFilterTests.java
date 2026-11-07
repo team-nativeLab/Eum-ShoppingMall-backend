@@ -24,11 +24,15 @@ import org.springframework.web.servlet.ModelAndView;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.example.shopping.global.security.KeyedHash;
 import com.example.shopping.global.security.RateLimitFilter;
+import com.example.shopping.global.security.SecretHashes;
 
 class RateLimitFilterTests {
 
 	private static final int LIMIT = 3;
+	private static final KeyedHash KEY_HASHES = KeyedHash.derive("test-secret-0123456789abcdef0123",
+			SecretHashes.RATE_LIMIT_KEY);
 
 	private final AtomicLong now = new AtomicLong(Instant.parse("2026-10-13T00:00:00Z").toEpochMilli());
 	private final Clock clock = new Clock() {
@@ -54,7 +58,7 @@ class RateLimitFilterTests {
 	};
 	private final Map<String, Long> sharedCounters = new ConcurrentHashMap<>();
 	private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
-	private final RateLimitFilter filter = new RateLimitFilter(LIMIT, resolver, clock, redisTemplate);
+	private final RateLimitFilter filter = new RateLimitFilter(LIMIT, resolver, clock, redisTemplate, KEY_HASHES);
 
 	{
 		when(redisTemplate.execute(ArgumentMatchers.<RedisScript<Long>>any(), ArgumentMatchers.<String>anyList(),
@@ -122,7 +126,7 @@ class RateLimitFilterTests {
 
 	@Test
 	void 공개_상품_조회는_화면_기능별로_따로_세고_자동_완성은_두_배까지_받는다() throws Exception {
-		RateLimitFilter searchFilter = new RateLimitFilter(10, 5, resolver, clock, redisTemplate);
+		RateLimitFilter searchFilter = new RateLimitFilter(10, 5, resolver, clock, redisTemplate, KEY_HASHES);
 		// 검색 한 번에 목록과 필터 개수를 함께 불러도 서로의 한도를 쓰지 않는다.
 		for (int i = 0; i < 5; i++) {
 			assertThat(call(searchFilter, "GET", "/api/v1/products", "10.0.0.12")).isEqualTo(200);
@@ -155,7 +159,7 @@ class RateLimitFilterTests {
 
 	@Test
 	void 서로_다른_필터_인스턴스도_Redis_카운터를_공유한다() throws Exception {
-		RateLimitFilter secondInstance = new RateLimitFilter(LIMIT, resolver, clock, redisTemplate);
+		RateLimitFilter secondInstance = new RateLimitFilter(LIMIT, resolver, clock, redisTemplate, KEY_HASHES);
 		for (int i = 0; i < LIMIT; i++) {
 			assertThat(call("POST", "/api/v1/auth/login", "10.0.0.25")).isEqualTo(200);
 		}
@@ -164,6 +168,16 @@ class RateLimitFilterTests {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		secondInstance.doFilter(request, response, new MockFilterChain());
 		assertThat(response.getStatus()).isEqualTo(429);
+	}
+
+	@Test
+	void Redis_키에는_클라이언트_IP를_그대로_남기지_않는다() throws Exception {
+		call("POST", "/api/v1/auth/login", "203.0.113.77");
+
+		// 서버 키로 해시하므로(#136) Redis를 볼 수 있어도 접속 IP를 알 수 없다.
+		assertThat(sharedCounters).isNotEmpty();
+		assertThat(sharedCounters.keySet()).noneMatch(key -> key.contains("203.0.113.77"))
+				.anyMatch(key -> key.contains(KEY_HASHES.hash("203.0.113.77")));
 	}
 
 	@Test
@@ -184,7 +198,7 @@ class RateLimitFilterTests {
 		StringRedisTemplate unavailableRedis = mock(StringRedisTemplate.class);
 		when(unavailableRedis.execute(ArgumentMatchers.<RedisScript<Long>>any(), ArgumentMatchers.<String>anyList(),
 				ArgumentMatchers.<Object[]>any())).thenThrow(new DataAccessResourceFailureException("redis unavailable"));
-		RateLimitFilter fallbackFilter = new RateLimitFilter(LIMIT, resolver, clock, unavailableRedis);
+		RateLimitFilter fallbackFilter = new RateLimitFilter(LIMIT, resolver, clock, unavailableRedis, KEY_HASHES);
 		for (int i = 0; i < LIMIT; i++) {
 			assertThat(call(fallbackFilter, "10.0.0.40")).isEqualTo(200);
 		}
@@ -197,7 +211,7 @@ class RateLimitFilterTests {
 		when(failingAfterTwoRequests.execute(ArgumentMatchers.<RedisScript<Long>>any(),
 				ArgumentMatchers.<String>anyList(), ArgumentMatchers.<Object[]>any()))
 				.thenReturn(1L, 2L).thenThrow(new DataAccessResourceFailureException("redis unavailable"));
-		RateLimitFilter fallbackFilter = new RateLimitFilter(LIMIT, resolver, clock, failingAfterTwoRequests);
+		RateLimitFilter fallbackFilter = new RateLimitFilter(LIMIT, resolver, clock, failingAfterTwoRequests, KEY_HASHES);
 		assertThat(call(fallbackFilter, "10.0.0.41")).isEqualTo(200);
 		assertThat(call(fallbackFilter, "10.0.0.41")).isEqualTo(200);
 		assertThat(call(fallbackFilter, "10.0.0.41")).isEqualTo(200);

@@ -17,6 +17,7 @@ import com.example.shopping.domain.payment.entity.PaymentStatus;
 import com.example.shopping.domain.payment.gateway.PgPayment;
 import com.example.shopping.domain.payment.gateway.PgPayment.PgStatus;
 import com.example.shopping.domain.payment.repository.PaymentRepository;
+import com.example.shopping.domain.payment.service.PaymentWebhookSecrets;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
 import com.example.shopping.global.exception.BusinessException;
@@ -37,6 +38,7 @@ public class OrderTxService {
 	private final ProductSkuRepository productSkuRepository;
 	private final ProductRepository productRepository;
 	private final CartItemRepository cartItemRepository;
+	private final PaymentWebhookSecrets webhookSecrets;
 
 	/** 결제 승인을 시작한다. 이미 진행 중이거나 끝났거나 기한이 지났으면 false */
 	@Transactional
@@ -66,7 +68,7 @@ public class OrderTxService {
 					(from, to) -> orderRepository.markPaid(orderId, from, to, now)) != 1) {
 				return false;
 			}
-			paymentRepository.save(Payment.of(orderId, pg, PaymentStatus.DONE));
+			paymentRepository.save(Payment.of(orderId, pg, PaymentStatus.DONE, webhookSecrets.hash(pg.secret())));
 			addSalesCount(orderId, 1);
 			removeOrderedItemsFromCart(orderId);
 			return true;
@@ -78,7 +80,8 @@ public class OrderTxService {
 			if (transition(Set.of(OrderStatus.PAYMENT_PROCESSING), OrderStatus.WAITING_DEPOSIT,
 					(from, to) -> orderRepository.markWaitingDeposit(orderId, from, to,
 							pg.virtualAccount().dueDate(), now)) == 1) {
-				paymentRepository.save(Payment.of(orderId, pg, PaymentStatus.WAITING_DEPOSIT));
+				paymentRepository.save(
+						Payment.of(orderId, pg, PaymentStatus.WAITING_DEPOSIT, webhookSecrets.hash(pg.secret())));
 				removeOrderedItemsFromCart(orderId);
 				return true;
 			}

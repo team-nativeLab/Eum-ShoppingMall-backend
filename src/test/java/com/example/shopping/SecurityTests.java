@@ -13,8 +13,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -140,6 +143,28 @@ class SecurityTests {
 		// 한 번 쓴 토큰은 다시 쓸 수 없고, 새 토큰은 계속 쓸 수 있다.
 		refresh(first).andExpect(status().isUnauthorized());
 		refresh(second).andExpect(status().isOk());
+	}
+
+	@Test
+	void Refresh_토큰은_서버_키로_해시하고_이전에_SHA_256으로_저장한_토큰도_한_번은_재발급받을_수_있다() throws Exception {
+		long memberId = insertMember(EMAIL, "USER");
+		Cookie issued = login(EMAIL, PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE);
+		// 키 없는 SHA-256과 다르므로 DB 값만으로는 토큰을 넣어 보며 맞힐 수 없다(#136).
+		assertThat(jdbcTemplate.queryForObject("select token_hash from refresh_token", String.class))
+				.hasSize(64).isNotEqualTo(sha256Hex(issued.getValue()));
+
+		// 배포 전에 받은 토큰은 키 없는 SHA-256으로 저장돼 있다.
+		String legacyToken = "legacy-refresh-token-0123456789abcdefghij";
+		jdbcTemplate.update("""
+				insert into refresh_token (member_id, token_hash, expires_at, used_at, token_version)
+				values (?, ?, ?, null, 0)
+				""", memberId, sha256Hex(legacyToken), LocalDateTime.now().plusDays(1));
+
+		Cookie rotated = refresh(new Cookie(REFRESH_COOKIE, legacyToken))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getCookie(REFRESH_COOKIE);
+		refresh(new Cookie(REFRESH_COOKIE, legacyToken)).andExpect(status().isUnauthorized());
+		refresh(rotated).andExpect(status().isOk());
 	}
 
 	@Test
@@ -426,6 +451,12 @@ class SecurityTests {
 
 	private ResultActions refresh(Cookie cookie) throws Exception {
 		return mockMvc.perform(post("/api/v1/auth/refresh").cookie(cookie));
+	}
+
+	/** 서버 키 없이 계산하는 SHA-256(16진수). #136 전에 Refresh 토큰을 저장하던 방식 */
+	private static String sha256Hex(String value) throws Exception {
+		return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+				.digest(value.getBytes(StandardCharsets.UTF_8)));
 	}
 
 	private String credentials(String email, String password) {

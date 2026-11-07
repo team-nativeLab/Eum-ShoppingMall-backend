@@ -25,6 +25,8 @@ import com.example.shopping.global.captcha.CaptchaVerifier;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.redis.RedisCircuitBreaker;
+import com.example.shopping.global.security.KeyedHash;
+import com.example.shopping.global.security.SecretHashes;
 
 /** 인증번호 실패 횟수: 3번이면 로봇 확인, 5번이면 1시간 차단 (#130). Redis가 끊긴 상태(서버별로 셈)에서 시간을 옮겨 확인한다. */
 class VerificationAttemptGuardTests {
@@ -72,7 +74,8 @@ class VerificationAttemptGuardTests {
 		when(redis.execute(ArgumentMatchers.<RedisScript<Long>>any(), ArgumentMatchers.<String>anyList(),
 				ArgumentMatchers.<Object[]>any())).thenThrow(new RedisConnectionFailureException("down"));
 		when(redis.delete(ArgumentMatchers.anyString())).thenThrow(new RedisConnectionFailureException("down"));
-		guard = new VerificationAttemptGuard(redis, new RedisCircuitBreaker(clock), captcha, 3, 5, clock);
+		guard = new VerificationAttemptGuard(redis, new RedisCircuitBreaker(clock), captcha,
+				KeyedHash.derive("test-secret-0123456789abcdef0123", SecretHashes.VERIFICATION_LOCK_KEY), 3, 5, clock);
 	}
 
 	@Test

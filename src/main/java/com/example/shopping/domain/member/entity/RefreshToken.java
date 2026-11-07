@@ -15,7 +15,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** Refresh 토큰. DB가 유출돼도 토큰을 쓸 수 없도록 원문이 아니라 SHA-256 해시만 저장한다. */
+/** Refresh 토큰. DB가 유출돼도 토큰을 쓸 수 없도록 원문이 아니라 서버 키로 만든 해시(HMAC-SHA256)만 저장한다. */
 @Entity
 @Table(indexes = @Index(columnList = "member_id"))
 @Getter
