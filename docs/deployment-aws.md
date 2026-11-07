@@ -21,9 +21,9 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 | 구성 | 켜는 변수 | 고정 비용(월) | plan이 만드는 리소스 |
 |---|---|---|---|
 | 기본 | 없음 | $0 | 42개 |
-| 데이터 준비(스키마 작업) | `enable_data_layer` | 약 $39 | 47개 |
-| 개발 검증 배포 | 위 + `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service` | 약 $130 | 63개 |
-| 운영 예시 | 위 + `db_multi_az=true`, `desired_count=2` | 약 $173 | 63개 |
+| 데이터 준비(스키마 작업) | `enable_data_layer` | 약 $39 | 51개 |
+| 개발 검증 배포 | 위 + `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service` | 약 $130 | 67개 |
+| 운영 예시 | 위 + `db_multi_az=true`, `desired_count=2` | 약 $173 | 67개 |
 
 기본 구성은 VPC와 서브넷·라우팅, 보안 그룹, DB·Redis 서브넷 그룹, IAM, ECS 클러스터, ECR, 업로드 S3와 CloudFront, 로그 그룹, 예산 경보만 만듭니다. 이 중 요금이 나오는 것은 ECR, S3, CloudFront, 로그처럼 쓴 만큼 내는 항목뿐입니다. 리소스 수는 `terraform/stacks/app/tests`와 같은 mock provider로 돌린 plan 결과입니다.
 
@@ -40,6 +40,7 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 | Fargate 태스크 1개(0.5 vCPU, 1GB) | `enable_ecs_service` | ($0.04656 × 0.5 + $0.00511) × 730시간 | $20.72 |
 
 - **쓴 만큼 더 나오는 항목:** NAT 처리량($0.059/GB), ALB LCU($0.008/LCU-시간), EFS($0.33/GB-월), ECR($0.10/GB-월), S3, CloudFront, CloudWatch Logs. EFS는 최소 요금이 없어 비어 있으면 저장 비용이 없습니다.
+- **RDS 로그(#132):** 감사·오류·느린 쿼리 로그를 CloudWatch Logs로 내보내므로 수집·보관한 양만큼 CloudWatch Logs 요금이 더 나옵니다. 감사 로그는 앱 계정의 쿼리를 빼고 접속과 사람·마이그레이션 계정의 쿼리만 남겨 양이 적습니다. 느린 쿼리는 1초 넘는 것만 남깁니다. 실제 양은 운영 첫 달의 로그 그룹 크기로 확인합니다.
 - **Terraform 밖의 비용:** 직접 만드는 앱 시크릿(`JWT_SECRET`, DB 앱 계정 등)은 개당 월 $0.40입니다.
 
 ### 예산 경보
@@ -70,6 +71,7 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 - 인증번호를 여러 번 틀린 요청에 로봇 확인을 붙이려면 Cloudflare Turnstile 위젯의 비밀 키. Cloudflare 대시보드에서 위젯을 만들 때 허용 도메인에 프론트 도메인을 넣습니다. 사이트 키는 프론트에 넣고, 프론트가 위젯을 붙인 뒤 `app_environment`에 `CAPTCHA_ENABLED=true`와 `CAPTCHA_ALLOWED_HOSTNAMES`(위젯을 푸는 프론트 도메인, 쉼표로 구분)를, `application_secret_arns`에 `CAPTCHA_SECRET_KEY`를 넣습니다. 앱이 Turnstile에 토큰을 확인하므로 NAT를 통한 HTTPS 외부 연결이 필요합니다. 키가 없으면 로봇 확인 없이 틀린 횟수 차단만 동작합니다.
 - 결제 금액 불일치 같은 상황을 메일로 받을 담당자 이메일과 SMTP 서버. `app_environment`에 `ALERT_EMAILS`, `MAIL_HOST`, `MAIL_FROM`을, `application_secret_arns`에 `MAIL_USERNAME`, `MAIL_PASSWORD`를 넣습니다. 알림 기준은 README의 "담당자 알림"을 참고합니다.
 - 현재 앱은 운영에서 `ddl-auto: validate`를 사용합니다. 빈 RDS에 테이블을 만드는 마이그레이션이 먼저 필요합니다(Issue #27). 별도 DB 관리자 계정으로 스키마를 만들고 `shopping_app`에는 앱 구동에 필요한 SELECT/INSERT/UPDATE/DELETE 권한만 부여한 후 `enable_ecs_service=true`로 바꿉니다. Terraform은 이 준비가 끝날 때까지 ECS 서비스를 만들지 않습니다.
+- DB에 직접 접속해 한 일은 RDS 감사 로그에 남습니다(#132). 모든 계정의 접속과, 앱 계정(`shopping_app`)·`rdsadmin`을 뺀 계정의 쿼리(조회·변경·DDL·권한 변경)를 `/aws/rds/instance/<name>-mysql/audit`에 2년(731일) 남깁니다. 앱 계정 이름을 바꾸면 `audit_excluded_users`도 바꿉니다. 오류·느린 쿼리(1초 이상) 로그는 30일 남기고, 느린 쿼리 로그에는 SQL에 넣은 값이 함께 남으므로 오래 두지 않습니다. 파라미터·옵션 그룹을 바꾸면 RDS를 수정하는데, 감사 플러그인을 처음 붙일 때는 적용 시점을 운영 일정에 맞춥니다.
 - DB 접속은 TLS만 받습니다(#133). RDS 파라미터 그룹이 `require_secure_transport=1`이라 평문 접속은 거절됩니다. 앱은 이미지에 넣은 RDS CA 신뢰 저장소(`/app/rds-truststore.p12`)로만 인증서와 호스트 이름을 검증합니다(`sslMode=VERIFY_IDENTITY`). DB 계정도 `REQUIRE SSL`로 만듭니다. AWS가 RDS CA 묶음을 바꾸면 `docker/rds/global-bundle.pem`과 `Dockerfile`의 체크섬을 함께 바꿉니다. 이 설정은 실제 RDS로는 아직 확인하지 않았으므로, 처음 띄울 때 앱이 DB에 붙는지 확인합니다.
 
 Terraform은 리소스를 생성해 과금할 수 있습니다. 아래 `apply`는 비용 검토와 계정/리전 확인 뒤 운영자가 실행합니다. 이 저장소 변경에서는 AWS 리소스를 만들지 않습니다.

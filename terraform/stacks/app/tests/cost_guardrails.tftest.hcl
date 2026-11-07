@@ -155,7 +155,8 @@ run "database_off" {
   assert {
     condition = (
       length(aws_db_instance.main) + length(aws_elasticache_replication_group.main) +
-      length(aws_secretsmanager_secret.redis) + length(aws_db_parameter_group.main)
+      length(aws_secretsmanager_secret.redis) + length(aws_db_parameter_group.main) +
+      length(aws_db_option_group.main) + length(aws_cloudwatch_log_group.db)
     ) == 0
     error_message = "기본값으로 RDS, Redis, 시크릿을 만들면 안 됩니다."
   }
@@ -192,6 +193,18 @@ run "database_enabled" {
       contains([for p in aws_db_parameter_group.main[0].parameter : "${p.name}=${p.value}"], "require_secure_transport=1"),
     ])
     error_message = "RDS는 TLS 접속만 받아야 합니다(require_secure_transport=1, #133)."
+  }
+
+  assert {
+    condition = alltrue([
+      contains([for p in aws_db_parameter_group.main[0].parameter : "${p.name}=${p.value}"], "slow_query_log=1"),
+      aws_db_instance.main[0].option_group_name == aws_db_option_group.main[0].name,
+      anytrue([for o in aws_db_option_group.main[0].option : o.option_name == "MARIADB_AUDIT_PLUGIN"]),
+      contains(aws_db_instance.main[0].enabled_cloudwatch_logs_exports, "audit"),
+      aws_cloudwatch_log_group.db["audit"].retention_in_days == 731,
+      aws_cloudwatch_log_group.db["slowquery"].retention_in_days == 30,
+    ])
+    error_message = "RDS는 감사·느린 쿼리 로그를 남기고 로그 보관 기간을 정해야 합니다(#132)."
   }
 }
 
