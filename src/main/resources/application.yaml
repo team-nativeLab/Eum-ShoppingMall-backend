@@ -53,6 +53,10 @@ spring:
     log-resolved-exception: false
 
 logging:
+  level:
+    # Hibernate는 SQL 오류 메시지를 그대로 남기는데, 중복 오류에는 겹친 값(이메일 등)이 들어 있다(#139).
+    # 예외는 GlobalExceptionHandler가 종류와 제약 이름만 남기고, 예상하지 못한 오류는 스택 트레이스와 함께 남긴다.
+    org.hibernate.orm.jdbc.error: off
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] [requestId=%X{requestId:-}] %-5level %logger{36} - %msg%n%ex"
   structured:
