@@ -46,9 +46,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Start application against an empty MySQL database
+      # 운영의 migrate 작업과 같은 방식으로 돌린다(#131). Flyway를 적용하고 Hibernate가 스키마를 검증한 뒤
+      # MigrationOnlyRunner가 종료 코드 0으로 끝나야 통과한다. 운영 API는 Flyway를 끄고 이 결과를 검증만 한다.
+      - name: Run the migration task against an empty MySQL database
         env:
-          SPRING_PROFILES_ACTIVE: migration
+          SPRING_PROFILES_ACTIVE: migrate
           DB_URL: jdbc:mysql://127.0.0.1:3306/shopping
           DB_USERNAME: shopping
           DB_PASSWORD: shopping
@@ -58,24 +60,12 @@ jobs:
         run: |
           set -euo pipefail
           log_file="$(mktemp)"
-          bash gradlew bootRun --no-daemon --console=plain >"$log_file" 2>&1 &
-          app_pid=$!
-          trap 'kill "$app_pid" 2>/dev/null || true; wait "$app_pid" 2>/dev/null || true; cat "$log_file"' EXIT
-
-          for attempt in $(seq 1 90); do
-            if grep -q 'Started ShoppingApplication' "$log_file"; then
-              exit 0
-            fi
-            if ! kill -0 "$app_pid" 2>/dev/null; then
-              cat "$log_file"
-              exit 1
-            fi
-            sleep 1
-          done
-
-          cat "$log_file"
-          echo "Application did not start with Flyway migration and Hibernate validation."
-          exit 1
+          trap 'cat "$log_file"' EXIT
+          if ! timeout 300 bash gradlew bootRun --no-daemon --console=plain >"$log_file" 2>&1; then
+            echo "Migration task did not finish with Flyway migration and Hibernate validation."
+            exit 1
+          fi
+          grep -q 'Started ShoppingApplication' "$log_file"
 
   terraform:
     name: Validate AWS infrastructure

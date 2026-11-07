@@ -20,7 +20,7 @@ resource "aws_iam_role_policy" "secrets" {
       Effect = "Allow"
       Action = ["secretsmanager:GetSecretValue"]
       Resource = concat(
-        [var.database_app_secret_arn],
+        compact([var.database_app_secret_arn, var.database_migration_secret_arn]),
         var.redis_secret_arns,
         values(var.application_secret_arns)
       )
@@ -47,6 +47,33 @@ resource "aws_iam_role_policy" "efs" {
       Condition = {
         StringEquals = { "elasticfilesystem:AccessPointArn" = var.efs_access_point_arn }
       }
+    }]
+  })
+}
+
+# DB 관리 접속 작업(db_admin)의 태스크 역할(#131). ECS Exec(SSM 세션)에 필요한 권한만 준다.
+# DB 계정이나 다른 AWS 권한은 없으며, 접속하는 사람이 자기 DB 계정으로 로그인한다.
+resource "aws_iam_role" "db_admin" {
+  count              = var.enable_service ? 1 : 0
+  name               = "${var.name}-ecs-db-admin"
+  assume_role_policy = local.ecs_tasks_assume_role_policy
+}
+
+resource "aws_iam_role_policy" "db_admin_exec" {
+  count = var.enable_service ? 1 : 0
+  name  = "${var.name}-ecs-exec"
+  role  = aws_iam_role.db_admin[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel"
+      ]
+      Resource = "*"
     }]
   })
 }

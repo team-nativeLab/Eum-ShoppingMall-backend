@@ -46,3 +46,9 @@ variable "redis_auth_token" {
   type      = string
   sensitive = true
 }
+
+variable "audit_excluded_users" {
+  description = "DB 감사 로그에서 쿼리를 남기지 않을 계정. 앱 계정과 RDS가 상태 확인에 쓰는 rdsadmin. 접속 기록은 이 계정들도 남는다."
+  type        = list(string)
+  default     = ["rdsadmin", "shopping_app"]
+}

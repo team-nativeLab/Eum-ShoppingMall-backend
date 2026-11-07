@@ -18,9 +18,11 @@ variables {
     JWT_SECRET = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:jwt"
   }
   database_app_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:db-app"
-  redis_auth_token        = "test-redis-token-1234"
-  budget_limit_usd        = 200
-  budget_alert_emails     = ["ops@eum-shopping.test", "dev@eum-shopping.test"]
+  # 마이그레이션 전용 계정(#131)
+  database_migration_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:db-migrate"
+  redis_auth_token              = "test-redis-token-1234"
+  budget_limit_usd              = 200
+  budget_alert_emails           = ["ops@eum-shopping.test", "dev@eum-shopping.test"]
 }
 
 # ---- 스택 ----
@@ -50,6 +52,31 @@ run "ecs_service_requires_what_it_runs_on" {
   }
 
   expect_failures = [var.enable_ecs_service]
+}
+
+run "ecs_service_requires_migration_secret" {
+  command = plan
+
+  variables {
+    enable_data_layer             = true
+    enable_nat_gateway            = true
+    enable_alb                    = true
+    enable_efs                    = true
+    enable_ecs_service            = true
+    database_migration_secret_arn = null
+  }
+
+  expect_failures = [var.enable_ecs_service]
+}
+
+run "migration_secret_must_differ_from_app_secret" {
+  command = plan
+
+  variables {
+    database_migration_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:db-app"
+  }
+
+  expect_failures = [var.database_migration_secret_arn]
 }
 
 run "local_storage_requires_efs" {
@@ -155,7 +182,8 @@ run "database_off" {
   assert {
     condition = (
       length(aws_db_instance.main) + length(aws_elasticache_replication_group.main) +
-      length(aws_secretsmanager_secret.redis) + length(aws_db_parameter_group.main)
+      length(aws_secretsmanager_secret.redis) + length(aws_db_parameter_group.main) +
+      length(aws_db_option_group.main) + length(aws_cloudwatch_log_group.db)
     ) == 0
     error_message = "기본값으로 RDS, Redis, 시크릿을 만들면 안 됩니다."
   }
@@ -192,6 +220,18 @@ run "database_enabled" {
       contains([for p in aws_db_parameter_group.main[0].parameter : "${p.name}=${p.value}"], "require_secure_transport=1"),
     ])
     error_message = "RDS는 TLS 접속만 받아야 합니다(require_secure_transport=1, #133)."
+  }
+
+  assert {
+    condition = alltrue([
+      contains([for p in aws_db_parameter_group.main[0].parameter : "${p.name}=${p.value}"], "slow_query_log=1"),
+      aws_db_instance.main[0].option_group_name == aws_db_option_group.main[0].name,
+      anytrue([for o in aws_db_option_group.main[0].option : o.option_name == "MARIADB_AUDIT_PLUGIN"]),
+      contains(aws_db_instance.main[0].enabled_cloudwatch_logs_exports, "audit"),
+      aws_cloudwatch_log_group.db["audit"].retention_in_days == 731,
+      aws_cloudwatch_log_group.db["slowquery"].retention_in_days == 30,
+    ])
+    error_message = "RDS는 감사·느린 쿼리 로그를 남기고 로그 보관 기간을 정해야 합니다(#132)."
   }
 }
 
@@ -263,9 +303,10 @@ run "api_runtime_without_alb_and_service" {
 
   assert {
     condition = (
-      length(aws_lb.api) + length(aws_ecs_task_definition.api) + length(aws_ecs_service.api)
+      length(aws_lb.api) + length(aws_ecs_task_definition.api) + length(aws_ecs_service.api) +
+      length(aws_ecs_task_definition.migrate) + length(aws_ecs_task_definition.db_admin) + length(aws_iam_role.db_admin)
     ) == 0
-    error_message = "기본값으로 ALB와 ECS 서비스를 만들면 안 됩니다."
+    error_message = "기본값으로 ALB와 ECS 서비스·작업을 만들면 안 됩니다."
   }
 }
 
@@ -310,8 +351,20 @@ run "api_runtime_with_everything" {
       length(aws_ecs_service.api) == 1,
       length(aws_ecs_task_definition.api[0].volume) == 1,
       length(aws_iam_role_policy.efs) == 1,
+      length(aws_ecs_task_definition.migrate) == 1,
+      length(aws_ecs_task_definition.db_admin) == 1,
+      length(aws_iam_role_policy.db_admin_exec) == 1,
     ])
     error_message = "모두 켰는데 빠진 리소스가 있습니다."
+  }
+
+  assert {
+    # migrate 작업은 업로드 볼륨 없이 마이그레이션만 한다(#131).
+    condition = alltrue([
+      length(aws_ecs_task_definition.migrate[0].volume) == 0,
+      aws_ecs_task_definition.migrate[0].family == "eum-test-migrate",
+    ])
+    error_message = "migrate 작업은 업로드 볼륨 없이 마이그레이션만 해야 합니다."
   }
 }
 
@@ -366,6 +419,11 @@ run "budget_alerts_every_recipient_at_each_threshold" {
   }
 
   assert {
+    condition     = length(aws_sns_topic.alarms) + length(aws_cloudwatch_metric_alarm.rds_cpu) == 0
+    error_message = "데이터 계층을 끄면 RDS·Redis 경보를 만들면 안 됩니다."
+  }
+
+  assert {
     condition     = aws_budgets_budget.monthly.limit_amount == "200"
     error_message = "월 예산이 입력값과 같아야 합니다."
   }
@@ -390,5 +448,40 @@ run "budget_alerts_every_recipient_at_each_threshold" {
       notification.notification_type == "FORECASTED" && notification.threshold == 100
     ])
     error_message = "예측 비용 100% 알림이 있어야 합니다."
+  }
+}
+
+run "database_alarms_when_data_layer_is_on" {
+  command = plan
+
+  module {
+    source = "../../modules/observability"
+  }
+
+  variables {
+    name                    = "eum-test"
+    limit_usd               = 200
+    alert_emails            = ["ops@eum-shopping.test", "dev@eum-shopping.test"]
+    alert_thresholds        = [50, 80, 100]
+    data_layer_enabled      = true
+    db_instance_identifier  = "eum-test-mysql"
+    db_master_username      = "eum_admin"
+    db_audit_log_group_name = "/aws/rds/instance/eum-test-mysql/audit"
+    redis_cluster_id        = "eum-test-redis-001"
+  }
+
+  assert {
+    condition = alltrue([
+      length(aws_sns_topic_subscription.alarm_email) == 2,
+      length(aws_cloudwatch_metric_alarm.rds_cpu) == 1,
+      length(aws_cloudwatch_metric_alarm.rds_free_storage) == 1,
+      length(aws_cloudwatch_metric_alarm.rds_connections) == 1,
+      length(aws_cloudwatch_metric_alarm.redis_memory) == 1,
+      length(aws_cloudwatch_metric_alarm.redis_cpu) == 1,
+      length(aws_cloudwatch_metric_alarm.db_master_user) == 1,
+      aws_cloudwatch_log_metric_filter.db_master_user[0].pattern == "\",eum_admin,\"",
+      aws_cloudwatch_metric_alarm.rds_cpu[0].dimensions["DBInstanceIdentifier"] == "eum-test-mysql",
+    ])
+    error_message = "데이터 계층을 켜면 RDS·Redis 경보와 마스터 계정 사용 알림이 담당자에게 가야 합니다(#145)."
   }
 }
