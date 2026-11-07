@@ -89,4 +89,11 @@ module "observability" {
   limit_usd        = var.budget_limit_usd
   alert_emails     = var.budget_alert_emails
   alert_thresholds = var.budget_alert_thresholds
+
+  # RDS·Redis 이상 징후 경보(#145). 예산 알림과 같은 담당자에게 보낸다.
+  data_layer_enabled      = var.enable_data_layer
+  db_instance_identifier  = module.database.db_instance_identifier
+  db_master_username      = var.db_username
+  db_audit_log_group_name = module.database.db_audit_log_group_name
+  redis_cluster_id        = module.database.redis_cluster_id
 }
