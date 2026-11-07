@@ -60,6 +60,9 @@ public class QuoteInquiry extends BaseTimeEntity {
 	@Column(length = 40)
 	private String privacyPolicyVersion;
 
+	// 보유 기간이 지나 회사·담당자·연락처·내용을 지운 시각(#134). PersonalDataRetentionCleaner만 채운다. 동의 기록은 남긴다.
+	private LocalDateTime personalDataPurgedAt;
+
 	/** memberId는 비회원이면 null, productId는 특정 상품에 대한 문의가 아니면 null */
 	public static QuoteInquiry create(Long memberId, Long productId, String companyName, String managerName,
 			String phone, String email, String content) {

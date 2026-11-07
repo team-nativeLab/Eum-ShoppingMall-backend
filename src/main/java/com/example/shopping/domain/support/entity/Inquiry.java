@@ -60,6 +60,9 @@ public class Inquiry extends BaseTimeEntity {
 	@Column(length = 40)
 	private String privacyPolicyVersion;
 
+	// 보유 기간이 지나 연락처·내용을 지운 시각(#134). PersonalDataRetentionCleaner만 채운다. 동의 기록은 남긴다.
+	private LocalDateTime personalDataPurgedAt;
+
 	/** memberId가 null이면 비회원 문의 */
 	public static Inquiry create(Long memberId, String inquiryType, String title, String content,
 			String contactPhone, String contactEmail) {
