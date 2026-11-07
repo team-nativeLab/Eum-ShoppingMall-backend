@@ -138,7 +138,7 @@ public class TossPaymentGateway implements PaymentGateway {
 						: OffsetDateTime.parse(payment.approvedAt())
 								.atZoneSameInstant(BUSINESS_TIME_ZONE)
 								.toLocalDateTime(),
-				raw, toVirtualAccount(payment.virtualAccount()), payment.secret());
+				toVirtualAccount(payment.virtualAccount()), payment.secret());
 	}
 
 	private PgVirtualAccount toVirtualAccount(TossVirtualAccount virtualAccount) {

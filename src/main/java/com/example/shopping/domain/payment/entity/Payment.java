@@ -65,9 +65,8 @@ public class Payment extends BaseTimeEntity {
 	@Column(nullable = false)
 	private long balanceAmount;
 
-	// PG 응답 원문
-	@Column(columnDefinition = "TEXT")
-	private String pgRaw;
+	// PG 응답 원문(pg_raw 컬럼)은 저장하지 않는다(#144). 카드 번호 일부·승인번호 같은 결제 수단 정보가 들어 있고 읽는 곳이 없다.
+	// 결제 분쟁 때는 Toss 결제 조회 API(paymentKey)로 원문을 다시 받을 수 있다.
 
 	private LocalDateTime approvedAt;
 
@@ -96,8 +95,6 @@ public class Payment extends BaseTimeEntity {
 		payment.status = status;
 		payment.approvedAmount = pg.totalAmount();
 		payment.balanceAmount = pg.balanceAmount();
-		// 가상계좌 응답에는 웹훅 검증 비밀값이 포함되므로 원문 전체를 DB에 보관하지 않는다.
-		payment.pgRaw = pg.secret() == null ? pg.raw() : null;
 		payment.approvedAt = pg.approvedAt();
 		PgVirtualAccount virtualAccount = pg.virtualAccount();
 		if (virtualAccount != null) {
@@ -117,7 +114,7 @@ public class Payment extends BaseTimeEntity {
 		}
 		status = PaymentStatus.DONE;
 		balanceAmount = pg.balanceAmount();
-		pgRaw = pg.secret() == null ? pg.raw() : null;
+		maskVirtualAccount();
 	}
 
 	public void expireVirtualAccount() {
@@ -125,6 +122,7 @@ public class Payment extends BaseTimeEntity {
 			throw new IllegalStateException("가상계좌 입금 대기 결제가 아닙니다.");
 		}
 		status = PaymentStatus.FAILED;
+		maskVirtualAccount();
 	}
 
 	public void revertDeposit(PgPayment pg) {
@@ -133,7 +131,43 @@ public class Payment extends BaseTimeEntity {
 		}
 		status = PaymentStatus.WAITING_DEPOSIT;
 		balanceAmount = pg.balanceAmount();
-		pgRaw = pg.secret() == null ? pg.raw() : null;
+		// 다시 입금해야 하므로 입금 완료 때 가린 계좌 정보를 PG가 알려 준 값으로 되살린다.
+		PgVirtualAccount virtualAccount = pg.virtualAccount();
+		if (virtualAccount != null && virtualAccount.accountNumber() != null) {
+			virtualAccountNumber = virtualAccount.accountNumber();
+			virtualAccountCustomerName = virtualAccount.customerName();
+		}
+	}
+
+	/**
+	 * 입금이 끝났거나 기한이 지난 가상계좌는 더 쓰지 않으므로 번호 끝 4자리와 입금자명 첫 글자만 남긴다(#144).
+	 * 결제 기록은 5년 동안 보관하므로 그동안 계좌 번호와 입금자명이 그대로 남지 않게 한다.
+	 */
+	private void maskVirtualAccount() {
+		virtualAccountNumber = keepLast(virtualAccountNumber, 4);
+		virtualAccountCustomerName = keepFirst(virtualAccountCustomerName, 1);
+	}
+
+	/** 끝의 count자만 남기고 앞을 *로 가린다. 길이가 count 이하면 모두 가린다. */
+	static String keepLast(String value, int count) {
+		if (value == null) {
+			return null;
+		}
+		if (value.length() <= count) {
+			return "*".repeat(value.length());
+		}
+		return "*".repeat(value.length() - count) + value.substring(value.length() - count);
+	}
+
+	/** 앞의 count자만 남기고 뒤를 *로 가린다. 길이가 count 이하면 모두 가린다. */
+	static String keepFirst(String value, int count) {
+		if (value == null) {
+			return null;
+		}
+		if (value.length() <= count) {
+			return "*".repeat(value.length());
+		}
+		return value.substring(0, count) + "*".repeat(value.length() - count);
 	}
 
 	public boolean isVirtualAccount() {
