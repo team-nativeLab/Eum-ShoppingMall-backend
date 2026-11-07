@@ -74,23 +74,29 @@ public class AuthService {
 	/**
 	 * 이메일 인증 토큰을 주면 인증을 확인하고 한 번 쓴다. 인증이 필수(SIGNUP_EMAIL_VERIFICATION_REQUIRED=true)인데 없으면 400.
 	 * 토큰 사용과 가입 저장은 한 트랜잭션이라 가입이 실패하면 토큰을 다시 쓸 수 있다.
+	 * 토큰을 주면 이미 가입된 이메일인지(409)는 토큰을 확인한 뒤에만 알려 준다. 그래서 인증을 필수로 하면 메일함 주인만
+	 * 가입 여부를 알 수 있다(#140). 인증이 필수가 아니면 토큰 없는 가입 요청의 409로 가입 여부를 알 수 있다.
 	 */
 	public SignupResponse signup(SignupRequest request) {
 		String email = ContactFormats.loginEmail(request.email());
-		if (memberRepository.existsByEmail(email)) {
-			throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
-		}
 		String token = request.emailVerificationToken();
-		if (signupEmailVerificationRequired && !StringUtils.hasText(token)) {
+		boolean withToken = StringUtils.hasText(token);
+		if (signupEmailVerificationRequired && !withToken) {
 			throw new BusinessException(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
+		}
+		if (!withToken && memberRepository.existsByEmail(email)) {
+			throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
 		}
 
 		String phone = ContactFormats.phone(request.phone());
 		Member member = Member.create(email, passwordEncoder.encode(request.password()), request.name().trim(), phone);
 		try {
 			return transactionTemplate.execute(status -> {
-				if (StringUtils.hasText(token)) {
+				if (withToken) {
 					emailVerificationService.consumeSignupToken(email, token);
+					if (memberRepository.existsByEmail(email)) {
+						throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
+					}
 					member.markEmailVerified(LocalDateTime.now());
 				}
 				Member saved = memberRepository.saveAndFlush(member);
