@@ -21,8 +21,10 @@ import com.example.shopping.global.security.SecretHashes;
 /**
  * 인증번호(회원가입·비밀번호 재설정)를 틀린 횟수를 이메일·용도별로 센다.
  * <ul>
- * <li>첫 실패부터 1시간 안에 3번 틀리면 다음 확인부터 로봇 확인(CAPTCHA)을 요구한다. 로봇 확인을 켰을 때만이다.</li>
- * <li>5번 틀리면 그때부터 1시간 동안 그 이메일로 인증번호를 받거나 확인할 수 없다(429). 1시간이 지나면 처음부터 다시 센다.</li>
+ * <li>로봇 확인(app.captcha)을 켜면: 첫 실패부터 1시간 안에 3번 틀리면 다음 확인부터 로봇 확인(CAPTCHA)을 요구한다.
+ * 막지는 않으므로, 남이 일부러 틀려도 주인은 로봇 확인을 하고 계속 인증할 수 있다(#141).</li>
+ * <li>로봇 확인을 끄면: 5번 틀리면 그때부터 1시간 동안 그 이메일로 인증번호를 받거나 확인할 수 없다(429).
+ * 1시간이 지나면 처음부터 다시 센다.</li>
  * </ul>
  * 인증번호가 없거나 만료된 경우도 틀린 것으로 세어, 가입되지 않은 이메일도 똑같이 로봇 확인과 차단을 받는다.
  * 횟수는 Redis로 서버끼리 공유하고, Redis 장애 중에는 서버별로 센다(SharedCounter).
@@ -65,9 +67,12 @@ public class VerificationAttemptGuard {
 		this.maxFailures = maxFailures;
 	}
 
-	/** 막힌 이메일·용도면 VERIFICATION_LOCKED(429). 인증번호를 보내기 전에도 부른다. */
+	/**
+	 * 막힌 이메일·용도면 VERIFICATION_LOCKED(429). 인증번호를 보내기 전에도 부른다.
+	 * 로봇 확인을 켜면 막지 않는다. 남이 일부러 틀려도 주인은 로봇 확인을 하고 계속 인증할 수 있다(#141).
+	 */
 	public void checkNotLocked(String email, VerificationPurpose purpose) {
-		if (locks.get(lockKey(email, purpose)) > 0) {
+		if (!captchaVerifier.isEnabled() && locks.get(lockKey(email, purpose)) > 0) {
 			throw new BusinessException(ErrorCode.VERIFICATION_LOCKED);
 		}
 	}
@@ -90,16 +95,24 @@ public class VerificationAttemptGuard {
 		}
 	}
 
-	/** 틀린 횟수를 하나 올린다. 이번에 한도에 닿아 막혔으면 true */
+	/** 틀린 횟수를 하나 올린다. 이번에 한도에 닿아 막혔으면 true. 로봇 확인을 켜면 막지 않으므로 늘 false다. */
 	public boolean recordFailure(String email, VerificationPurpose purpose) {
 		String failureKey = failureKey(email, purpose);
-		if (failures.increment(failureKey, FAILURE_WINDOW) < maxFailures) {
+		if (failures.increment(failureKey, FAILURE_WINDOW) < maxFailures || captchaVerifier.isEnabled()) {
 			return false;
 		}
 		locks.increment(lockKey(email, purpose), LOCK_DURATION);
 		// 막힌 1시간이 끝나면 처음부터 다시 센다.
 		failures.reset(failureKey);
 		return true;
+	}
+
+	/**
+	 * 로봇 확인을 켰는지. 켜면 3번 틀린 뒤부터 확인마다 로봇 확인을 하므로 하루 틀린 횟수 한도도 두지 않는다
+	 * (한도에 일부러 닿게 해 남의 인증을 하루 동안 막을 수 있기 때문이다, #141).
+	 */
+	public boolean isCaptchaProtected() {
+		return captchaVerifier.isEnabled();
 	}
 
 	/** 인증에 성공하면 센 횟수를 지운다. */

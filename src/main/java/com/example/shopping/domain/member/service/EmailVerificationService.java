@@ -63,25 +63,34 @@ public class EmailVerificationService {
 	}
 
 	/**
-	 * 이미 가입된 이메일이면 409, 인증번호를 여러 번 틀려 막힌 이메일이면 429.
-	 * 메일 서버가 받지 않으면 503이고, 이때는 바로 다시 요청할 수 있다.
+	 * 가입 여부와 상관없이 같은 응답을 준다(#140). 이미 가입된 이메일에는 인증번호 대신 "이미 가입된 이메일" 안내를 보내므로,
+	 * 가입 여부는 그 메일함의 주인만 알 수 있다.
+	 * 인증번호를 여러 번 틀려 막힌 이메일이면 429. 메일 서버가 받지 않으면 503이고, 이때는 바로 다시 요청할 수 있다.
 	 */
 	public EmailVerificationSendResponse sendSignupCode(String rawEmail) {
 		String email = ContactFormats.loginEmail(rawEmail);
-		if (memberRepository.existsByEmail(email)) {
-			throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
-		}
+		boolean registered = memberRepository.existsByEmail(email);
 		String code = VerificationCodes.newCode();
+		// 가입된 이메일에도 인증번호를 만들어 발송 간격·하루 한도를 똑같이 적용한다. 보내지 않으므로 이 번호로는 인증할 수 없다.
 		EmailVerification verification = transactionTemplate
 				.execute(status -> issue(email, VerificationPurpose.SIGNUP, code));
 		try {
-			emailSender.send(email, subject("이메일 인증번호"), """
-					회원가입 이메일 인증번호입니다.
+			if (registered) {
+				emailSender.send(email, subject("이미 가입된 이메일입니다"), """
+						이 이메일로 회원가입 인증번호를 요청하셨지만, 이미 가입된 이메일입니다.
 
-					인증번호: %s
+						로그인해 주세요. 비밀번호가 기억나지 않으면 비밀번호 찾기를 이용해 주세요.
+						직접 요청하지 않았다면 이 메일은 무시해 주세요.
+						""");
+			} else {
+				emailSender.send(email, subject("이메일 인증번호"), """
+						회원가입 이메일 인증번호입니다.
 
-					영문 대소문자를 구분해 10분 안에 입력해 주세요. 직접 요청하지 않았다면 이 메일은 무시해 주세요.
-					""".formatted(code));
+						인증번호: %s
+
+						영문 대소문자를 구분해 10분 안에 입력해 주세요. 직접 요청하지 않았다면 이 메일은 무시해 주세요.
+						""".formatted(code));
+			}
 		} catch (EmailSendException e) {
 			verificationRepository.deleteById(verification.getId());
 			throw new BusinessException(ErrorCode.EMAIL_SEND_FAILED);
@@ -153,7 +162,7 @@ public class EmailVerificationService {
 
 	/**
 	 * 가장 최근에 보낸 인증번호와 비교한다. 틀리면 횟수를 올리고, 5번 틀리면 다시 받아야 한다.
-	 * 24시간 동안 틀린 횟수가 모두 합쳐 10번이면 맞는 번호도 받지 않는다(429).
+	 * 24시간 동안 틀린 횟수가 모두 합쳐 10번이면 맞는 번호도 받지 않는다(429). 로봇 확인을 켜면 이 한도는 두지 않는다(#141).
 	 * 인증번호가 없는 경우와 만료된 경우, 틀린 경우를 구분해 알려 주지 않고 모두 틀린 횟수로 센다.
 	 * 이번 실패로 VerificationAttemptGuard의 한도에 닿으면 VERIFICATION_LOCKED(429)로 알린다.
 	 * 막힘·로봇 확인은 호출하는 쪽이 트랜잭션 밖에서 먼저 확인한다(VerificationAttemptGuard.checkAttemptAllowed).
@@ -169,7 +178,8 @@ public class EmailVerificationService {
 			throw failure(email, purpose, ErrorCode.VERIFICATION_ATTEMPTS_EXCEEDED);
 		}
 		LocalDateTime now = LocalDateTime.now();
-		if (verificationRepository.sumAttemptsSince(email, purpose, now.minus(DAILY_WINDOW)) >= DAILY_FAILURE_LIMIT) {
+		if (!attemptGuard.isCaptchaProtected()
+				&& verificationRepository.sumAttemptsSince(email, purpose, now.minus(DAILY_WINDOW)) >= DAILY_FAILURE_LIMIT) {
 			throw new BusinessException(ErrorCode.VERIFICATION_DAILY_LIMIT_EXCEEDED);
 		}
 		if (!verification.isCodeUsable(now)) {
