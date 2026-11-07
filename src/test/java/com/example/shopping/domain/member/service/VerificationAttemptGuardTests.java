@@ -59,7 +59,7 @@ class VerificationAttemptGuardTests {
 		}
 
 		@Override
-		public boolean verify(String token, String remoteIp) {
+		public boolean verify(String token, String action, String remoteIp) {
 			return "human".equals(token);
 		}
 	};

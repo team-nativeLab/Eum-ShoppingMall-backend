@@ -115,6 +115,7 @@ IP별 요청 제한(`RATE_LIMIT_PER_MINUTE`)과 별도로 로그인 이메일마
 - **비밀번호 재설정:** 가입 여부가 드러나지 않도록, 한도를 넘거나 막힌 요청도 응답은 똑같이 성공이고 메일만 보내지 않습니다. 가입되지 않은 이메일로 확인해도 똑같이 세고 막습니다.
 - **로봇 확인(Cloudflare Turnstile):** 기본은 꺼져 있고, 꺼져 있으면 5번 틀렸을 때의 차단만 동작합니다.
   - Cloudflare 대시보드에서 Turnstile 위젯을 만들고 허용 도메인에 프론트 도메인을 넣습니다. 사이트 키는 프론트에, 비밀 키는 서버의 `CAPTCHA_SECRET_KEY`에 넣고 `CAPTCHA_ENABLED=true`로 켭니다. 켰는데 비밀 키가 없으면 서버가 뜨지 않습니다.
+  - 서버는 Turnstile 응답의 `success`와 함께, 위젯을 푼 사이트(`hostname`)가 `CAPTCHA_ALLOWED_HOSTNAMES`(쉼표로 구분, 켜면 필수)에 있는지와 위젯의 `action`이 `verify-code`인지도 확인합니다. 다르면 `400 CAPTCHA_INVALID`입니다. 프론트는 인증번호 확인 화면의 위젯에 `action: "verify-code"`를 넣어야 합니다.
   - 토큰은 한 번만 쓸 수 있으므로 확인 요청마다 위젯에서 새로 받아야 합니다. Turnstile이 응답하지 않으면 `503 CAPTCHA_UNAVAILABLE`입니다.
   - 실제 키가 없어도 Cloudflare가 제공하는 테스트용 사이트 키·비밀 키로 프론트 연동을 먼저 확인할 수 있습니다.
 
