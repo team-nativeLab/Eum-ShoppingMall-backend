@@ -228,6 +228,27 @@ class AdminApiTests {
 	}
 
 	@Test
+	void 회원_검색어의_퍼센트와_밑줄은_글자_그대로_찾고_이메일은_대소문자를_가리지_않는다() throws Exception {
+		insertMember("hong@example.com", "홍길동", "USER");
+		insertMember("a_b@example.com", "밑줄", "USER");
+		insertMember("axb@example.com", "엑스", "USER");
+
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "_"))
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].email").value("a_b@example.com"));
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "a_b"))
+				.andExpect(jsonPath("$.data.totalElements").value(1));
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "%"))
+				.andExpect(jsonPath("$.data.totalElements").value(0));
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "\\"))
+				.andExpect(jsonPath("$.data.totalElements").value(0));
+		// 이메일은 소문자로 저장하므로 대문자로 찾아도 나온다.
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "HONG@"))
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].name").value("홍길동"));
+	}
+
+	@Test
 	void 관리자_변경을_기록하고_최고관리자만_감사로그를_조회한다() throws Exception {
 		long superAdminId = insertMember("audit-super@example.com", "최고관리자", "SUPER_ADMIN");
 		long adminId = insertMember("audit-admin@example.com", "관리자", "ADMIN");
