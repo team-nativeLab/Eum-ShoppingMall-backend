@@ -43,7 +43,8 @@ resource "aws_ecs_task_definition" "api" {
     portMappings = [{ containerPort = var.api_port, protocol = "tcp" }]
     environment = concat([
       { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
-      { name = "DB_URL", value = "jdbc:mysql://${var.db_address}:3306/${var.db_name}?sslMode=VERIFY_IDENTITY" },
+      # RDS 인증서는 이미지에 넣은 RDS CA 신뢰 저장소로만 검증한다(Dockerfile, #133). 저장소 비밀번호는 비밀이 아니다.
+      { name = "DB_URL", value = "jdbc:mysql://${var.db_address}:3306/${var.db_name}?${local.db_url_options}" },
       { name = "REDIS_HOST", value = var.redis_endpoint },
       { name = "REDIS_PORT", value = "6379" },
       { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
