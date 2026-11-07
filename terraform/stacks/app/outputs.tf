@@ -42,3 +42,28 @@ output "uploads_iam_user" {
   description = "업로드용 IAM 사용자. 이 사용자의 액세스 키를 만들어 Secrets Manager에 넣고 application_secret_arns에 추가한다."
   value       = module.photo_storage.iam_user_name
 }
+
+output "ecs_cluster_name" {
+  description = "ECS 클러스터 이름. migrate·db-admin 작업을 띄울 때 쓴다(docs/deployment-aws.md)."
+  value       = module.api_runtime.ecs_cluster_name
+}
+
+output "migrate_task_family" {
+  description = "DB 마이그레이션 작업의 태스크 정의 이름(#131). 배포할 때 API보다 먼저 돌린다. 서비스를 끄면 null이다."
+  value       = module.api_runtime.migrate_task_family
+}
+
+output "db_admin_task_family" {
+  description = "DB 관리 접속 작업의 태스크 정의 이름(#131). 서비스를 끄면 null이다."
+  value       = module.api_runtime.db_admin_task_family
+}
+
+output "app_subnet_ids" {
+  description = "migrate·db-admin 작업을 띄울 앱 서브넷"
+  value       = module.network.app_subnet_ids
+}
+
+output "app_security_group_id" {
+  description = "migrate·db-admin 작업에 붙일 앱 보안 그룹(RDS 3306에 접속할 수 있다)"
+  value       = module.network.app_security_group_id
+}
