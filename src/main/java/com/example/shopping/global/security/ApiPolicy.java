@@ -70,6 +70,20 @@ public final class ApiPolicy {
 			ADMIN_LOGIN,
 			"/api/v1/uploads/presigned-url");
 
+	/**
+	 * 개인정보가 보이는 관리자 조회 API. 누가 언제 누구의 정보를 봤는지 감사 로그에 남긴다(#138).
+	 * 개인정보의 안전성 확보조치 기준 제8조(접속기록 보관)는 조회도 남기도록 한다. 대시보드 집계처럼 개인정보가 없는 조회는 넣지 않는다.
+	 */
+	public static final List<String> AUDITED_READS = List.of(
+			"/api/v1/admin/users",
+			"/api/v1/admin/users/{userId}",
+			"/api/v1/admin/orders",
+			"/api/v1/admin/orders/{orderId}",
+			"/api/v1/admin/inquiries",
+			"/api/v1/admin/inquiries/{inquiryId}",
+			"/api/v1/admin/quotes",
+			"/api/v1/admin/audit-logs");
+
 	/** 로그인 없이 여는 운영 경로. API 문서는 켰을 때만 있다(API_DOCS_ENABLED). */
 	public static final List<String> PUBLIC_OPERATIONS = List.of(
 			"/error",
@@ -126,6 +140,7 @@ public final class ApiPolicy {
 	private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
 	private static final List<PathPattern> AUDITED_PATTERNS = parse(ADMIN_API);
 	private static final List<PathPattern> AUDIT_EXCLUDED_PATTERNS = parse(AUDIT_EXCLUDED);
+	private static final List<PathPattern> AUDITED_READ_PATTERNS = parse(AUDITED_READS);
 
 	private ApiPolicy() {
 	}
@@ -135,6 +150,11 @@ public final class ApiPolicy {
 		PathContainer container = PathContainer.parsePath(path);
 		return WRITE_METHODS.contains(method) && matches(AUDITED_PATTERNS, container)
 				&& !matches(AUDIT_EXCLUDED_PATTERNS, container);
+	}
+
+	/** 감사 대상 조회: AUDITED_READS의 GET 요청 */
+	public static boolean isAuditedRead(String method, String path) {
+		return "GET".equals(method) && matches(AUDITED_READ_PATTERNS, PathContainer.parsePath(path));
 	}
 
 	/** path가 patterns 중 하나와 맞는지 */

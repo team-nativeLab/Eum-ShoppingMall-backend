@@ -18,6 +18,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
@@ -282,10 +284,45 @@ class AdminApiTests {
 
 		mockMvc.perform(get("/api/v1/admin/audit-logs").with(admin(adminId)))
 				.andExpect(status().isForbidden());
-		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId)))
+		mockMvc.perform(get("/api/v1/admin/audit-logs").param("kind", "CHANGE").with(superAdmin(superAdminId)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.totalElements").value(1))
 				.andExpect(jsonPath("$.data.content[0].details").value(Matchers.containsString("서비스 이용 약관")));
+		// 권한이 없어 거절된 감사 로그 조회 시도도 조회 기록으로 남는다(#138).
+		mockMvc.perform(get("/api/v1/admin/audit-logs").param("kind", "READ")
+				.param("actorMemberId", String.valueOf(adminId)).with(superAdmin(superAdminId)))
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].actorMemberId").value(adminId))
+				.andExpect(jsonPath("$.data.content[0].responseStatus").value(403));
+	}
+
+	@Test
+	void 개인정보가_보이는_관리자_조회는_누가_어떤_대상을_어떤_조건으로_봤는지_남기고_응답은_남기지_않는다() throws Exception {
+		long adminId = insertMember("reader-admin@example.com", "관리자", "ADMIN");
+		long memberId = insertMember("hong-read@example.com", "홍길동", "USER");
+
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "hong").param("page", "0").with(admin(adminId)))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/admin/users/{userId}", memberId).with(admin(adminId)))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/admin/orders").param("status", "PAID").with(admin(adminId)))
+				.andExpect(status().isOk());
+		// 개인정보가 없는 조회(상품·대시보드)는 남기지 않는다.
+		mockMvc.perform(get("/api/v1/admin/products").with(admin(adminId))).andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/admin/dashboard").with(admin(adminId))).andExpect(status().isOk());
+
+		List<Map<String, Object>> reads = jdbcTemplate.queryForList("""
+				select action, target_type, target_id, details from admin_audit_log
+				where actor_member_id = ? order by id
+				""", adminId);
+		assertThat(reads).extracting(row -> row.get("ACTION") + " " + row.get("TARGET_TYPE") + "/" + row.get("TARGET_ID")
+				+ " " + row.get("DETAILS"))
+				.containsExactly("GET users/null {\"keyword\":\"hong\",\"page\":\"0\"}",
+						"GET users/" + memberId + " null",
+						"GET orders/null {\"status\":\"PAID\"}");
+		// 응답 본문(이름·연락처 등 개인정보)은 남기지 않는다.
+		assertThat(reads).allSatisfy(row -> assertThat(String.valueOf(row.get("DETAILS")))
+				.doesNotContain("홍길동", "01012345678"));
 	}
 
 	@Test

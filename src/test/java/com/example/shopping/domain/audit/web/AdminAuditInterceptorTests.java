@@ -28,6 +28,7 @@ import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 
 import com.example.shopping.domain.audit.service.AdminAuditLogService;
+import com.example.shopping.domain.audit.service.AdminBulkReadMonitor;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -46,7 +47,8 @@ class AdminAuditInterceptorTests {
 		doThrow(new IllegalStateException("db down")).when(auditLogService)
 				.record(any(), any(), any(), any(), any(), any(), any(), anyInt());
 		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-		AdminAuditInterceptor interceptor = new AdminAuditInterceptor(auditLogService, meterRegistry);
+		AdminAuditInterceptor interceptor = new AdminAuditInterceptor(auditLogService,
+				mock(AdminBulkReadMonitor.class), meterRegistry);
 
 		MockHttpServletRequest raw = new MockHttpServletRequest("PATCH", "/api/v1/admin/users/42/status");
 		raw.setContentType("application/json");
@@ -64,7 +66,7 @@ class AdminAuditInterceptorTests {
 
 		interceptor.afterCompletion(request, new MockHttpServletResponse(), new HandlerMethod(this, method), null);
 
-		assertThat(output).contains("관리자 변경 감사 로그 저장 실패", "target=users:42")
+		assertThat(output).contains("관리자 감사 로그 저장 실패", "target=users:42")
 				.doesNotContain("홍길동", "010-1234-5678", "SUSPENDED");
 		assertThat(meterRegistry.counter("admin.audit.record.failures").count()).isEqualTo(1);
 	}
