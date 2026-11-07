@@ -3,6 +3,7 @@ package com.example.shopping.global.exception;
 import java.sql.SQLTransientConnectionException;
 import java.util.List;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -68,8 +69,25 @@ public class GlobalExceptionHandler {
 	 */
 	@ExceptionHandler({ ConcurrencyFailureException.class, DataIntegrityViolationException.class })
 	public ResponseEntity<ApiResponse<Void>> handleConcurrentUpdate(Exception e) {
-		log.warn("동시 요청 충돌 또는 DB 제약 위반: {}", e.getMessage());
+		// 예외 메시지에는 겹친 값이 그대로 들어 있으므로(Duplicate entry 'user@example.com' ...) 종류와 제약 이름만 남긴다(#139).
+		ConstraintViolationException violation = findCause(e, ConstraintViolationException.class);
+		String constraint = violation == null ? null : violation.getConstraintName();
+		if (violation != null && violation.getKind() == ConstraintViolationException.ConstraintKind.CHECK) {
+			// CHECK 제약(음수 재고·금액 등)은 동시 요청으로는 생기지 않으므로 코드를 확인해야 한다.
+			log.error("DB CHECK 제약 위반: constraint={}", constraint);
+		} else {
+			log.warn("동시 요청 충돌 또는 DB 제약 위반: type={}, constraint={}", e.getClass().getSimpleName(), constraint);
+		}
 		return toResponse(ErrorCode.CONCURRENT_UPDATE);
+	}
+
+	private static <T extends Throwable> T findCause(Throwable e, Class<T> type) {
+		for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+			if (type.isInstance(cause)) {
+				return type.cast(cause);
+			}
+		}
+		return null;
 	}
 
 	@ExceptionHandler(AccessDeniedException.class)

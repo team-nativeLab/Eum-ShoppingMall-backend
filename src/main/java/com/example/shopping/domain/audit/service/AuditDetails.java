@@ -14,8 +14,17 @@ public final class AuditDetails {
 	static final int MAX_LENGTH = 2000;
 	static final String MASK = "***";
 
-	// 이름에 이 단어가 들어간 항목은 값을 남기지 않는다. (password, currentPassword, secretKey, refreshToken 등)
-	private static final Pattern SENSITIVE_NAME = Pattern.compile("(?i).*(password|secret|token|card).*");
+	/**
+	 * 이름에 이 단어가 들어간 항목은 값을 남기지 않는다. 감사 로그는 2년 동안 남으므로 원래 데이터를 지운 뒤에도 남으면 안 되는 값이다(#139).
+	 * <ul>
+	 * <li>비밀 값: password, currentPassword, secretKey, refreshToken, cardNumber 등</li>
+	 * <li>연락처: email, phone, address, zipCode, recipient 등</li>
+	 * <li>자유롭게 쓰는 글: 회원 정지·주문 취소·재고 조정 사유(reason), 문의·FAQ 답변(answer), 메모(memo, note, comment).
+	 * 고객 이름이나 연락처가 섞일 수 있다.</li>
+	 * </ul>
+	 */
+	private static final Pattern SENSITIVE_NAME = Pattern.compile(
+			"(?i).*(password|secret|token|card|email|phone|mobile|address|zipcode|recipient|reason|answer|memo|note|comment).*");
 	private static final JsonMapper JSON = JsonMapper.builder().build();
 
 	private AuditDetails() {
