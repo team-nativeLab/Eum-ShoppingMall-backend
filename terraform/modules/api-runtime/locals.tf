@@ -13,14 +13,15 @@ locals {
   # 컨테이너 안에서 업로드 볼륨이 붙는 경로. 앱의 UPLOAD_DIR도 이 값을 쓴다.
   uploads_mount_path = "/app/uploads"
 
-  # RDS 접속 주소(#133). TLS로 접속하고 인증서와 호스트 이름을 이미지에 넣은 RDS CA 신뢰 저장소(Dockerfile)로만 검증한다.
+  # RDS 접속 옵션(#133). TLS로 접속하고 인증서와 호스트 이름을 이미지에 넣은 RDS CA 신뢰 저장소(Dockerfile)로만 검증한다.
   # 저장소에는 공개 인증서만 있으므로 비밀번호는 비밀이 아니다. 기본 JVM 신뢰 저장소로는 넘어가지 않는다.
-  db_url = join("", [
-    "jdbc:mysql://${var.db_address}:3306/${var.db_name}?sslMode=VERIFY_IDENTITY",
-    "&trustCertificateKeyStoreUrl=file:/app/rds-truststore.p12",
-    "&trustCertificateKeyStoreType=PKCS12",
-    "&trustCertificateKeyStorePassword=rds-truststore",
-    "&fallbackToSystemTrustStore=false",
+  # 주소(db_address)는 서비스를 켤 때만 있으므로 접속 주소는 태스크 정의 안에서 만든다.
+  db_url_options = join("&", [
+    "sslMode=VERIFY_IDENTITY",
+    "trustCertificateKeyStoreUrl=file:/app/rds-truststore.p12",
+    "trustCertificateKeyStoreType=PKCS12",
+    "trustCertificateKeyStorePassword=rds-truststore",
+    "fallbackToSystemTrustStore=false",
   ])
 
   # ECS 실행 역할과 태스크 역할이 함께 쓰는 신뢰 정책
