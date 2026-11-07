@@ -15,6 +15,12 @@ public final class ValidationPatterns {
 	/** 연락처. 숫자 사이 하이픈은 있어도 되고 없어도 된다 (예: 010-1234-5678, 0212345678). 저장할 때는 ContactFormats.phone으로 뺀다. */
 	public static final String PHONE = "^\\d{2,3}-?\\d{3,4}-?\\d{4}$";
 
+	/**
+	 * 로그인 이메일에 쓸 수 있는 글자. 공백 없는 영문·숫자·기호(ASCII)만 허용하고, 형식은 @Email로 따로 검사한다.
+	 * MySQL은 악센트를 구분하지 않고 비교할 수 있어서 'ádmin@…'이 'admin@…' 계정으로 잡히는 것을 막는다(#137).
+	 */
+	public static final String ASCII_EMAIL = "^[\\x21-\\x7E]+$";
+
 	/** PHONE과 같지만 빈 문자열도 허용한다. 수정 요청에서 빈 문자열은 값을 지운다는 뜻이다. */
 	public static final String PHONE_OR_EMPTY = "^$|" + PHONE;
 

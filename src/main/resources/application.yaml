@@ -181,6 +181,8 @@ app:
     # 프론트가 Turnstile 위젯(사이트 키)을 붙이고 서버에 비밀 키를 넣은 뒤 켠다. 꺼 두면 틀린 횟수 차단(security.verification-lock)만 동작한다.
     enabled: ${CAPTCHA_ENABLED:false}
     secret-key: ${CAPTCHA_SECRET_KEY:}
+    # 위젯을 풀 수 있는 프론트 도메인(쉼표로 구분, 예: shop.example.com). 다른 사이트에서 푼 토큰은 받지 않는다. 켜면 필수다.
+    allowed-hostnames: ${CAPTCHA_ALLOWED_HOSTNAMES:}
     # Turnstile 토큰 확인 주소
     verify-url: https://challenges.cloudflare.com/turnstile/v0/siteverify
   mail:

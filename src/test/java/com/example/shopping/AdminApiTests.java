@@ -1,6 +1,7 @@
 package com.example.shopping;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
@@ -141,6 +142,17 @@ class AdminApiTests {
 	}
 
 	@Test
+	void 초기_관리자_이메일에_영문_외_문자가_있으면_기동을_멈춘다() {
+		AdminAccountInitializer initializer = new AdminAccountInitializer(
+				new AdminBootstrapProperties("ádmin@example.com", PASSWORD), memberRepository, passwordEncoder,
+				refreshTokenService);
+
+		assertThatThrownBy(() -> initializer.run(null)).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("ADMIN_EMAIL");
+		assertThat(jdbcTemplate.queryForObject("select count(*) from member", Long.class)).isZero();
+	}
+
+	@Test
 	void 최고관리자만_역할을_바꾸고_변경된_회원의_토큰을_폐기한다() throws Exception {
 		long superAdminId = insertMember("super@example.com", "최고관리자", "SUPER_ADMIN");
 		long memberId = insertMember("role-target@example.com", "대상 회원", "ADMIN");
@@ -225,6 +237,27 @@ class AdminApiTests {
 		mockMvc.perform(get("/api/v1/admin/users/{id}", 999_999))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
+	}
+
+	@Test
+	void 회원_검색어의_퍼센트와_밑줄은_글자_그대로_찾고_이메일은_대소문자를_가리지_않는다() throws Exception {
+		insertMember("hong@example.com", "홍길동", "USER");
+		insertMember("a_b@example.com", "밑줄", "USER");
+		insertMember("axb@example.com", "엑스", "USER");
+
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "_"))
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].email").value("a_b@example.com"));
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "a_b"))
+				.andExpect(jsonPath("$.data.totalElements").value(1));
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "%"))
+				.andExpect(jsonPath("$.data.totalElements").value(0));
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "\\"))
+				.andExpect(jsonPath("$.data.totalElements").value(0));
+		// 이메일은 소문자로 저장하므로 대문자로 찾아도 나온다.
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "HONG@"))
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].name").value("홍길동"));
 	}
 
 	@Test

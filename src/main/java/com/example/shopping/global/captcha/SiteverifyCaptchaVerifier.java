@@ -1,5 +1,7 @@
 package com.example.shopping.global.captcha;
 
+import java.util.Locale;
+
 import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -16,8 +18,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Cloudflare Turnstile의 siteverify API(secret·response·remoteip를 폼으로 보내고 {"success": true|false}를 받음)로
- * 토큰을 확인한다.
+ * Cloudflare Turnstile의 siteverify API(secret·response·remoteip를 폼으로 보내고 {"success", "hostname", "action"}을 받음)로
+ * 토큰을 확인한다. success만 보지 않고, 허용한 사이트에서 이 용도로 푼 토큰인지도 확인한다(#146).
  */
 @Slf4j
 public class SiteverifyCaptchaVerifier implements CaptchaVerifier {
@@ -37,7 +39,7 @@ public class SiteverifyCaptchaVerifier implements CaptchaVerifier {
 	}
 
 	@Override
-	public boolean verify(String token, String remoteIp) {
+	public boolean verify(String token, String action, String remoteIp) {
 		MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
 		form.add("secret", properties.secretKey());
 		form.add("response", token);
@@ -64,10 +66,26 @@ public class SiteverifyCaptchaVerifier implements CaptchaVerifier {
 			throw new BusinessException(ErrorCode.CAPTCHA_UNAVAILABLE);
 		}
 		JsonNode success = result.path("success");
-		if (success.isBoolean() && success.booleanValue()) {
-			return true;
+		if (!success.isBoolean() || !success.booleanValue()) {
+			log.info("로봇 확인에 실패했습니다: {}", result.path("error-codes"));
+			return false;
 		}
-		log.info("로봇 확인에 실패했습니다: {}", result.path("error-codes"));
-		return false;
+		// 위젯의 허용 도메인 설정에만 기대지 않는다. 다른 사이트나 다른 화면의 위젯에서 받은 토큰은 통과시키지 않는다.
+		String hostname = text(result, "hostname").toLowerCase(Locale.ROOT);
+		if (!properties.allowedHostnames().contains(hostname)) {
+			log.warn("허용하지 않은 사이트에서 푼 로봇 확인 토큰입니다: hostname={}", hostname);
+			return false;
+		}
+		String solvedAction = text(result, "action");
+		if (!solvedAction.equals(action)) {
+			log.warn("다른 용도의 위젯에서 받은 로봇 확인 토큰입니다: action={}, expected={}", solvedAction, action);
+			return false;
+		}
+		return true;
+	}
+
+	private static String text(JsonNode result, String field) {
+		JsonNode value = result.path(field);
+		return value.isString() ? value.stringValue() : "";
 	}
 }

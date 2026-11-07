@@ -11,6 +11,7 @@ import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberRole;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.global.validation.ContactFormats;
+import com.example.shopping.global.validation.ValidationPatterns;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +43,10 @@ public class AdminAccountInitializer implements ApplicationRunner {
 			throw new IllegalStateException("관리자 초기 비밀번호(ADMIN_PASSWORD)는 " + MIN_PASSWORD_LENGTH + "자 이상이어야 합니다.");
 		}
 		String email = ContactFormats.loginEmail(properties.email());
+		if (!email.matches(ValidationPatterns.ASCII_EMAIL) || !email.contains("@")) {
+			// 로그인 API가 받지 않는 이메일로 만들면 그 계정으로 로그인할 수 없다(#137).
+			throw new IllegalStateException("관리자 초기 이메일(ADMIN_EMAIL)은 영문·숫자·기호로 된 이메일이어야 합니다.");
+		}
 		Member existing = memberRepository.findByEmail(email).orElse(null);
 		if (existing != null) {
 			if (existing.getRole() == MemberRole.ADMIN) {

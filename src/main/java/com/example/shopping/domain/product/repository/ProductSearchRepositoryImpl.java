@@ -15,6 +15,7 @@ import com.example.shopping.domain.product.entity.Certification;
 import com.example.shopping.domain.product.entity.Product;
 import com.example.shopping.domain.product.entity.ProductSku;
 import com.example.shopping.domain.product.entity.ProductStatus;
+import com.example.shopping.global.persistence.LikePatterns;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -29,8 +30,6 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 
 public class ProductSearchRepositoryImpl implements ProductSearchRepository {
-
-	private static final char LIKE_ESCAPE = '\\';
 
 	@PersistenceContext
 	private EntityManager entityManager;
@@ -119,10 +118,10 @@ public class ProductSearchRepositoryImpl implements ProductSearchRepository {
 			predicates.add(product.get("category").get("id").in(condition.categoryIds()));
 		}
 		if (condition.keyword() != null) {
-			String pattern = containsPattern(condition.keyword());
+			String pattern = LikePatterns.contains(condition.keyword().toLowerCase(Locale.ROOT));
 			predicates.add(cb.or(
-					cb.like(cb.lower(product.get("name")), pattern, LIKE_ESCAPE),
-					cb.like(cb.lower(product.get("brand")), pattern, LIKE_ESCAPE)));
+					cb.like(cb.lower(product.get("name")), pattern, LikePatterns.ESCAPE),
+					cb.like(cb.lower(product.get("brand")), pattern, LikePatterns.ESCAPE)));
 		}
 		if (condition.brands() != null && !condition.brands().isEmpty()) {
 			predicates.add(product.get("brand").in(condition.brands()));
@@ -192,14 +191,5 @@ public class ProductSearchRepositoryImpl implements ProductSearchRepository {
 		}
 		orders.add(cb.desc(product.get("id")));
 		return orders;
-	}
-
-	/** 검색어에 든 %와 _가 "아무 글자"로 해석되지 않고 글자 그대로 검색되게 한다. */
-	private String containsPattern(String keyword) {
-		String escaped = keyword.toLowerCase(Locale.ROOT)
-				.replace("\\", "\\\\")
-				.replace("%", "\\%")
-				.replace("_", "\\_");
-		return "%" + escaped + "%";
 	}
 }

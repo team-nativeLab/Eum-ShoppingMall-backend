@@ -99,8 +99,9 @@ class VerificationLockTests {
 		confirm(email, code, FakeCaptchaVerifier.HUMAN)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.verificationToken").exists());
-		assertThat(captcha.calls).containsExactly(FakeCaptchaVerifier.ROBOT + "@" + CLIENT_IP,
-				FakeCaptchaVerifier.HUMAN + "@" + CLIENT_IP);
+		// 인증번호 확인 화면의 위젯(action=verify-code)에서 받은 토큰인지도 확인 서비스에 함께 묻는다.
+		assertThat(captcha.calls).containsExactly("verify-code:" + FakeCaptchaVerifier.ROBOT + "@" + CLIENT_IP,
+				"verify-code:" + FakeCaptchaVerifier.HUMAN + "@" + CLIENT_IP);
 	}
 
 	@Test
@@ -262,11 +263,11 @@ class VerificationLockTests {
 		}
 
 		@Override
-		public boolean verify(String token, String remoteIp) {
+		public boolean verify(String token, String action, String remoteIp) {
 			if (UNAVAILABLE.equals(token)) {
 				throw new BusinessException(ErrorCode.CAPTCHA_UNAVAILABLE);
 			}
-			calls.add(token + "@" + remoteIp);
+			calls.add(action + ":" + token + "@" + remoteIp);
 			return HUMAN.equals(token);
 		}
 	}
