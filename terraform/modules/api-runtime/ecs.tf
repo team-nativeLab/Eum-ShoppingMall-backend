@@ -69,8 +69,9 @@ resource "aws_ecs_task_definition" "api" {
   lifecycle {
     # 두 시크릿은 username·password 키 형식이 같아 RDS 마스터 시크릿을 실수로 넣기 쉽다. 넣으면 앱이 마스터 계정으로 접속한다(#131).
     precondition {
-      condition = var.database_master_secret_arn == null || !contains(
-        [var.database_app_secret_arn, var.database_migration_secret_arn], var.database_master_secret_arn
+      # Terraform의 ||는 오른쪽도 계산하므로 null 대신 비교할 수 없는 값을 넣는다.
+      condition = !contains(
+        [var.database_app_secret_arn, var.database_migration_secret_arn], coalesce(var.database_master_secret_arn, "-")
       )
       error_message = "database_app_secret_arn·database_migration_secret_arn에 RDS 마스터 시크릿(rds_master_secret_arn)을 넣으면 안 됩니다."
     }
