@@ -44,7 +44,7 @@ S3를 쓰려면 `UPLOAD_STORAGE=s3`, `AWS_REGION`, `UPLOAD_S3_BUCKET`, `UPLOAD_C
 
 모든 응답에 `X-Request-Id`가 들어갑니다. 요청에 안전한 값(영문·숫자·점·밑줄·하이픈으로 된 1~64자)이 있으면 그대로 돌려주고, 그렇지 않으면 서버가 UUID를 만듭니다. 같은 값이 애플리케이션 로그에도 남습니다. 요청이 시작한 백그라운드 작업(메일, 알림톡)도 그 요청의 ID를 남기고, 정기 작업은 실행마다 만든 ID(`<작업 이름>-<UUID>`)를 같은 자리에 남깁니다.
 
-`LOG_FORMAT`에 `ecs`, `logstash`, `gelf` 중 하나를 넣으면 로그 수집 도구가 읽을 한 줄 JSON으로 남깁니다. 비워 두면 텍스트 패턴으로 남습니다. 이메일, 연락처, 토큰은 로그에 남기지 않습니다.
+`LOG_FORMAT`에 `ecs`, `logstash`, `gelf` 중 하나를 넣으면 로그 수집 도구가 읽을 한 줄 JSON으로 남깁니다. 비워 두면 텍스트 패턴으로 남습니다. 이메일, 연락처, 토큰은 로그에 남기지 않습니다. DB 제약 위반은 예외 종류와 제약 이름만 남기고, 겹친 값이 그대로 들어 있는 Hibernate의 SQL 오류 로그(`org.hibernate.orm.jdbc.error`)는 끕니다. 재고·금액 같은 CHECK 제약 위반은 코드 실수이므로 ERROR로 남깁니다. 메일 서버 설정이 없을 때도 받는 사람과 메일 본문(인증번호)은 남기지 않습니다.
 
 Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개이고 나머지 Actuator 경로는 관리자 토큰이 있어야 합니다.
 
@@ -94,7 +94,11 @@ IP별 요청 제한(`RATE_LIMIT_PER_MINUTE`)과 별도로 로그인 이메일마
 
 관리자의 `POST`, `PUT`, `PATCH`, `DELETE` 요청(이미지 업로드 포함)은 성공했거나 권한 부족(403)으로 거절됐을 때 기록합니다. 검증 오류 같은 다른 실패는 기록하지 않습니다.
 
-- **기록 내용:** 요청한 회원, 서버가 확인한 클라이언트 IP, HTTP 메서드, 대상 종류와 식별자, 경로 요약, 응답 상태, JSON 요청 본문이 남습니다. 본문의 민감한 필드(`password`, `secret`, `token`, `card`)는 가리고 2,000자로 자릅니다.
+- **기록 내용:** 요청한 회원, 서버가 확인한 클라이언트 IP, HTTP 메서드, 대상 종류와 식별자, 경로 요약, 응답 상태, JSON 요청 본문이 남습니다. 본문에서 이름에 아래 단어가 들어간 필드는 가리고, 2,000자로 자릅니다. 감사 로그는 원래 데이터를 지운 뒤에도 2년 동안 남기 때문입니다.
+  - 비밀 값: `password`, `secret`, `token`, `card`
+  - 연락처: `email`, `phone`, `mobile`, `address`, `zipcode`, `recipient`
+  - 고객 정보가 섞일 수 있는 글: `reason`(정지·취소·재고 조정 사유), `answer`(문의·FAQ 답변), `memo`, `note`, `comment`
+- **저장 실패:** 기록을 저장하지 못하면 앱 로그에는 요청한 회원·IP·경로·대상만 ERROR로 남기고 본문은 남기지 않습니다.
 - **대상:** 매칭된 경로에서 가장 안쪽의 `name/{id}`입니다. `/api/v1/admin/products/{productId}/skus/{skuId}/stock-adjustments`는 `skus`와 SKU ID를, 이미지 업로드는 `uploads`를 기록합니다.
 - **조회:** `GET /api/v1/admin/audit-logs`는 요청한 회원, 대상 종류, 시간으로 거를 수 있고 `SUPER_ADMIN`만 쓸 수 있습니다. `fromDate`·`toDate`는 `2026-10-01`이나 `2026-10-01T09:00:00`을 받고, 날짜만 넣은 `toDate`는 그날 전체를 포함합니다.
 
