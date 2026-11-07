@@ -46,7 +46,7 @@ public class AuthController {
 		return ApiResponse.ok(authService.signup(request));
 	}
 
-	/** 회원가입 이메일 인증번호를 보낸다. 이미 가입된 이메일이면 409, 1분 안에 다시 요청하면 429 */
+	/** 회원가입 이메일 인증번호를 보낸다. 이미 가입된 이메일이면 인증번호 대신 안내 메일을 보내고 응답은 같다. 1분 안에 다시 요청하면 429 */
 	@PostMapping("/email-verifications")
 	public ApiResponse<EmailVerificationSendResponse> sendEmailVerification(
 			@Valid @RequestBody EmailVerificationSendRequest request) {

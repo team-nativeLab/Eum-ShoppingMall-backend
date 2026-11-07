@@ -141,18 +141,39 @@ class EmailVerificationApiTests {
 	}
 
 	@Test
-	void 이미_가입된_이메일은_인증번호를_보내지_않고_1분_안에는_다시_보낼_수_없다() throws Exception {
+	void 이미_가입된_이메일도_같은_응답을_주고_인증번호_대신_안내_메일을_보내며_1분_안에는_다시_보낼_수_없다() throws Exception {
 		insertMember("member@example.com");
-		postJson("/api/v1/auth/email-verifications", "{\"email\":\"member@example.com\"}")
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"));
+		// 가입 여부와 상관없이 응답이 같아, 가입 여부는 메일함 주인만 알 수 있다(#140).
+		for (String email : new String[] { "member@example.com", EMAIL }) {
+			postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + email + "\"}")
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.expiresAt").exists());
+			postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + email + "\"}")
+					.andExpect(status().isTooManyRequests())
+					.andExpect(jsonPath("$.code").value("VERIFICATION_RESEND_TOO_SOON"));
+		}
 
-		postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}").andExpect(status().isOk());
-		postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}")
-				.andExpect(status().isTooManyRequests())
-				.andExpect(jsonPath("$.code").value("VERIFICATION_RESEND_TOO_SOON"));
 		assertThat(mailbox.sentTo(EMAIL)).hasSize(1);
-		assertThat(mailbox.sentTo("member@example.com")).isEmpty();
+		assertThat(mailbox.lastTo(EMAIL).code()).isNotNull();
+		assertThat(mailbox.sentTo("member@example.com")).hasSize(1);
+		RecordingEmailSender.SentMail notice = mailbox.lastTo("member@example.com");
+		assertThat(notice.subject()).contains("이미 가입된 이메일");
+		assertThat(notice.text()).contains("비밀번호 찾기").doesNotContain("인증번호:");
+	}
+
+	@Test
+	void 비밀번호_재설정_확인은_가입_여부와_상관없이_같은_오류를_준다() throws Exception {
+		insertMember("member@example.com");
+		for (String email : new String[] { "member@example.com", "nobody@example.com" }) {
+			postJson("/api/v1/auth/password-reset", "{\"email\":\"" + email + "\"}").andExpect(status().isOk());
+			// 인증번호 하나를 다 틀릴 때까지의 응답이 가입 여부와 상관없이 같다(#140).
+			for (int i = 0; i < 4; i++) {
+				resetPassword(email, "000000", "new-pass-5678")
+						.andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
+			}
+			resetPassword(email, "000000", "new-pass-5678")
+					.andExpect(jsonPath("$.code").value("VERIFICATION_ATTEMPTS_EXCEEDED"));
+		}
 	}
 
 	@Test
@@ -286,7 +307,10 @@ class EmailVerificationApiTests {
 		postJson("/api/v1/auth/password-reset", "{\"email\":\"suspended@example.com\"}")
 				.andExpect(status().isOk());
 
-		assertThat(jdbcTemplate.queryForObject("select count(*) from email_verification", Integer.class)).isZero();
+		// 보내지 않는 인증번호는 만들어 두어 재설정 확인의 응답이 가입된 이메일과 같게 한다(#140).
+		assertThat(jdbcTemplate.queryForObject("select count(*) from email_verification", Integer.class)).isEqualTo(2);
+		assertThat(mailbox.sentTo("nobody@example.com")).isEmpty();
+		assertThat(mailbox.sentTo("suspended@example.com")).isEmpty();
 		resetPassword("nobody@example.com", "123456", "new-pass-5678")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
