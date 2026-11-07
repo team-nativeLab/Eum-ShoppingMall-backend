@@ -21,9 +21,9 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 | 구성 | 켜는 변수 | 고정 비용(월) | plan이 만드는 리소스 |
 |---|---|---|---|
 | 기본 | 없음 | $0 | 42개 |
-| 데이터 준비(스키마 작업) | `enable_data_layer` | 약 $39 | 46개 |
-| 개발 검증 배포 | 위 + `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service` | 약 $130 | 62개 |
-| 운영 예시 | 위 + `db_multi_az=true`, `desired_count=2` | 약 $173 | 62개 |
+| 데이터 준비(스키마 작업) | `enable_data_layer` | 약 $39 | 47개 |
+| 개발 검증 배포 | 위 + `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service` | 약 $130 | 63개 |
+| 운영 예시 | 위 + `db_multi_az=true`, `desired_count=2` | 약 $173 | 63개 |
 
 기본 구성은 VPC와 서브넷·라우팅, 보안 그룹, DB·Redis 서브넷 그룹, IAM, ECS 클러스터, ECR, 업로드 S3와 CloudFront, 로그 그룹, 예산 경보만 만듭니다. 이 중 요금이 나오는 것은 ECR, S3, CloudFront, 로그처럼 쓴 만큼 내는 항목뿐입니다. 리소스 수는 `terraform/stacks/app/tests`와 같은 mock provider로 돌린 plan 결과입니다.
 
