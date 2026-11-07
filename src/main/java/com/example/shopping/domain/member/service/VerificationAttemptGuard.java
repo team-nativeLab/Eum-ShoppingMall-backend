@@ -15,6 +15,8 @@ import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.redis.RedisCircuitBreaker;
 import com.example.shopping.global.redis.SharedCounter;
+import com.example.shopping.global.security.KeyedHash;
+import com.example.shopping.global.security.SecretHashes;
 
 /**
  * 인증번호(회원가입·비밀번호 재설정)를 틀린 횟수를 이메일·용도별로 센다.
@@ -38,22 +40,26 @@ public class VerificationAttemptGuard {
 
 	private final SharedCounter failures;
 	private final SharedCounter locks;
+	private final KeyedHash keyHashes;
 	private final CaptchaVerifier captchaVerifier;
 	private final int captchaAfterFailures;
 	private final int maxFailures;
 
 	@Autowired
 	public VerificationAttemptGuard(StringRedisTemplate redis, RedisCircuitBreaker redisCircuitBreaker,
-			CaptchaVerifier captchaVerifier,
+			CaptchaVerifier captchaVerifier, SecretHashes secretHashes,
 			@Value("${security.verification-lock.captcha-after-failures:3}") int captchaAfterFailures,
 			@Value("${security.verification-lock.max-failures:5}") int maxFailures) {
-		this(redis, redisCircuitBreaker, captchaVerifier, captchaAfterFailures, maxFailures, Clock.systemUTC());
+		this(redis, redisCircuitBreaker, captchaVerifier, secretHashes.forPurpose(SecretHashes.VERIFICATION_LOCK_KEY),
+				captchaAfterFailures, maxFailures, Clock.systemUTC());
 	}
 
 	VerificationAttemptGuard(StringRedisTemplate redis, RedisCircuitBreaker redisCircuitBreaker,
-			CaptchaVerifier captchaVerifier, int captchaAfterFailures, int maxFailures, Clock clock) {
+			CaptchaVerifier captchaVerifier, KeyedHash keyHashes, int captchaAfterFailures, int maxFailures,
+			Clock clock) {
 		this.failures = new SharedCounter("verification-failure", redis, redisCircuitBreaker, clock, MAX_LOCAL_KEYS);
 		this.locks = new SharedCounter("verification-lock", redis, redisCircuitBreaker, clock, MAX_LOCAL_KEYS);
+		this.keyHashes = keyHashes;
 		this.captchaVerifier = captchaVerifier;
 		this.captchaAfterFailures = captchaAfterFailures;
 		this.maxFailures = maxFailures;
@@ -101,12 +107,12 @@ public class VerificationAttemptGuard {
 		failures.reset(failureKey(email, purpose));
 	}
 
-	/** Redis 키에 이메일을 그대로 남기지 않는다. */
-	private static String failureKey(String email, VerificationPurpose purpose) {
-		return FAILURE_KEY_PREFIX + VerificationCodes.hash("verification", purpose.name(), email);
+	/** Redis 키에 이메일을 그대로 남기지 않는다. 서버 키로 해시해 Redis를 볼 수 있어도 이메일 목록을 넣어 보며 되돌릴 수 없다(#136). */
+	private String failureKey(String email, VerificationPurpose purpose) {
+		return FAILURE_KEY_PREFIX + keyHashes.hash(purpose.name(), email);
 	}
 
-	private static String lockKey(String email, VerificationPurpose purpose) {
-		return LOCK_KEY_PREFIX + VerificationCodes.hash("verification", purpose.name(), email);
+	private String lockKey(String email, VerificationPurpose purpose) {
+		return LOCK_KEY_PREFIX + keyHashes.hash(purpose.name(), email);
 	}
 }

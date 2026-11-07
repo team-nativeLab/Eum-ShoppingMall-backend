@@ -1,10 +1,6 @@
 package com.example.shopping.domain.payment.entity;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.Base64;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -90,7 +86,8 @@ public class Payment extends BaseTimeEntity {
 	private String webhookSecretHash;
 
 	/** PG가 승인한 결과를 그대로 기록한다. */
-	public static Payment of(Long orderId, PgPayment pg, PaymentStatus status) {
+	/** @param webhookSecretHash 가상계좌 웹훅 비밀값의 해시(PaymentWebhookSecrets.hash). 비밀값이 없으면 null */
+	public static Payment of(Long orderId, PgPayment pg, PaymentStatus status, String webhookSecretHash) {
 		Payment payment = new Payment();
 		payment.orderId = orderId;
 		payment.paymentKey = pg.paymentKey();
@@ -106,7 +103,7 @@ public class Payment extends BaseTimeEntity {
 			payment.virtualAccountCustomerName = virtualAccount.customerName();
 			payment.virtualAccountDueAt = virtualAccount.dueDate();
 		}
-		payment.webhookSecretHash = hashWebhookSecret(pg.secret());
+		payment.webhookSecretHash = webhookSecretHash;
 		return payment;
 	}
 
@@ -175,25 +172,5 @@ public class Payment extends BaseTimeEntity {
 
 	public boolean isVirtualAccount() {
 		return VIRTUAL_ACCOUNT_METHOD.equals(method);
-	}
-
-	public boolean matchesWebhookSecret(String secret) {
-		if (webhookSecretHash == null || secret == null) {
-			return false;
-		}
-		return MessageDigest.isEqual(webhookSecretHash.getBytes(StandardCharsets.US_ASCII),
-				hashWebhookSecret(secret).getBytes(StandardCharsets.US_ASCII));
-	}
-
-	private static String hashWebhookSecret(String secret) {
-		if (secret == null) {
-			return null;
-		}
-		try {
-			return Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256")
-					.digest(secret.getBytes(StandardCharsets.UTF_8)));
-		} catch (NoSuchAlgorithmException e) {
-			throw new IllegalStateException("SHA-256 is unavailable", e);
-		}
 	}
 }

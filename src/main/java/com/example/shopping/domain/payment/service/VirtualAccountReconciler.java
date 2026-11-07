@@ -42,9 +42,10 @@ public class VirtualAccountReconciler {
 	private final OrderTxService orderTxService;
 	private final OrderRepository orderRepository;
 	private final ManualCheckAlerts alerts;
+	private final PaymentWebhookSecrets webhookSecrets;
 
 	public void reconcile(Order order, Payment payment, PgPayment pg) {
-		if (!PgPaymentMatcher.isSameVirtualAccount(order, payment, pg)) {
+		if (!PgPaymentMatcher.isSameVirtualAccount(order, payment, pg, webhookSecrets)) {
 			alerts.raise("virtual_account_mismatch", "주문 {} 가상계좌 PG 조회 결과가 저장된 결제와 맞지 않습니다.",
 					order.getOrderNo());
 			return;

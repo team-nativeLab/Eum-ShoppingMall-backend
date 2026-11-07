@@ -12,6 +12,8 @@ import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 import com.example.shopping.global.redis.RedisCircuitBreaker;
 import com.example.shopping.global.redis.SharedCounter;
+import com.example.shopping.global.security.KeyedHash;
+import com.example.shopping.global.security.SecretHashes;
 
 /**
  * 이메일별 로그인 실패 횟수를 센다. IP별 요청 제한(RateLimitFilter)만으로는 IP를 바꿔 가며 한 계정에 비밀번호를 넣어 보는 공격을 막지 못한다.
@@ -27,17 +29,20 @@ public class LoginAttemptLimiter {
 	private static final int MAX_LOCAL_EMAILS = 10_000;
 
 	private final SharedCounter failures;
+	private final KeyedHash keyHashes;
 	private final int maxFailures;
 
 	@Autowired
 	public LoginAttemptLimiter(StringRedisTemplate redis, RedisCircuitBreaker redisCircuitBreaker,
-			@Value("${security.login-lock.max-failures:10}") int maxFailures) {
-		this(redis, redisCircuitBreaker, maxFailures, Clock.systemUTC());
+			SecretHashes secretHashes, @Value("${security.login-lock.max-failures:10}") int maxFailures) {
+		this(redis, redisCircuitBreaker, secretHashes.forPurpose(SecretHashes.LOGIN_LOCK_KEY), maxFailures,
+				Clock.systemUTC());
 	}
 
-	LoginAttemptLimiter(StringRedisTemplate redis, RedisCircuitBreaker redisCircuitBreaker, int maxFailures,
-			Clock clock) {
+	LoginAttemptLimiter(StringRedisTemplate redis, RedisCircuitBreaker redisCircuitBreaker, KeyedHash keyHashes,
+			int maxFailures, Clock clock) {
 		this.failures = new SharedCounter("login-failure", redis, redisCircuitBreaker, clock, MAX_LOCAL_EMAILS);
+		this.keyHashes = keyHashes;
 		this.maxFailures = maxFailures;
 	}
 
@@ -56,8 +61,8 @@ public class LoginAttemptLimiter {
 		failures.reset(key(email));
 	}
 
-	/** Redis 키에 이메일을 그대로 남기지 않는다. */
-	private static String key(String email) {
-		return KEY_PREFIX + VerificationCodes.hash("login", email);
+	/** Redis 키에 이메일을 그대로 남기지 않는다. 서버 키로 해시해 Redis를 볼 수 있어도 이메일 목록을 넣어 보며 되돌릴 수 없다(#136). */
+	String key(String email) {
+		return KEY_PREFIX + keyHashes.hash(email);
 	}
 }
