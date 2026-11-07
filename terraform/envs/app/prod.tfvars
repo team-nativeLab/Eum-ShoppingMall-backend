@@ -38,6 +38,8 @@ application_secret_arns = {
   # CAPTCHA_SECRET_KEY = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/captcha-replace"
 }
 database_app_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/db-app-replace"
+# 마이그레이션 전용 계정(DDL 권한). 일회성 migrate 작업만 받는다(#131). enable_ecs_service를 켜면 필수다.
+database_migration_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:eum-shopping/db-migrate-replace"
 
 # 담당자 알림 메일에 필요한 값. MAIL_USERNAME, MAIL_PASSWORD는 application_secret_arns에 넣는다.
 # app_environment = {

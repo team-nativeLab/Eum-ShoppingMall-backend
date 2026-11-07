@@ -43,21 +43,11 @@ resource "aws_ecs_task_definition" "api" {
     portMappings = [{ containerPort = var.api_port, protocol = "tcp" }]
     environment = concat([
       { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
+      # 스키마는 migrate 작업만 바꾼다(#131). API는 DML 전용 앱 계정으로 뜨고 Hibernate가 스키마가 맞는지만 확인한다.
+      { name = "SPRING_FLYWAY_ENABLED", value = "false" },
       # RDS 인증서는 이미지에 넣은 RDS CA 신뢰 저장소로만 검증한다(Dockerfile, #133). 저장소 비밀번호는 비밀이 아니다.
       { name = "DB_URL", value = "jdbc:mysql://${var.db_address}:3306/${var.db_name}?${local.db_url_options}" },
-      { name = "REDIS_HOST", value = var.redis_endpoint },
-      { name = "REDIS_PORT", value = "6379" },
-      { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
-      # ALB가 있는 공용 서브넷만 프록시로 믿는다.
-      { name = "TRUSTED_PROXY_CIDRS", value = join(",", var.trusted_proxy_cidrs) },
-      { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
-      { name = "REFRESH_COOKIE_SAME_SITE", value = var.refresh_cookie_same_site },
-      { name = "UPLOAD_DIR", value = local.uploads_mount_path },
-      { name = "UPLOAD_STORAGE", value = var.upload_storage },
-      { name = "UPLOAD_S3_BUCKET", value = var.uploads_bucket },
-      { name = "UPLOAD_CDN_BASE_URL", value = var.uploads_cdn_url },
-      { name = "AWS_REGION", value = var.aws_region }
-    ], [for name, value in var.app_environment : { name = name, value = value }])
+    ], local.shared_environment)
     # 비밀 값은 environment에 넣지 않는다. ECS가 Secrets Manager에서 읽어 환경변수로 넣는다.
     secrets = concat([
       { name = "DB_USERNAME", valueFrom = "${var.database_app_secret_arn}:username::" },
@@ -75,6 +65,83 @@ resource "aws_ecs_task_definition" "api" {
     }
   }])
   depends_on = [aws_iam_role_policy_attachment.execution, aws_iam_role_policy.secrets, aws_iam_role_policy.efs]
+
+  lifecycle {
+    # 두 시크릿은 username·password 키 형식이 같아 RDS 마스터 시크릿을 실수로 넣기 쉽다. 넣으면 앱이 마스터 계정으로 접속한다(#131).
+    precondition {
+      condition = var.database_master_secret_arn == null || !contains(
+        [var.database_app_secret_arn, var.database_migration_secret_arn], var.database_master_secret_arn
+      )
+      error_message = "database_app_secret_arn·database_migration_secret_arn에 RDS 마스터 시크릿(rds_master_secret_arn)을 넣으면 안 됩니다."
+    }
+  }
+}
+
+# DB 마이그레이션만 하고 끝나는 일회성 작업(#131). 배포할 때 새 이미지로 이 작업을 먼저 돌리고(aws ecs run-task),
+# 종료 코드 0으로 끝나면 API 서비스를 새 이미지로 바꾼다. DDL 권한이 있는 마이그레이션 전용 계정은 이 작업만 받는다.
+resource "aws_ecs_task_definition" "migrate" {
+  count                    = var.enable_service ? 1 : 0
+  family                   = "${var.name}-migrate"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = aws_iam_role.execution.arn
+
+  container_definitions = jsonencode([{
+    name      = "migrate"
+    image     = "${aws_ecr_repository.api.repository_url}:${var.image_tag}"
+    essential = true
+    environment = concat([
+      # Flyway를 적용하고 Hibernate가 스키마를 검증한 뒤 끝난다(application-migrate.yaml, MigrationOnlyRunner).
+      { name = "SPRING_PROFILES_ACTIVE", value = "prod,migrate" },
+      { name = "DB_URL", value = "jdbc:mysql://${var.db_address}:3306/${var.db_name}?${local.db_url_options}" },
+    ], local.shared_environment)
+    secrets = concat([
+      { name = "DB_USERNAME", valueFrom = "${var.database_migration_secret_arn}:username::" },
+      { name = "DB_PASSWORD", valueFrom = "${var.database_migration_secret_arn}:password::" },
+      { name = "SPRING_DATA_REDIS_PASSWORD", valueFrom = var.redis_secret_arns[0] }
+    ], local.app_secrets)
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.api.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "migrate"
+      }
+    }
+  }])
+  depends_on = [aws_iam_role_policy_attachment.execution, aws_iam_role_policy.secrets]
+}
+
+# DB 관리 접속용 일회성 작업(#131). DB 보안 그룹이나 퍼블릭 접근을 열지 않고, 이 작업을 ECS Exec로 띄워
+# SSM 포트 포워딩으로 RDS에 붙는다. 아무것도 하지 않고 1시간 뒤 끝난다. 방법은 docs/deployment-aws.md의 "DB 관리 접속"을 따른다.
+resource "aws_ecs_task_definition" "db_admin" {
+  count                    = var.enable_service ? 1 : 0
+  family                   = "${var.name}-db-admin"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.execution.arn
+  task_role_arn            = aws_iam_role.db_admin[0].arn
+
+  container_definitions = jsonencode([{
+    name            = "db-admin"
+    image           = "public.ecr.aws/amazonlinux/amazonlinux:2023"
+    essential       = true
+    command         = ["sleep", "3600"]
+    linuxParameters = { initProcessEnabled = true }
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.api.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "db-admin"
+      }
+    }
+  }])
+  depends_on = [aws_iam_role_policy_attachment.execution, aws_iam_role_policy.db_admin_exec]
 }
 
 resource "aws_ecs_service" "api" {

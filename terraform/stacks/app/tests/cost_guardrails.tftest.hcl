@@ -18,9 +18,11 @@ variables {
     JWT_SECRET = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:jwt"
   }
   database_app_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:db-app"
-  redis_auth_token        = "test-redis-token-1234"
-  budget_limit_usd        = 200
-  budget_alert_emails     = ["ops@eum-shopping.test", "dev@eum-shopping.test"]
+  # 마이그레이션 전용 계정(#131)
+  database_migration_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:db-migrate"
+  redis_auth_token              = "test-redis-token-1234"
+  budget_limit_usd              = 200
+  budget_alert_emails           = ["ops@eum-shopping.test", "dev@eum-shopping.test"]
 }
 
 # ---- 스택 ----
@@ -50,6 +52,31 @@ run "ecs_service_requires_what_it_runs_on" {
   }
 
   expect_failures = [var.enable_ecs_service]
+}
+
+run "ecs_service_requires_migration_secret" {
+  command = plan
+
+  variables {
+    enable_data_layer             = true
+    enable_nat_gateway            = true
+    enable_alb                    = true
+    enable_efs                    = true
+    enable_ecs_service            = true
+    database_migration_secret_arn = null
+  }
+
+  expect_failures = [var.enable_ecs_service]
+}
+
+run "migration_secret_must_differ_from_app_secret" {
+  command = plan
+
+  variables {
+    database_migration_secret_arn = "arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:db-app"
+  }
+
+  expect_failures = [var.database_migration_secret_arn]
 }
 
 run "local_storage_requires_efs" {
@@ -276,9 +303,10 @@ run "api_runtime_without_alb_and_service" {
 
   assert {
     condition = (
-      length(aws_lb.api) + length(aws_ecs_task_definition.api) + length(aws_ecs_service.api)
+      length(aws_lb.api) + length(aws_ecs_task_definition.api) + length(aws_ecs_service.api) +
+      length(aws_ecs_task_definition.migrate) + length(aws_ecs_task_definition.db_admin) + length(aws_iam_role.db_admin)
     ) == 0
-    error_message = "기본값으로 ALB와 ECS 서비스를 만들면 안 됩니다."
+    error_message = "기본값으로 ALB와 ECS 서비스·작업을 만들면 안 됩니다."
   }
 }
 
@@ -323,8 +351,20 @@ run "api_runtime_with_everything" {
       length(aws_ecs_service.api) == 1,
       length(aws_ecs_task_definition.api[0].volume) == 1,
       length(aws_iam_role_policy.efs) == 1,
+      length(aws_ecs_task_definition.migrate) == 1,
+      length(aws_ecs_task_definition.db_admin) == 1,
+      length(aws_iam_role_policy.db_admin_exec) == 1,
     ])
     error_message = "모두 켰는데 빠진 리소스가 있습니다."
+  }
+
+  assert {
+    # migrate 작업은 업로드 볼륨 없이 마이그레이션만 한다(#131).
+    condition = alltrue([
+      length(aws_ecs_task_definition.migrate[0].volume) == 0,
+      aws_ecs_task_definition.migrate[0].family == "eum-test-migrate",
+    ])
+    error_message = "migrate 작업은 업로드 볼륨 없이 마이그레이션만 해야 합니다."
   }
 }
 
