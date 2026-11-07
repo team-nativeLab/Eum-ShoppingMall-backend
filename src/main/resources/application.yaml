@@ -170,6 +170,16 @@ app:
   audit:
     # 관리자 감사 로그 보존 기간(일). 지난 로그는 매일 05:15에 지운다. 접속기록 보관 기준에 맞춰 365 이상만 받는다.
     retention-days: ${AUDIT_LOG_RETENTION_DAYS:730}
+  retention:
+    # 개인정보 보유 기간(일, #134). 지나면 매일 05:30에 개인정보만 지운다(PersonalDataRetentionCleaner). 개인정보 처리방침과 맞춘다.
+    # 끝난 주문의 배송지. 전자상거래법 계약·대금결제·재화 공급 기록(5년)보다 짧게는 받지 않는다.
+    order-days: ${ORDER_PERSONAL_DATA_RETENTION_DAYS:1825}
+    # 답변한 1:1 문의의 연락처·내용. 소비자 불만·분쟁 처리 기록(3년)보다 짧게는 받지 않는다.
+    inquiry-days: ${INQUIRY_PERSONAL_DATA_RETENTION_DAYS:1095}
+    # 완료한 견적 문의의 회사·담당자·연락처·내용
+    quote-days: ${QUOTE_PERSONAL_DATA_RETENTION_DAYS:1095}
+    # 보냈거나 최종 실패한 알림 발송 기록(수신 번호·답변 내용)
+    notification-days: ${NOTIFICATION_RETENTION_DAYS:90}
   alert:
     # 확인이 필요한 상황을 메일로 받을 담당자 이메일(쉼표로 구분). 비어 있으면 로그와 지표로만 남긴다. 메일 서버(MAIL_HOST)도 설정해야 보낸다.
     emails: ${ALERT_EMAILS:}
