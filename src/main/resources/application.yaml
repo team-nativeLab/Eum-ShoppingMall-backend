@@ -124,13 +124,19 @@ security:
     # 한 사무실 직원들이 같은 공인 IP로 접속하므로 넉넉하게 둔다. 크롤링 같은 대량 요청은 프록시·WAF에서 막는다.
     public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:300}
   login-lock:
-    # 한 이메일이 첫 실패부터 10분 안에 이만큼 틀리면 그 10분 동안 로그인을 막는다. IP를 바꿔 가며 비밀번호를 넣어 보는 공격 대비.
+    # 한 이메일이 첫 실패부터 10분 안에 이만큼 틀리면 다음 로그인부터 로봇 확인을 요구한다(app.captcha를 켰을 때). IP를 바꿔 가며 비밀번호를 넣어 보는 공격 대비.
+    # 막지 않으므로 남이 일부러 틀려도 주인은 로그인할 수 있다(#141).
+    captcha-after-failures: ${LOGIN_CAPTCHA_AFTER_FAILURES:5}
+    # 로봇 확인을 껐을 때만: 이만큼 틀리면 그 10분 동안 로그인을 막는다.
     max-failures: ${LOGIN_LOCK_MAX_FAILURES:10}
   verification-lock:
     # 이메일 인증번호(회원가입·비밀번호 재설정)를 첫 실패부터 1시간 안에 이만큼 틀리면 다음부터 로봇 확인을 요구한다(app.captcha를 켰을 때).
     captcha-after-failures: 3
     # 이만큼 틀리면 그때부터 1시간 동안 그 이메일로 인증번호를 받거나 확인할 수 없다.
     max-failures: 5
+  audit:
+    # 관리자 한 명이 10분 안에 개인정보 조회 API(ApiPolicy.AUDITED_READS)를 이만큼 부르면 담당자에게 알린다(#138).
+    bulk-read-alert-threshold: ${ADMIN_BULK_READ_ALERT_THRESHOLD:100}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
     max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}

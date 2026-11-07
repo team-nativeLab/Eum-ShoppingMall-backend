@@ -46,7 +46,7 @@ public class AuthController {
 		return ApiResponse.ok(authService.signup(request));
 	}
 
-	/** 회원가입 이메일 인증번호를 보낸다. 이미 가입된 이메일이면 409, 1분 안에 다시 요청하면 429 */
+	/** 회원가입 이메일 인증번호를 보낸다. 이미 가입된 이메일이면 인증번호 대신 안내 메일을 보내고 응답은 같다. 1분 안에 다시 요청하면 429 */
 	@PostMapping("/email-verifications")
 	public ApiResponse<EmailVerificationSendResponse> sendEmailVerification(
 			@Valid @RequestBody EmailVerificationSendRequest request) {
@@ -82,8 +82,9 @@ public class AuthController {
 
 	/** WEB-018 로그인. Access 토큰은 응답 본문으로, Refresh 토큰은 HttpOnly 쿠키로 내려준다. */
 	@PostMapping("/login")
-	public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
-		return responder.withTokens(authService.login(request));
+	public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request,
+			HttpServletRequest httpRequest) {
+		return responder.withTokens(authService.login(request, httpRequest.getRemoteAddr()));
 	}
 
 	/** Refresh 쿠키로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. */
