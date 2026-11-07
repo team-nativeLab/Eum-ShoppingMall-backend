@@ -92,6 +92,25 @@ class AuthApiTests {
 	}
 
 	@Test
+	void 영문_외_문자가_든_이메일로는_가입_로그인_인증번호_요청을_할_수_없다() throws Exception {
+		// MySQL은 악센트를 구분하지 않고 비교할 수 있어 'ádmin@…'이 'admin@…' 계정으로 잡힐 수 있다(#137).
+		String variant = "ádmin@example.com";
+
+		signup(variant, PASSWORD, "홍길동", null)
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors[0].field").value("email"));
+		login(variant, PASSWORD)
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+		for (String path : new String[] { "/api/v1/auth/email-verifications", "/api/v1/auth/password-reset" }) {
+			mockMvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(json("email", variant)))
+					.andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.errors[0].field").value("email"));
+		}
+		assertThat(jdbcTemplate.queryForObject("select count(*) from member", Long.class)).isZero();
+	}
+
+	@Test
 	void 한글이_섞인_비밀번호는_가입할_수_없다() throws Exception {
 		signup(EMAIL, "비밀번호password1", "홍길동", null)
 				.andExpect(status().isBadRequest())

@@ -1,6 +1,7 @@
 package com.example.shopping;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
@@ -138,6 +139,17 @@ class AdminApiTests {
 		adminLogin("boot@example.com", PASSWORD).andExpect(status().isOk());
 		// 기존 회원의 비밀번호가 설정값으로 덮어써지지 않았다.
 		adminLogin("existing@example.com", "another-pass-1234").andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void 초기_관리자_이메일에_영문_외_문자가_있으면_기동을_멈춘다() {
+		AdminAccountInitializer initializer = new AdminAccountInitializer(
+				new AdminBootstrapProperties("ádmin@example.com", PASSWORD), memberRepository, passwordEncoder,
+				refreshTokenService);
+
+		assertThatThrownBy(() -> initializer.run(null)).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("ADMIN_EMAIL");
+		assertThat(jdbcTemplate.queryForObject("select count(*) from member", Long.class)).isZero();
 	}
 
 	@Test
