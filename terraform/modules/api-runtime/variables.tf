@@ -109,6 +109,12 @@ variable "cors_allowed_origins" {
   type = string
 }
 
+variable "cors_admin_origins" {
+  description = "관리자 화면 origin. 비우면 관리자 재발급을 브라우저에서 받지 않는다."
+  type        = string
+  default     = ""
+}
+
 variable "refresh_cookie_same_site" {
   type = string
 }

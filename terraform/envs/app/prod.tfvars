@@ -8,7 +8,8 @@ aws_region           = "ap-northeast-2"
 name                 = "eum-shopping"
 certificate_arn      = "arn:aws:acm:ap-northeast-2:123456789012:certificate/replace-me"
 api_domain           = "api.example.com"
-cors_allowed_origins = "https://shop.example.com"
+cors_allowed_origins = "https://shop.example.com,https://admin.example.com"
+cors_admin_origins   = "https://admin.example.com"
 image_tag            = "replace-with-immutable-git-sha"
 # 로그인 갱신이 동작하려면 웹 프론트가 API와 같은 등록 도메인을 써야 한다(shop.example.com + api.example.com).
 # *.vercel.app 프론트는 어떤 API 도메인과도 다른 사이트다. docs/deployment-proxy.md를 참고한다.

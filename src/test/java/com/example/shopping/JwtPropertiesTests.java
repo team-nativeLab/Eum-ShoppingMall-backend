@@ -30,7 +30,7 @@ class JwtPropertiesTests {
 	void 교차_사이트_Refresh_쿠키는_Secure와_SameSite_None을_설정한다() {
 		JwtProperties properties = new JwtProperties("x".repeat(32), 900, 1209600, true, "None");
 		String cookie = new AuthTokenResponder(properties)
-				.withTokens(new AuthTokens("access", 900, "refresh"))
+				.withTokens(AuthTokenResponder.Session.MEMBER, new AuthTokens("access", 900, "refresh", 1209600))
 				.getHeaders().getFirst(HttpHeaders.SET_COOKIE);
 		assertThat(cookie).contains("SameSite=None", "Secure", "HttpOnly");
 	}

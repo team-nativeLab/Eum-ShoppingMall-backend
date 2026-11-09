@@ -48,15 +48,47 @@ public class RefreshTokenService {
 		this.tokenHashes = secretHashes.forPurpose(SecretHashes.REFRESH_TOKEN);
 	}
 
-	/** @return 클라이언트에 내려줄 토큰 원문 */
+	/** 회원 세션. 쓸 때마다 새 토큰으로 바뀌고, 마지막 재발급부터 14일 동안 쓸 수 있다. @return 클라이언트에 내려줄 토큰 원문 */
 	public String issue(Long memberId, long tokenVersion) {
-		byte[] bytes = new byte[32];
-		secureRandom.nextBytes(bytes);
-		String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-
+		String token = newToken();
 		LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(jwtProperties.refreshTokenExpiry());
 		refreshTokenRepository.save(RefreshToken.create(memberId, hash(token), expiresAt, tokenVersion));
 		return token;
+	}
+
+	/** 회원 Refresh 토큰의 수명(초). 쿠키 Max-Age로 쓴다. */
+	public long memberTokenLifetimeSeconds() {
+		return jwtProperties.refreshTokenExpiry();
+	}
+
+	/**
+	 * 관리자 세션(#164). idleTimeout 동안 재발급하지 않으면 끝나고, 계속 쓰더라도 sessionExpiresAt에 끝난다.
+	 * 「개인정보의 안전성 확보조치 기준」 제6조의 접속 자동 차단이다.
+	 *
+	 * @param sessionExpiresAt 로그인할 때 정한 세션 종료 시각. 재발급할 때는 전 토큰의 값을 그대로 넘긴다.
+	 */
+	public IssuedToken issueAdmin(Long memberId, long tokenVersion, LocalDateTime sessionExpiresAt,
+			Duration idleTimeout) {
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime idleExpiresAt = now.plus(idleTimeout);
+		LocalDateTime expiresAt = idleExpiresAt.isBefore(sessionExpiresAt) ? idleExpiresAt : sessionExpiresAt;
+		if (!expiresAt.isAfter(now)) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED);
+		}
+		String token = newToken();
+		refreshTokenRepository.save(RefreshToken.create(memberId, hash(token), expiresAt, tokenVersion,
+				sessionExpiresAt));
+		return new IssuedToken(token, Math.max(1, Duration.between(now, expiresAt).toSeconds()));
+	}
+
+	private String newToken() {
+		byte[] bytes = new byte[32];
+		secureRandom.nextBytes(bytes);
+		return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+	}
+
+	/** @param expiresIn 토큰을 쓸 수 있는 남은 시간(초). 쿠키 Max-Age로 쓴다. */
+	public record IssuedToken(String token, long expiresIn) {
 	}
 
 	/**

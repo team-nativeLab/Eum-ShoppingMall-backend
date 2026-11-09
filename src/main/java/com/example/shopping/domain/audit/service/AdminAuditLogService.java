@@ -37,17 +37,18 @@ public class AdminAuditLogService {
 	}
 
 	/**
-	 * 관리자 로그인 성공·실패를 남긴다. 로그인(AuthService)은 트랜잭션 밖에서 돌므로 이 기록은 따로 커밋된다.
+	 * 관리자 로그인의 각 단계(비밀번호, OTP)와 회원 로그인으로 관리자 계정에 들어오려 한 시도(#163)를 남긴다.
+	 * 로그인(AuthService)은 트랜잭션 밖에서 돌므로 이 기록은 따로 커밋된다.
 	 *
-	 * @param memberId 로그인한 관리자. 실패면 null
+	 * @param memberId 그 단계를 통과한 관리자. 실패면 null
 	 * @param email    실패한 경우 입력한 이메일 (어느 계정을 노렸는지 확인용)
+	 * @param summary  어느 단계의 어떤 결과인지 (예: 관리자 로그인 성공, 관리자 OTP 확인 실패)
 	 */
 	@Transactional
-	public void recordAdminLogin(Long memberId, String ip, String email, int responseStatus) {
+	public void recordAdminLogin(Long memberId, String ip, String email, int responseStatus, String summary) {
 		boolean succeeded = responseStatus >= 200 && responseStatus < 300;
 		String details = succeeded ? null : AuditDetails.ofEmail(email);
-		repository.save(AdminAuditLog.create(memberId, ip, "LOGIN", "auth", null,
-				succeeded ? "관리자 로그인 성공" : "관리자 로그인 실패", details, responseStatus));
+		repository.save(AdminAuditLog.create(memberId, ip, "LOGIN", "auth", null, summary, details, responseStatus));
 	}
 
 	@Transactional(readOnly = true)

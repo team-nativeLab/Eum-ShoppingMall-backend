@@ -68,8 +68,22 @@ variable "api_domain" {
 }
 
 variable "cors_allowed_origins" {
-  description = "프론트엔드 HTTPS origin. 정확한 값을 쉼표로 구분해 적는다."
+  description = "프론트엔드 HTTPS origin(고객 사이트와 관리자 화면). 정확한 값을 쉼표로 구분해 적는다."
   type        = string
+}
+
+variable "cors_admin_origins" {
+  description = "cors_allowed_origins 중 관리자 화면 origin. 관리자 Refresh 쿠키(재발급·로그아웃)는 이 origin에서 온 요청만 받는다. 비우면 관리자는 Access 토큰이 끝날 때마다(15분) 다시 로그인해야 한다."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = alltrue([
+      for origin in compact([for value in split(",", var.cors_admin_origins) : trimspace(value)]) :
+      contains([for value in split(",", var.cors_allowed_origins) : trimspace(value)], origin)
+    ])
+    error_message = "cors_admin_origins의 주소는 cors_allowed_origins에도 넣어야 관리자 화면이 API를 부를 수 있습니다."
+  }
 }
 
 variable "refresh_cookie_same_site" {

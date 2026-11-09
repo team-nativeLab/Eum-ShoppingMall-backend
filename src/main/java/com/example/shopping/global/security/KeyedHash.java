@@ -24,7 +24,12 @@ public final class KeyedHash {
 
 	/** 서버 비밀 값에서 용도별 키를 뽑는다. 같은 비밀 값·용도면 언제나 같은 키가 나온다. */
 	public static KeyedHash derive(String secret, String purpose) {
-		return new KeyedHash(hmac(secret.getBytes(StandardCharsets.UTF_8), purpose));
+		return new KeyedHash(deriveKey(secret, purpose));
+	}
+
+	/** 용도별 키(32바이트). 암호화 키(SecretCipher)도 같은 방법으로 용도 이름만 달리 뽑는다. */
+	static byte[] deriveKey(String secret, String purpose) {
+		return hmac(secret.getBytes(StandardCharsets.UTF_8), purpose);
 	}
 
 	/** 값들을 ':'로 이어 해시한다. 결과는 64자 소문자 16진수다. 같은 값이면 언제나 같은 해시가 나와 다시 찾을 때 쓸 수 있다. */
