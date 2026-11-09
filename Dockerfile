@@ -1,7 +1,10 @@
-FROM eclipse-temurin:21-jdk AS build
+# Gradle wrapper는 빌드할 때마다 services.gradle.org에서 배포판을 받는다. 그 서버가 응답하지 않으면 이미지를 만들 수 없으므로,
+# 같은 버전의 Gradle이 든 공식 이미지(Eclipse Temurin JDK 21 기반)로 빌드한다.
+# gradle/wrapper/gradle-wrapper.properties의 버전을 바꾸면 이 태그도 함께 바꾼다. CI가 두 버전이 같은지 확인한다.
+FROM gradle:9.7.1-jdk21 AS build
 WORKDIR /workspace
 COPY . .
-RUN bash gradlew bootJar --no-daemon && \
+RUN gradle bootJar --no-daemon && \
     mkdir -p /out && \
     find build/libs -maxdepth 1 -name '*.jar' ! -name '*-plain.jar' -exec cp {} /out/app.jar \;
 # RDS 인증서를 검증할 신뢰 저장소(#133). RDS 인증서를 발급하는 AWS 전용 CA는 기본 JVM 신뢰 저장소에 없다.

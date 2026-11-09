@@ -111,6 +111,15 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
 
+      # 이미지는 Gradle 공식 이미지로 빌드한다(Dockerfile). wrapper와 버전이 다르면 로컬·CI와 다른 Gradle로 빌드되므로 막는다.
+      - name: Check that Dockerfile uses the wrapper's Gradle version
+        run: |
+          wrapper_version="$(sed -n 's/^distributionUrl=.*gradle-\(.*\)-bin\.zip$/\1/p' gradle/wrapper/gradle-wrapper.properties)"
+          if ! grep -q "^FROM gradle:${wrapper_version}-jdk21 AS build$" Dockerfile; then
+            echo "Dockerfile의 Gradle 이미지 버전을 wrapper 버전(${wrapper_version})과 맞춰 주세요."
+            exit 1
+          fi
+
       - name: Build container image
         run: docker build --tag eum-shopping-backend:ci .
 
