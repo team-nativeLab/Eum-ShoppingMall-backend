@@ -39,6 +39,9 @@ security:
     # 테스트는 같은 이메일로 로그인 실패를 여러 번 반복하므로 사실상 끈다. 잠금·로봇 확인은 LoginLockTests에서 따로 검증한다.
     captcha-after-failures: 100000
     max-failures: 100000
+  admin:
+    # 관리자 로그인 테스트가 많아 OTP는 끈다. OTP 흐름은 AdminMfaTests에서 켜고 검증한다.
+    mfa-required: false
   verification-lock:
     # 인증번호 실패 횟수는 테스트 사이에도 서버 메모리에 남으므로 사실상 끈다. 차단·로봇 확인은 VerificationLockTests에서 따로 검증한다.
     captcha-after-failures: 100000

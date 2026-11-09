@@ -138,6 +138,15 @@ security:
     captcha-after-failures: 3
     # 이만큼 틀리면 그때부터 1시간 동안 그 이메일로 인증번호를 받거나 확인할 수 없다.
     max-failures: 5
+  admin:
+    # 관리자 로그인에 OTP(TOTP) 2단계 인증을 요구한다(#164). 끄더라도 OTP를 등록한 관리자는 OTP를 확인한다. 운영에서는 끄지 않는다.
+    mfa-required: ${ADMIN_MFA_REQUIRED:true}
+    # OTP 앱에 보일 서비스 이름
+    mfa-issuer: ${ADMIN_MFA_ISSUER:Eum Shopping}
+    # 관리자가 이 시간 동안 재발급하지 않으면(쓰지 않으면) 다시 로그인해야 한다. 개인정보의 안전성 확보조치 기준 제6조의 접속 자동 차단
+    session-idle-timeout: ${ADMIN_SESSION_IDLE_TIMEOUT:30m}
+    # 로그인한 뒤 이 시간이 지나면 계속 쓰고 있어도 다시 로그인해야 한다.
+    session-max-lifetime: ${ADMIN_SESSION_MAX_LIFETIME:8h}
   audit:
     # 관리자 한 명이 10분 안에 개인정보 조회 API(ApiPolicy.AUDITED_READS)를 이만큼 부르면 담당자에게 알린다(#138).
     bulk-read-alert-threshold: ${ADMIN_BULK_READ_ALERT_THRESHOLD:100}

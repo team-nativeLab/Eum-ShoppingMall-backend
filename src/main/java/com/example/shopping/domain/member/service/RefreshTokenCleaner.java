@@ -9,7 +9,10 @@ import com.example.shopping.global.scheduling.ScheduledJobRunner;
 
 import lombok.RequiredArgsConstructor;
 
-/** 만료된 Refresh 토큰을 지운다. 하루에 한 번 크게 지우지 않고 1분마다 정해진 양씩 지운다. */
+/**
+ * 만료된 Refresh 토큰을 지운다. 하루에 한 번 크게 지우지 않고 1분마다 정해진 양씩 지운다.
+ * 관리자가 비밀번호만 넣고 OTP를 넣지 않아 남은 로그인 확인 토큰(5분)도 함께 지운다.
+ */
 @Component
 @RequiredArgsConstructor
 public class RefreshTokenCleaner {
@@ -19,10 +22,12 @@ public class RefreshTokenCleaner {
 	private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
 
 	private final RefreshTokenService refreshTokenService;
+	private final AdminMfaService adminMfaService;
 	private final ScheduledJobRunner jobRunner;
 
 	@Scheduled(fixedDelay = 60_000)
 	public void purgeExpiredRefreshTokens() {
-		jobRunner.run(JOB_NAME, LOCK_DURATION, (stats, owner) -> stats.processed(refreshTokenService.purgeExpired()));
+		jobRunner.run(JOB_NAME, LOCK_DURATION, (stats, owner) -> stats.processed(
+				refreshTokenService.purgeExpired() + adminMfaService.purgeExpiredChallenges()));
 	}
 }

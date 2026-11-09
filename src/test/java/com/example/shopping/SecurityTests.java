@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -141,6 +142,70 @@ class SecurityTests {
 
 		// 고객 사이트의 재발급 API는 관리자 토큰을 받지 않는다. 쿠키 이름을 바꿔 보내도 같다.
 		refresh(new Cookie(REFRESH_COOKIE, second.getValue())).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void 관리자_세션은_30분_동안_재발급하지_않으면_끝나고_계속_써도_로그인한_지_8시간이_지나면_끝난다() throws Exception {
+		insertMember(EMAIL, "ADMIN");
+
+		// 관리자 쿠키·토큰은 30분만 쓰고(회원은 14일), 세션은 로그인부터 8시간 뒤에 끝난다(#164).
+		Cookie first = adminLoginResponse(EMAIL).getCookie(ADMIN_REFRESH_COOKIE);
+		assertThat(first.getMaxAge()).isBetween(1790, 1800);
+		LocalDateTime expiresAt = jdbcTemplate.queryForObject("select expires_at from refresh_token",
+				LocalDateTime.class);
+		LocalDateTime sessionExpiresAt = jdbcTemplate.queryForObject("select session_expires_at from refresh_token",
+				LocalDateTime.class);
+		assertThat(Duration.between(LocalDateTime.now(), expiresAt))
+				.isBetween(Duration.ofMinutes(29), Duration.ofMinutes(30));
+		assertThat(Duration.between(LocalDateTime.now(), sessionExpiresAt))
+				.isBetween(Duration.ofHours(8).minusMinutes(1), Duration.ofHours(8));
+
+		// 30분 동안 재발급하지 않으면 끝난다.
+		jdbcTemplate.update("update refresh_token set expires_at = ?", LocalDateTime.now().minusSeconds(1));
+		entityManager.clear();
+		adminRefresh(first).andExpect(status().isUnauthorized());
+
+		// 재발급한 토큰도 세션이 끝나는 시각을 넘기지 못한다.
+		Cookie second = adminLoginResponse(EMAIL).getCookie(ADMIN_REFRESH_COOKIE);
+		jdbcTemplate.update("update refresh_token set session_expires_at = ? where used_at is null",
+				LocalDateTime.now().plusMinutes(5));
+		entityManager.clear();
+		Cookie third = adminRefresh(second).andExpect(status().isOk()).andReturn().getResponse()
+				.getCookie(ADMIN_REFRESH_COOKIE);
+		assertThat(third.getMaxAge()).isBetween(290, 300);
+
+		jdbcTemplate.update("update refresh_token set session_expires_at = ? where used_at is null",
+				LocalDateTime.now().minusSeconds(1));
+		entityManager.clear();
+		adminRefresh(third).andExpect(status().isUnauthorized());
+
+		// 세션 종료 시각이 없는 관리자 토큰(#164 전에 받은 것)은 재발급하지 않아 다시 로그인하게 한다.
+		Cookie beforeChange = adminLoginResponse(EMAIL).getCookie(ADMIN_REFRESH_COOKIE);
+		jdbcTemplate.update("update refresh_token set session_expires_at = null");
+		entityManager.clear();
+		adminRefresh(beforeChange).andExpect(status().isUnauthorized());
+
+		// 회원 세션은 그대로 14일이다.
+		insertMember("shopper@example.com", "USER");
+		assertThat(login("shopper@example.com", PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE)
+				.getMaxAge()).isEqualTo(1209600);
+	}
+
+	@Test
+	void OTP를_요구하지_않는_설정에서도_OTP를_등록한_관리자에게는_요구한다() throws Exception {
+		long adminId = insertMember(EMAIL, "ADMIN");
+		jdbcTemplate.update("""
+				insert into admin_mfa (member_id, secret_ciphertext, enabled_at, last_used_step, created_at, updated_at)
+				values (?, 'v1:test', now(), 0, now(), now())
+				""", adminId);
+
+		mockMvc.perform(post("/api/v1/admin/auth/login")
+						.contentType(MediaType.APPLICATION_JSON).content(credentials(EMAIL, PASSWORD)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.mfaRequired").value(true))
+				.andExpect(jsonPath("$.data.mfaSetupRequired").value(false))
+				.andExpect(jsonPath("$.data.accessToken").doesNotExist())
+				.andExpect(result -> assertThat(result.getResponse().getHeader(HttpHeaders.SET_COOKIE)).isNull());
 	}
 
 	@Test
@@ -510,6 +575,13 @@ class SecurityTests {
 
 	private ResultActions refresh(Cookie cookie) throws Exception {
 		return mockMvc.perform(post("/api/v1/auth/refresh").cookie(cookie));
+	}
+
+	private MockHttpServletResponse adminLoginResponse(String email) throws Exception {
+		return mockMvc.perform(post("/api/v1/admin/auth/login")
+						.contentType(MediaType.APPLICATION_JSON).content(credentials(email, PASSWORD)))
+				.andExpect(status().isOk())
+				.andReturn().getResponse();
 	}
 
 	private ResultActions adminRefresh(Cookie cookie) throws Exception {

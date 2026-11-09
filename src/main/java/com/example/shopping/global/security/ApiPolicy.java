@@ -19,12 +19,16 @@ public final class ApiPolicy {
 	public static final String ADMIN_LOGIN = "/api/v1/admin/auth/login";
 	public static final String ADMIN_REFRESH = "/api/v1/admin/auth/refresh";
 	public static final String ADMIN_LOGOUT = "/api/v1/admin/auth/logout";
+	public static final String ADMIN_MFA_SETUP = "/api/v1/admin/auth/mfa/setup";
+	public static final String ADMIN_MFA_VERIFY = "/api/v1/admin/auth/mfa/verify";
 
 	/**
-	 * 관리자 로그인·재발급·로그아웃. 관리자 세션은 회원 세션과 쿠키·경로를 나눠 고객 사이트에서 쓸 수 없게 한다(#163).
-	 * /admin 아래에 있지만 로그인 없이 부른다. 로그인은 AuthService가 성공·실패를 감사 로그에 따로 남긴다.
+	 * 관리자 로그인(비밀번호·OTP 두 단계, #164)·재발급·로그아웃. 관리자 세션은 회원 세션과 쿠키·경로를 나눠
+	 * 고객 사이트에서 쓸 수 없게 한다(#163). /admin 아래에 있지만 로그인 없이 부른다.
+	 * 로그인 단계별 성공·실패는 AuthService가 감사 로그에 따로 남긴다.
 	 */
-	public static final List<String> ADMIN_AUTH = List.of(ADMIN_LOGIN, ADMIN_REFRESH, ADMIN_LOGOUT);
+	public static final List<String> ADMIN_AUTH = List.of(ADMIN_LOGIN, ADMIN_MFA_SETUP, ADMIN_MFA_VERIFY,
+			ADMIN_REFRESH, ADMIN_LOGOUT);
 
 	/**
 	 * 로그인 없이 부르는 인증 API. 이 경로에서는 Access 토큰을 읽지 않아, 프론트가 만료된 토큰을 붙인 채
@@ -42,6 +46,8 @@ public final class ApiPolicy {
 			"/api/v1/auth/password-reset",
 			"/api/v1/auth/password-reset/confirm",
 			ADMIN_LOGIN,
+			ADMIN_MFA_SETUP,
+			ADMIN_MFA_VERIFY,
 			ADMIN_REFRESH,
 			ADMIN_LOGOUT);
 
@@ -78,6 +84,8 @@ public final class ApiPolicy {
 	 */
 	public static final List<String> AUDIT_EXCLUDED = List.of(
 			ADMIN_LOGIN,
+			ADMIN_MFA_SETUP,
+			ADMIN_MFA_VERIFY,
 			ADMIN_REFRESH,
 			ADMIN_LOGOUT,
 			"/api/v1/uploads/presigned-url");
@@ -125,6 +133,9 @@ public final class ApiPolicy {
 			// 회원·관리자 로그인은 한 묶음으로 세어 경로를 바꿔 한도를 피하지 못하게 한다.
 			new RateLimit(HttpMethod.POST, "/api/v1/auth/login", "POST /api/v1/login", Limit.DEFAULT),
 			new RateLimit(HttpMethod.POST, ADMIN_LOGIN, "POST /api/v1/login", Limit.DEFAULT),
+			// OTP 코드 대입도 로그인과 같은 묶음으로 센다.
+			new RateLimit(HttpMethod.POST, ADMIN_MFA_VERIFY, "POST /api/v1/login", Limit.DEFAULT),
+			post(ADMIN_MFA_SETUP),
 			post("/api/v1/auth/signup"),
 			// 회원·관리자 재발급도 한 묶음으로 센다.
 			post("/api/v1/auth/refresh"),

@@ -23,6 +23,7 @@ import com.example.shopping.domain.member.entity.RefreshToken;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
+import com.example.shopping.global.security.AdminSecurityProperties;
 import com.example.shopping.global.security.JwtTokenProvider;
 import com.example.shopping.global.validation.ContactFormats;
 
@@ -35,6 +36,14 @@ public class AuthService {
 
 	private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
+	// 관리자 로그인 감사 로그의 요약
+	private static final String ADMIN_LOGIN_SUCCEEDED = "관리자 로그인 성공";
+	private static final String ADMIN_LOGIN_ENROLLED = "관리자 OTP 등록·로그인 성공";
+	private static final String ADMIN_LOGIN_FAILED = "관리자 로그인 실패";
+	private static final String ADMIN_PASSWORD_VERIFIED = "관리자 비밀번호 확인(OTP 대기)";
+	private static final String ADMIN_OTP_FAILED = "관리자 OTP 확인 실패";
+	private static final String ADMIN_MEMBER_LOGIN_REJECTED = "관리자 계정 회원 로그인 시도(거절)";
+
 	private final MemberRepository memberRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final EmailVerificationService emailVerificationService;
@@ -46,6 +55,8 @@ public class AuthService {
 	private final AdminAuditLogService auditLogService;
 	private final LoginAttemptLimiter loginAttemptLimiter;
 	private final ConsentService consentService;
+	private final AdminMfaService adminMfaService;
+	private final AdminSecurityProperties adminSecurity;
 
 	// 없는 이메일로 로그인해도 해시 비교를 한 번 수행해, 응답 시간으로 가입 여부를 추측하지 못하게 한다.
 	private final String dummyPasswordHash;
@@ -56,7 +67,8 @@ public class AuthService {
 			MemberRepository memberRepository, PasswordEncoder passwordEncoder,
 			JwtTokenProvider jwtTokenProvider, RefreshTokenService refreshTokenService,
 			AccessTokenService accessTokenService, AdminAuditLogService auditLogService,
-			LoginAttemptLimiter loginAttemptLimiter, ConsentService consentService) {
+			LoginAttemptLimiter loginAttemptLimiter, ConsentService consentService, AdminMfaService adminMfaService,
+			AdminSecurityProperties adminSecurity) {
 		this.memberRepository = memberRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.emailVerificationService = emailVerificationService;
@@ -68,6 +80,8 @@ public class AuthService {
 		this.auditLogService = auditLogService;
 		this.loginAttemptLimiter = loginAttemptLimiter;
 		this.consentService = consentService;
+		this.adminMfaService = adminMfaService;
+		this.adminSecurity = adminSecurity;
 		this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-timing");
 	}
 
@@ -119,19 +133,40 @@ public class AuthService {
 	}
 
 	/**
-	 * 관리자 로그인. 일반 회원 계정이면 계정이 없는 것과 똑같이 응답한다.
-	 * 성공·실패를 감사 로그에 남긴다. 기록에 실패해도 로그인 결과는 바꾸지 않는다.
+	 * 관리자 로그인 1단계(비밀번호). 일반 회원 계정이면 계정이 없는 것과 똑같이 응답한다.
+	 * OTP를 요구하면(#164) 토큰 대신 OTP 확인용 1회용 토큰을 주고, 로그인은 verifyAdminMfa에서 끝난다.
+	 * 각 단계의 성공·실패를 감사 로그에 남긴다. 기록에 실패해도 로그인 결과는 바꾸지 않는다.
 	 */
-	public AuthTokens adminLogin(LoginRequest request, String clientIp) {
-		Member member = authenticate(request, clientIp, true);
-		AuthTokens tokens = issueTokens(member);
-		recordAdminLogin(member.getId(), clientIp, null, 200, false);
+	public AdminLoginResult adminLogin(LoginRequest request, String clientIp) {
+		Member admin = authenticate(request, clientIp, true);
+		if (adminMfaService.isRequiredFor(admin)) {
+			AdminMfaService.Challenge challenge = adminMfaService.start(admin);
+			recordAdminLogin(admin.getId(), clientIp, null, 200, ADMIN_PASSWORD_VERIFIED);
+			return new AdminLoginResult(null, challenge);
+		}
+		AuthTokens tokens = issueAdminTokens(admin, newAdminSessionExpiry());
+		recordAdminLogin(admin.getId(), clientIp, null, 200, ADMIN_LOGIN_SUCCEEDED);
+		return new AdminLoginResult(tokens, null);
+	}
+
+	/** 관리자 로그인 2단계(OTP). 코드를 확인하고 토큰을 준다. 처음 넣은 코드면 OTP 등록도 이때 끝난다. */
+	public AuthTokens verifyAdminMfa(String mfaToken, String code, String clientIp) {
+		Member admin = adminMfaService.challengedAdmin(mfaToken);
+		boolean enrolled;
+		try {
+			enrolled = adminMfaService.verify(mfaToken, code);
+		} catch (BusinessException e) {
+			recordAdminLogin(null, clientIp, admin.getEmail(), e.getErrorCode().getStatus().value(), ADMIN_OTP_FAILED);
+			throw e;
+		}
+		AuthTokens tokens = issueAdminTokens(admin, newAdminSessionExpiry());
+		recordAdminLogin(admin.getId(), clientIp, null, 200, enrolled ? ADMIN_LOGIN_ENROLLED : ADMIN_LOGIN_SUCCEEDED);
 		return tokens;
 	}
 
-	private void recordAdminLogin(Long memberId, String clientIp, String email, int status, boolean viaMemberLogin) {
+	private void recordAdminLogin(Long memberId, String clientIp, String email, int status, String summary) {
 		try {
-			auditLogService.recordAdminLogin(memberId, clientIp, email, status, viaMemberLogin);
+			auditLogService.recordAdminLogin(memberId, clientIp, email, status, summary);
 		} catch (RuntimeException e) {
 			log.error("관리자 로그인 감사 로그 저장 실패: member={}, ip={}, status={}", memberId, clientIp, status, e);
 		}
@@ -160,7 +195,14 @@ public class AuthService {
 		if (consumed.getTokenVersion() != member.getAccessTokenVersion()) {
 			throw new BusinessException(ErrorCode.UNAUTHORIZED);
 		}
-		return issueTokens(member);
+		if (!adminSession) {
+			return issueTokens(member);
+		}
+		// 관리자 세션은 로그인할 때 정한 종료 시각을 넘기지 못한다(#164). 이 값이 없는 토큰(#164 전에 받은 것)은 받지 않는다.
+		if (consumed.getSessionExpiresAt() == null) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED);
+		}
+		return issueAdminTokens(member, consumed.getSessionExpiresAt());
 	}
 
 	/** Refresh 토큰과 요청에 포함된 유효한 Access 토큰을 폐기한다. */
@@ -198,17 +240,43 @@ public class AuthService {
 			return member;
 		} catch (BusinessException e) {
 			if (adminApi || adminAccount) {
-				recordAdminLogin(null, clientIp, email, e.getErrorCode().getStatus().value(), !adminApi);
+				recordAdminLogin(null, clientIp, email, e.getErrorCode().getStatus().value(),
+						adminApi ? ADMIN_LOGIN_FAILED : ADMIN_MEMBER_LOGIN_REJECTED);
 			}
 			throw e;
 		}
 	}
 
 	private AuthTokens issueTokens(Member member) {
-		String accessToken = jwtTokenProvider.createAccessToken(member.getId(), member.getRole().name(),
-				member.getAccessTokenVersion());
 		String refreshToken = refreshTokenService.issue(member.getId(), member.getAccessTokenVersion());
-		return new AuthTokens(accessToken, jwtTokenProvider.accessTokenExpiry(), refreshToken);
+		return new AuthTokens(accessToken(member), jwtTokenProvider.accessTokenExpiry(), refreshToken,
+				refreshTokenService.memberTokenLifetimeSeconds());
+	}
+
+	/** 관리자 세션: 30분 동안 재발급하지 않거나 로그인한 지 8시간이 지나면 끝난다(security.admin, #164). */
+	private AuthTokens issueAdminTokens(Member admin, LocalDateTime sessionExpiresAt) {
+		RefreshTokenService.IssuedToken refreshToken = refreshTokenService.issueAdmin(admin.getId(),
+				admin.getAccessTokenVersion(), sessionExpiresAt, adminSecurity.sessionIdleTimeout());
+		return new AuthTokens(accessToken(admin), jwtTokenProvider.accessTokenExpiry(), refreshToken.token(),
+				refreshToken.expiresIn());
+	}
+
+	private String accessToken(Member member) {
+		return jwtTokenProvider.createAccessToken(member.getId(), member.getRole().name(),
+				member.getAccessTokenVersion());
+	}
+
+	private LocalDateTime newAdminSessionExpiry() {
+		return LocalDateTime.now().plus(adminSecurity.sessionMaxLifetime());
+	}
+
+	/**
+	 * 관리자 로그인 1단계 결과. 둘 중 하나만 있다.
+	 *
+	 * @param tokens       OTP를 요구하지 않아 바로 준 토큰
+	 * @param mfaChallenge OTP를 요구할 때 OTP 확인용 1회용 토큰
+	 */
+	public record AdminLoginResult(AuthTokens tokens, AdminMfaService.Challenge mfaChallenge) {
 	}
 
 }
