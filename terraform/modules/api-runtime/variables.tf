@@ -89,6 +89,22 @@ variable "database_app_secret_arn" {
   type = string
 }
 
+variable "database_migration_secret_arn" {
+  description = "마이그레이션 전용 DB 계정(DDL 권한) 시크릿 ARN. migrate 작업만 받는다(#131). 서비스를 켜면 필수다."
+  type        = string
+  default     = null
+  validation {
+    condition     = !var.enable_service || var.database_migration_secret_arn != null
+    error_message = "enable_service를 켜려면 database_migration_secret_arn이 필요합니다."
+  }
+}
+
+variable "database_master_secret_arn" {
+  description = "RDS 마스터 계정 시크릿 ARN. 앱·마이그레이션 시크릿에 잘못 넣지 않았는지 확인하는 데만 쓴다."
+  type        = string
+  default     = null
+}
+
 variable "cors_allowed_origins" {
   type = string
 }

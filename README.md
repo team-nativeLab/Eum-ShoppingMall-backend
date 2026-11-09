@@ -9,6 +9,8 @@ MySQL 스키마는 Flyway로 관리합니다. 빈 데이터베이스는 Hibernat
 
 `test` 프로파일은 마이그레이션 스크립트가 MySQL 전용이므로 H2 스키마 자동 생성을 쓰고 Flyway를 끕니다. CI는 빈 MySQL 8.4 데이터베이스에서 `ddl-auto: validate`로 애플리케이션을 띄웁니다. 마이그레이션이 실패하거나 엔티티와 맞지 않으면 필수 검사인 `Validate database migrations`에서 막힙니다.
 
+운영(ECS)에서는 API 서버가 뜰 때 마이그레이션하지 않습니다(#131). 마이그레이션 전용 계정을 받는 일회성 `migrate` 작업(`SPRING_PROFILES_ACTIVE=prod,migrate`)이 Flyway를 적용하고 Hibernate 검증까지 마친 뒤 종료 코드 0으로 끝나고(`MigrationOnlyRunner`), API는 `SPRING_FLYWAY_ENABLED=false`와 DML 전용 앱 계정으로 뜹니다. CI의 `Validate database migrations`도 이 `migrate` 프로파일로 돌려 종료 코드 0을 확인합니다. 절차는 `docs/deployment-aws.md`의 "DB 계정과 마이그레이션"을 따릅니다.
+
 `local` 프로파일도 Flyway와 Hibernate 검증을 씁니다. 이전에 Hibernate `update`로 만든 로컬 데이터베이스를 보존하려고, 이미 있는 로컬 스키마를 버전 1로 베이스라인 처리합니다. 이 베이스라인은 로컬에서만 씁니다. 운영에서는 자동 베이스라인을 켜지 않습니다. 기존 운영 데이터베이스에 Flyway를 연결하기 전에는 스키마를 확인하고 직접 베이스라인을 잡습니다. 첫 마이그레이션은 기본 카테고리나 관리자 계정을 만들지 않으며, 이 데이터는 계속 애플리케이션 부트스트랩이 맡습니다.
 
 ## 관리자 주문 취소 API
