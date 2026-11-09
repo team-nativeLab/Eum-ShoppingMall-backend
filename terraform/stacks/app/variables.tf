@@ -136,6 +136,10 @@ variable "enable_ecs_service" {
     condition     = !var.enable_ecs_service || var.upload_storage == "s3" || var.enable_efs
     error_message = "upload_storage가 local이면 enable_ecs_service를 켤 때 enable_efs도 켜야 합니다."
   }
+  validation {
+    condition     = !var.enable_ecs_service || var.database_migration_secret_arn != null
+    error_message = "enable_ecs_service를 켜려면 마이그레이션 전용 DB 계정 시크릿(database_migration_secret_arn)이 필요합니다."
+  }
 }
 
 # ---- 비용 경보 ----
@@ -222,6 +226,16 @@ variable "application_secret_arns" {
 variable "database_app_secret_arn" {
   description = "앱 전용 최소 권한 DB 계정의 username·password 키를 담은 Secrets Manager JSON 시크릿 ARN"
   type        = string
+}
+
+variable "database_migration_secret_arn" {
+  description = "마이그레이션 전용 DB 계정(DDL 권한)의 username·password 키를 담은 Secrets Manager JSON 시크릿 ARN. migrate 작업만 받는다(#131)."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.database_migration_secret_arn == null || var.database_migration_secret_arn != var.database_app_secret_arn
+    error_message = "마이그레이션 계정과 앱 계정은 다른 시크릿이어야 합니다. 앱 계정에는 DDL 권한을 주지 않습니다."
+  }
 }
 
 # ---- 데이터베이스 ----

@@ -57,16 +57,19 @@ module "api_runtime" {
   # ALB가 있는 공용 서브넷만 프록시로 믿는다.
   trusted_proxy_cidrs = var.public_subnet_cidrs
 
-  certificate_arn          = var.certificate_arn
-  image_tag                = var.image_tag
-  desired_count            = var.desired_count
-  app_environment          = var.app_environment
-  application_secret_arns  = var.application_secret_arns
-  database_app_secret_arn  = var.database_app_secret_arn
-  cors_allowed_origins     = var.cors_allowed_origins
-  cors_admin_origins       = var.cors_admin_origins
-  refresh_cookie_same_site = var.refresh_cookie_same_site
-  upload_storage           = var.upload_storage
+  certificate_arn         = var.certificate_arn
+  image_tag               = var.image_tag
+  desired_count           = var.desired_count
+  app_environment         = var.app_environment
+  application_secret_arns = var.application_secret_arns
+  database_app_secret_arn = var.database_app_secret_arn
+  # 마이그레이션 전용 계정은 migrate 작업만 받는다(#131). 마스터 시크릿은 잘못 넣지 않았는지 확인하는 데만 쓴다.
+  database_migration_secret_arn = var.database_migration_secret_arn
+  database_master_secret_arn    = module.database.db_master_secret_arn
+  cors_allowed_origins          = var.cors_allowed_origins
+  cors_admin_origins            = var.cors_admin_origins
+  refresh_cookie_same_site      = var.refresh_cookie_same_site
+  upload_storage                = var.upload_storage
 
   db_name              = var.db_name
   db_address           = module.database.db_address
@@ -87,4 +90,11 @@ module "observability" {
   limit_usd        = var.budget_limit_usd
   alert_emails     = var.budget_alert_emails
   alert_thresholds = var.budget_alert_thresholds
+
+  # RDS·Redis 이상 징후 경보(#145). 예산 알림과 같은 담당자에게 보낸다.
+  data_layer_enabled      = var.enable_data_layer
+  db_instance_identifier  = module.database.db_instance_identifier
+  db_master_username      = var.db_username
+  db_audit_log_group_name = module.database.db_audit_log_group_name
+  redis_cluster_id        = module.database.redis_cluster_id
 }
