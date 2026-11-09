@@ -46,6 +46,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import com.example.shopping.global.redis.RedisCircuitBreaker;
 import com.example.shopping.global.security.AccessTokenValidator;
+import com.example.shopping.global.security.AdminSecurityProperties;
 import com.example.shopping.global.security.ApiPolicy;
 import com.example.shopping.global.security.JwtProperties;
 import com.example.shopping.global.security.JwtTokenProvider;
@@ -57,7 +58,7 @@ import com.example.shopping.global.security.SecurityErrorHandler;
 
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({ JwtProperties.class, AdminSecurityProperties.class })
 public class SecurityConfig {
 
 	private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
@@ -66,7 +67,7 @@ public class SecurityConfig {
 	SecurityFilterChain filterChain(HttpSecurity http, SecurityErrorHandler errorHandler,
 			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
 			@Value("${cors.allowed-origins}") List<String> allowedOrigins,
-			@Value("${cors.admin-origins:}") List<String> adminOrigins,
+			@Value("${cors.admin-origins:}") List<String> adminOrigins, AdminSecurityProperties adminSecurity,
 			StringRedisTemplate redisTemplate, RedisCircuitBreaker redisCircuitBreaker, SecretHashes secretHashes,
 			@Value("${security.rate-limit.requests-per-minute}") int requestsPerMinute,
 			@Value("${security.rate-limit.public-product-requests-per-minute:300}") int publicProductRequestsPerMinute,
@@ -104,6 +105,9 @@ public class SecurityConfig {
 				.addFilterBefore(new RefreshCookieOriginFilter(allowedOrigins, adminOrigins, exceptionResolver),
 						BearerTokenAuthenticationFilter.class);
 		warnIfAdminOriginsMisconfigured(allowedOrigins, adminOrigins);
+		if (!adminSecurity.mfaRequired()) {
+			log.warn("ADMIN_MFA_REQUIRED=false: OTP를 등록하지 않은 관리자는 비밀번호만으로 로그인합니다. 운영에서는 켜 두어야 합니다.");
+		}
 		return http.build();
 	}
 

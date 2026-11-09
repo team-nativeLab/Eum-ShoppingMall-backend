@@ -43,11 +43,15 @@ public class AuthTokenResponder {
 	}
 
 	public ResponseEntity<ApiResponse<LoginResponse>> withTokens(Session session, AuthTokens tokens) {
-		ResponseCookie cookie = cookie(session, tokens.refreshToken(),
-				Duration.ofSeconds(jwtProperties.refreshTokenExpiry()));
+		return withTokens(session, tokens, new LoginResponse(tokens.accessToken(), tokens.expiresIn()));
+	}
+
+	/** 응답 본문을 따로 정할 때. 쿠키 Max-Age는 Refresh 토큰을 쓸 수 있는 남은 시간이다. */
+	public <T> ResponseEntity<ApiResponse<T>> withTokens(Session session, AuthTokens tokens, T body) {
+		ResponseCookie cookie = cookie(session, tokens.refreshToken(), Duration.ofSeconds(tokens.refreshTokenExpiresIn()));
 		return ResponseEntity.ok()
 				.header(HttpHeaders.SET_COOKIE, cookie.toString())
-				.body(ApiResponse.ok(new LoginResponse(tokens.accessToken(), tokens.expiresIn())));
+				.body(ApiResponse.ok(body));
 	}
 
 	public ResponseEntity<ApiResponse<Void>> withoutTokens(Session session) {
