@@ -51,6 +51,7 @@ resource "aws_ecs_task_definition" "api" {
       # ALB가 있는 공용 서브넷만 프록시로 믿는다.
       { name = "TRUSTED_PROXY_CIDRS", value = join(",", var.trusted_proxy_cidrs) },
       { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
+      { name = "CORS_ADMIN_ORIGINS", value = var.cors_admin_origins },
       { name = "REFRESH_COOKIE_SAME_SITE", value = var.refresh_cookie_same_site },
       { name = "UPLOAD_DIR", value = local.uploads_mount_path },
       { name = "UPLOAD_STORAGE", value = var.upload_storage },

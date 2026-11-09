@@ -17,35 +17,51 @@ import lombok.RequiredArgsConstructor;
 /**
  * 토큰을 HTTP 응답으로 옮긴다. Refresh 토큰은 스크립트가 읽을 수 없는 HttpOnly 쿠키에 담고,
  * 다른 사이트에서 보낸 요청에는 실리지 않도록 SameSite=Strict, 재발급·로그아웃 경로로만 가도록 Path를 제한한다.
+ * 관리자 세션은 쿠키 이름과 경로를 따로 써서 고객 사이트의 재발급 요청에 실리지 않는다(#163).
  */
 @Component
 @RequiredArgsConstructor
 public class AuthTokenResponder {
 
 	public static final String REFRESH_COOKIE = "refresh_token";
-	private static final String COOKIE_PATH = "/api/v1/auth";
+	public static final String ADMIN_REFRESH_COOKIE = "admin_refresh_token";
 
 	private final JwtProperties jwtProperties;
 
-	public ResponseEntity<ApiResponse<LoginResponse>> withTokens(AuthTokens tokens) {
-		ResponseCookie cookie = cookie(tokens.refreshToken(), Duration.ofSeconds(jwtProperties.refreshTokenExpiry()));
+	/** 쿠키 이름과, 쿠키를 보낼 재발급·로그아웃 API의 경로 */
+	public enum Session {
+		MEMBER(REFRESH_COOKIE, "/api/v1/auth"),
+		ADMIN(ADMIN_REFRESH_COOKIE, "/api/v1/admin/auth");
+
+		private final String cookieName;
+		private final String cookiePath;
+
+		Session(String cookieName, String cookiePath) {
+			this.cookieName = cookieName;
+			this.cookiePath = cookiePath;
+		}
+	}
+
+	public ResponseEntity<ApiResponse<LoginResponse>> withTokens(Session session, AuthTokens tokens) {
+		ResponseCookie cookie = cookie(session, tokens.refreshToken(),
+				Duration.ofSeconds(jwtProperties.refreshTokenExpiry()));
 		return ResponseEntity.ok()
 				.header(HttpHeaders.SET_COOKIE, cookie.toString())
 				.body(ApiResponse.ok(new LoginResponse(tokens.accessToken(), tokens.expiresIn())));
 	}
 
-	public ResponseEntity<ApiResponse<Void>> withoutTokens() {
+	public ResponseEntity<ApiResponse<Void>> withoutTokens(Session session) {
 		return ResponseEntity.ok()
-				.header(HttpHeaders.SET_COOKIE, cookie("", Duration.ZERO).toString())
+				.header(HttpHeaders.SET_COOKIE, cookie(session, "", Duration.ZERO).toString())
 				.body(ApiResponse.ok(null));
 	}
 
-	private ResponseCookie cookie(String value, Duration maxAge) {
-		return ResponseCookie.from(REFRESH_COOKIE, value)
+	private ResponseCookie cookie(Session session, String value, Duration maxAge) {
+		return ResponseCookie.from(session.cookieName, value)
 				.httpOnly(true)
 				.secure(jwtProperties.refreshCookieSecure())
 				.sameSite(jwtProperties.refreshCookieSameSite())
-				.path(COOKIE_PATH)
+				.path(session.cookiePath)
 				.maxAge(maxAge)
 				.build();
 	}

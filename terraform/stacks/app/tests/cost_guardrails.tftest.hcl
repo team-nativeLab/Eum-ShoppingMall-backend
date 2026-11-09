@@ -65,6 +65,25 @@ run "local_storage_requires_efs" {
   expect_failures = [var.enable_ecs_service]
 }
 
+run "admin_origins_must_be_allowed_origins" {
+  command = plan
+
+  variables {
+    cors_admin_origins = "https://admin.eum-shopping.test"
+  }
+
+  expect_failures = [var.cors_admin_origins]
+}
+
+run "admin_origins_accepts_listed_origin" {
+  command = plan
+
+  variables {
+    cors_allowed_origins = "https://shop.eum-shopping.test, https://admin.eum-shopping.test"
+    cors_admin_origins   = "https://admin.eum-shopping.test"
+  }
+}
+
 run "budget_rejects_example_values" {
   command = plan
 

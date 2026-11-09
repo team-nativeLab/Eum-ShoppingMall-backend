@@ -33,7 +33,7 @@ class ApiPolicyTests {
 	 * 로그아웃은 쿠키의 Refresh 토큰을 폐기할 뿐이고, PG 웹훅은 PG 서버가 보내므로 IP별로 막으면 정상 알림까지 막힌다.
 	 */
 	private static final List<String> UNLIMITED_PUBLIC_WRITES = List.of("/api/v1/auth/logout",
-			"/api/v1/payments/webhook");
+			ApiPolicy.ADMIN_LOGOUT, "/api/v1/payments/webhook");
 
 	@Autowired
 	@Qualifier("requestMappingHandlerMapping")
@@ -42,7 +42,8 @@ class ApiPolicyTests {
 	@Test
 	void 관리자_기능은_관리자만_부르고_변경_요청은_감사_로그에_남긴다() {
 		List<String> violations = endpoints().stream()
-				.filter(e -> !e.pattern().equals(ApiPolicy.ADMIN_LOGIN))
+				// 관리자 로그인·재발급·로그아웃은 로그인 없이 부른다.
+				.filter(e -> !ApiPolicy.ADMIN_AUTH.contains(e.pattern()))
 				.filter(e -> {
 					boolean adminController = e.controller().startsWith("Admin");
 					boolean adminPath = e.pattern().startsWith("/api/v1/admin/");

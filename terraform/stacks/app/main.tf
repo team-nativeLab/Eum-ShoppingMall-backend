@@ -64,6 +64,7 @@ module "api_runtime" {
   application_secret_arns  = var.application_secret_arns
   database_app_secret_arn  = var.database_app_secret_arn
   cors_allowed_origins     = var.cors_allowed_origins
+  cors_admin_origins       = var.cors_admin_origins
   refresh_cookie_same_site = var.refresh_cookie_same_site
   upload_storage           = var.upload_storage
 

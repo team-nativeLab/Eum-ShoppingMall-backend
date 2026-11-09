@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.shopping.domain.member.controller.AuthTokenResponder.Session;
 import com.example.shopping.domain.member.dto.request.EmailVerificationConfirmRequest;
 import com.example.shopping.domain.member.dto.request.EmailVerificationSendRequest;
 import com.example.shopping.domain.member.dto.request.LoginRequest;
@@ -80,18 +81,21 @@ public class AuthController {
 		return ApiResponse.ok(null);
 	}
 
-	/** WEB-018 로그인. Access 토큰은 응답 본문으로, Refresh 토큰은 HttpOnly 쿠키로 내려준다. */
+	/**
+	 * WEB-018 로그인. Access 토큰은 응답 본문으로, Refresh 토큰은 HttpOnly 쿠키로 내려준다.
+	 * 관리자 계정은 비밀번호가 맞아도 실패로 응답한다. 관리자는 관리자 로그인(ADM-001)만 쓴다(#163).
+	 */
 	@PostMapping("/login")
 	public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request,
 			HttpServletRequest httpRequest) {
-		return responder.withTokens(authService.login(request, httpRequest.getRemoteAddr()));
+		return responder.withTokens(Session.MEMBER, authService.login(request, httpRequest.getRemoteAddr()));
 	}
 
-	/** Refresh 쿠키로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. */
+	/** Refresh 쿠키로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. 관리자 토큰은 발급하지 않는다. */
 	@PostMapping("/refresh")
 	public ResponseEntity<ApiResponse<LoginResponse>> refresh(
 			@CookieValue(name = AuthTokenResponder.REFRESH_COOKIE, required = false) String refreshToken) {
-		return responder.withTokens(authService.refresh(refreshToken));
+		return responder.withTokens(Session.MEMBER, authService.refresh(refreshToken));
 	}
 
 	/** Authorization 헤더의 Access 토큰과 Refresh 쿠키를 폐기한다. */
@@ -100,6 +104,6 @@ public class AuthController {
 			@CookieValue(name = AuthTokenResponder.REFRESH_COOKIE, required = false) String refreshToken,
 			@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader) {
 		authService.logout(refreshToken, authorizationHeader);
-		return responder.withoutTokens();
+		return responder.withoutTokens(Session.MEMBER);
 	}
 }

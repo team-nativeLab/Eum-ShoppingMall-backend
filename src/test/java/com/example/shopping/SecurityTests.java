@@ -56,6 +56,10 @@ class SecurityTests {
 	private static final String EMAIL = "member@example.com";
 	private static final String PASSWORD = "test-pass-1234";
 	private static final String REFRESH_COOKIE = "refresh_token";
+	private static final String ADMIN_REFRESH_COOKIE = "admin_refresh_token";
+	/** application-test.yaml의 cors.admin-origins. 고객 사이트는 http://localhost:3000 */
+	private static final String ADMIN_ORIGIN = "http://localhost:5173";
+	private static final String WEB_ORIGIN = "http://localhost:3000";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -113,6 +117,50 @@ class SecurityTests {
 	}
 
 	// ───────── Refresh 토큰 ─────────
+
+	@Test
+	void 관리자는_관리자_전용_쿠키로_재발급받고_회원_재발급으로는_관리자_토큰을_받을_수_없다() throws Exception {
+		insertMember(EMAIL, "ADMIN");
+
+		MockHttpServletResponse loginResponse = mockMvc.perform(post("/api/v1/admin/auth/login")
+						.contentType(MediaType.APPLICATION_JSON).content(credentials(EMAIL, PASSWORD)))
+				.andExpect(status().isOk())
+				.andReturn().getResponse();
+		assertThat(loginResponse.getCookie(REFRESH_COOKIE)).isNull();
+		Cookie first = loginResponse.getCookie(ADMIN_REFRESH_COOKIE);
+		assertThat(first).isNotNull();
+		assertThat(loginResponse.getHeader(HttpHeaders.SET_COOKIE))
+				.contains("HttpOnly", "SameSite=Strict", "Path=/api/v1/admin/auth");
+
+		MockHttpServletResponse refreshed = adminRefresh(first).andExpect(status().isOk()).andReturn().getResponse();
+		Cookie second = refreshed.getCookie(ADMIN_REFRESH_COOKIE);
+		assertThat(second.getValue()).isNotEqualTo(first.getValue());
+		String accessToken = JsonPath.read(refreshed.getContentAsString(), "$.data.accessToken");
+		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+				.andExpect(status().isOk());
+
+		// 고객 사이트의 재발급 API는 관리자 토큰을 받지 않는다. 쿠키 이름을 바꿔 보내도 같다.
+		refresh(new Cookie(REFRESH_COOKIE, second.getValue())).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void 관리자_재발급은_회원_토큰을_받지_않고_관리자_로그아웃은_관리자_쿠키를_지운다() throws Exception {
+		insertMember(EMAIL, "USER");
+		Cookie memberCookie = login(EMAIL, PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE);
+		adminRefresh(new Cookie(ADMIN_REFRESH_COOKIE, memberCookie.getValue())).andExpect(status().isUnauthorized());
+
+		insertMember("admin@example.com", "ADMIN");
+		Cookie adminCookie = mockMvc.perform(post("/api/v1/admin/auth/login")
+						.contentType(MediaType.APPLICATION_JSON).content(credentials("admin@example.com", PASSWORD)))
+				.andReturn().getResponse().getCookie(ADMIN_REFRESH_COOKIE);
+		MockHttpServletResponse logout = mockMvc.perform(post("/api/v1/admin/auth/logout")
+						.header("Origin", ADMIN_ORIGIN).cookie(adminCookie))
+				.andExpect(status().isOk())
+				.andReturn().getResponse();
+		assertThat(logout.getHeader(HttpHeaders.SET_COOKIE))
+				.contains(ADMIN_REFRESH_COOKIE + "=", "Max-Age=0", "Path=/api/v1/admin/auth");
+		adminRefresh(adminCookie).andExpect(status().isUnauthorized());
+	}
 
 	@Test
 	void 로그인하면_스크립트가_읽을_수_없는_쿠키로_Refresh_토큰을_받고_재발급하면_토큰이_교체된다() throws Exception {
@@ -367,6 +415,17 @@ class SecurityTests {
 	}
 
 	@Test
+	void 관리자_재발급과_로그아웃은_고객_사이트에서_온_요청을_거부한다() throws Exception {
+		// 고객 사이트도 CORS는 허용하지만 관리자 쿠키는 관리자 화면 주소에서 온 요청만 받는다(#163).
+		mockMvc.perform(post("/api/v1/admin/auth/refresh").header("Origin", WEB_ORIGIN))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(post("/api/v1/admin/auth/logout").header("Origin", WEB_ORIGIN))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(post("/api/v1/admin/auth/refresh").header("Origin", ADMIN_ORIGIN))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void 지나치게_큰_요청_본문은_읽지_않고_413으로_거절한다() throws Exception {
 		String hugeBody = "{\"email\":\"a@example.com\",\"password\":\"" + "x".repeat(2 * 1024 * 1024) + "\"}";
 
@@ -451,6 +510,10 @@ class SecurityTests {
 
 	private ResultActions refresh(Cookie cookie) throws Exception {
 		return mockMvc.perform(post("/api/v1/auth/refresh").cookie(cookie));
+	}
+
+	private ResultActions adminRefresh(Cookie cookie) throws Exception {
+		return mockMvc.perform(post("/api/v1/admin/auth/refresh").header("Origin", ADMIN_ORIGIN).cookie(cookie));
 	}
 
 	/** 서버 키 없이 계산하는 SHA-256(16진수). #136 전에 Refresh 토큰을 저장하던 방식 */

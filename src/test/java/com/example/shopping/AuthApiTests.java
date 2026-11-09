@@ -179,8 +179,9 @@ class AuthApiTests {
 		insertMember("super-admin@example.com", PASSWORD, "SUPER_ADMIN", "ACTIVE");
 
 		String memberToken = loginAndGetToken(EMAIL, PASSWORD);
-		String adminToken = loginAndGetToken("admin@example.com", PASSWORD);
-		String superAdminToken = loginAndGetToken("super-admin@example.com", PASSWORD);
+		// 관리자 계정은 관리자 로그인으로만 들어온다(#163).
+		String adminToken = loginAndGetToken("/api/v1/admin/auth/login", "admin@example.com", PASSWORD);
+		String superAdminToken = loginAndGetToken("/api/v1/admin/auth/login", "super-admin@example.com", PASSWORD);
 
 		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken))
 				.andExpect(status().isForbidden());
@@ -252,7 +253,13 @@ class AuthApiTests {
 	}
 
 	private String loginAndGetToken(String email, String password) throws Exception {
-		String body = login(email, password)
+		return loginAndGetToken("/api/v1/auth/login", email, password);
+	}
+
+	private String loginAndGetToken(String path, String email, String password) throws Exception {
+		String body = mockMvc.perform(post(path)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(json("email", email, "password", password)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.expiresIn").value(900))
 				.andReturn().getResponse().getContentAsString();

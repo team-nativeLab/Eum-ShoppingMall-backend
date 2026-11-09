@@ -94,7 +94,11 @@ management:
       enabled: true
 
 cors:
+  # 쿠키를 쓰는 프론트엔드 주소 전체(고객 사이트와 관리자 화면). 회원 Refresh 쿠키(재발급·로그아웃)는 이 Origin에서 온 요청만 받는다.
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  # 위 목록 중 관리자 화면 주소. 관리자 Refresh 쿠키는 이 Origin에서 온 요청만 받아, 고객 사이트에서는 관리자 세션을 쓸 수 없다(#163).
+  # 비어 있으면 브라우저의 관리자 재발급을 모두 거절해, 관리자는 Access 토큰이 끝날 때마다(15분) 다시 로그인해야 한다.
+  admin-origins: ${CORS_ADMIN_ORIGINS:}
   allowed-methods: GET, POST, PUT, DELETE, OPTIONS
   allowed-headers: "*"
   allow-credentials: true

@@ -110,6 +110,14 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 
 IP별 요청 제한과 로그인 잠금은 같은 Redis 카운터 구현(`SharedCounter`)을 쓰고, Redis 장애 중에는 인스턴스별로 셉니다.
 
+## 관리자 로그인과 세션
+
+관리자 계정은 관리자 로그인(`POST /api/v1/admin/auth/login`)으로만 들어오고, 관리자 세션은 회원 세션과 따로 씁니다(#163).
+
+- **회원 로그인:** `POST /api/v1/auth/login`에 관리자 계정을 넣으면 비밀번호가 맞아도 `401 LOGIN_FAILED`로 답하고 실패 횟수를 셉니다. 관리자 로그인에 회원 계정을 넣어도 같습니다. 이 시도는 감사 로그(`kind=LOGIN`)에 "관리자 계정 회원 로그인 시도(거절)"로 남습니다. 관리자가 쇼핑하려면 회원 계정을 따로 만듭니다.
+- **세션 분리:** 관리자 Refresh 토큰은 `admin_refresh_token` 쿠키(Path `/api/v1/admin/auth`)로 주고, 재발급·로그아웃은 `POST /api/v1/admin/auth/refresh`·`POST /api/v1/admin/auth/logout`을 씁니다. 회원 재발급(`/api/v1/auth/refresh`)은 관리자 토큰을, 관리자 재발급은 회원 토큰을 받지 않습니다.
+- **관리자 화면 주소:** 관리자 재발급·로그아웃은 `CORS_ADMIN_ORIGINS`(Terraform `cors_admin_origins`)에서 온 요청만 받습니다. 그래서 고객 사이트에 스크립트 삽입 같은 문제가 생겨도 같은 브라우저의 관리자 세션으로 관리자 토큰을 받을 수 없습니다. 이 주소는 `CORS_ALLOWED_ORIGINS`에도 넣습니다. 비어 있으면 관리자는 Access 토큰이 끝날 때마다(15분) 다시 로그인해야 합니다.
+
 ## 로그인 시도 제한
 
 IP별 요청 제한(`RATE_LIMIT_PER_MINUTE`)과 별도로 로그인 이메일마다 실패 횟수를 셉니다. 회원·관리자 로그인에 똑같이 적용합니다.

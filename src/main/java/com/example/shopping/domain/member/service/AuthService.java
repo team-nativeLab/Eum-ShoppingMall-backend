@@ -109,9 +109,13 @@ public class AuthService {
 		}
 	}
 
-	/** @param clientIp 서버가 확인한 클라이언트 IP. 로봇 확인 서비스가 토큰을 받은 IP와 비교한다. */
+	/**
+	 * 회원 로그인. 관리자 계정은 받지 않는다(#163).
+	 *
+	 * @param clientIp 서버가 확인한 클라이언트 IP. 로봇 확인 서비스가 토큰을 받은 IP와 비교한다.
+	 */
 	public AuthTokens login(LoginRequest request, String clientIp) {
-		return issueTokens(authenticate(request, clientIp));
+		return issueTokens(authenticate(request, clientIp, false));
 	}
 
 	/**
@@ -119,34 +123,39 @@ public class AuthService {
 	 * 성공·실패를 감사 로그에 남긴다. 기록에 실패해도 로그인 결과는 바꾸지 않는다.
 	 */
 	public AuthTokens adminLogin(LoginRequest request, String clientIp) {
-		Member member;
-		try {
-			member = authenticate(request, clientIp);
-			if (!member.getRole().canAccessAdminApi()) {
-				throw new BusinessException(ErrorCode.LOGIN_FAILED);
-			}
-		} catch (BusinessException e) {
-			recordAdminLogin(null, clientIp, request.email(), e.getErrorCode().getStatus().value());
-			throw e;
-		}
+		Member member = authenticate(request, clientIp, true);
 		AuthTokens tokens = issueTokens(member);
-		recordAdminLogin(member.getId(), clientIp, null, 200);
+		recordAdminLogin(member.getId(), clientIp, null, 200, false);
 		return tokens;
 	}
 
-	private void recordAdminLogin(Long memberId, String clientIp, String email, int status) {
+	private void recordAdminLogin(Long memberId, String clientIp, String email, int status, boolean viaMemberLogin) {
 		try {
-			auditLogService.recordAdminLogin(memberId, clientIp, email == null ? null : ContactFormats.loginEmail(email), status);
+			auditLogService.recordAdminLogin(memberId, clientIp, email, status, viaMemberLogin);
 		} catch (RuntimeException e) {
 			log.error("관리자 로그인 감사 로그 저장 실패: member={}, ip={}, status={}", memberId, clientIp, status, e);
 		}
 	}
 
-	/** Refresh 토큰으로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. */
+	/** 회원 Refresh 토큰으로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. */
 	public AuthTokens refresh(String refreshToken) {
+		return refresh(refreshToken, false);
+	}
+
+	/** 관리자 Refresh 토큰으로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. */
+	public AuthTokens adminRefresh(String refreshToken) {
+		return refresh(refreshToken, true);
+	}
+
+	/**
+	 * 회원 재발급은 관리자 토큰을, 관리자 재발급은 회원 토큰을 주지 않는다(#163). 관리자 계정은 관리자 로그인으로만 들어오고,
+	 * 권한을 바꾸면 토큰 버전이 올라 이전 Refresh 토큰을 쓸 수 없으므로, 토큰 주인의 지금 권한이 그 세션의 종류다.
+	 */
+	private AuthTokens refresh(String refreshToken, boolean adminSession) {
 		RefreshToken consumed = refreshTokenService.consume(refreshToken);
 		Member member = memberRepository.findById(consumed.getMemberId())
 				.filter(m -> m.getStatus() == MemberStatus.ACTIVE)
+				.filter(m -> m.getRole().canAccessAdminApi() == adminSession)
 				.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 		if (consumed.getTokenVersion() != member.getAccessTokenVersion()) {
 			throw new BusinessException(ErrorCode.UNAUTHORIZED);
@@ -160,25 +169,39 @@ public class AuthService {
 		refreshTokenService.revoke(refreshToken);
 	}
 
-	private Member authenticate(LoginRequest request, String clientIp) {
+	/**
+	 * 회원 로그인 API는 회원 계정만, 관리자 로그인 API는 관리자 계정만 받는다(#163). 다른 쪽 계정이면 비밀번호가 맞아도
+	 * 틀린 것과 똑같이 응답하고 실패 횟수도 센다. 맞았을 때 횟수를 지우면 로봇 확인 요구가 풀리는 것으로 비밀번호가 맞았는지 알 수 있다.
+	 * 관리자 로그인 API로 온 실패와, 회원 로그인 API로 관리자 계정을 노린 시도는 감사 로그에 남긴다.
+	 */
+	private Member authenticate(LoginRequest request, String clientIp, boolean adminApi) {
 		String email = ContactFormats.loginEmail(request.email());
-		loginAttemptLimiter.checkAllowed(email, request.captchaToken(), clientIp);
 		Member member = memberRepository.findByEmail(email).orElse(null);
+		boolean adminAccount = member != null && member.getRole().canAccessAdminApi();
+		try {
+			loginAttemptLimiter.checkAllowed(email, request.captchaToken(), clientIp);
 
-		String passwordHash = member == null ? dummyPasswordHash : member.getPasswordHash();
-		boolean passwordMatches = passwordEncoder.matches(request.password(), passwordHash);
+			String passwordHash = member == null ? dummyPasswordHash : member.getPasswordHash();
+			boolean passwordMatches = passwordEncoder.matches(request.password(), passwordHash);
 
-		// 이메일이 없는 경우와 비밀번호가 틀린 경우를 구분해서 알려주지 않고, 둘 다 실패 횟수를 센다.
-		if (member == null || member.getStatus() == MemberStatus.WITHDRAWN || !passwordMatches) {
-			loginAttemptLimiter.recordFailure(email);
-			throw new BusinessException(ErrorCode.LOGIN_FAILED);
+			// 이메일이 없는 경우와 비밀번호가 틀린 경우를 구분해서 알려주지 않고, 둘 다 실패 횟수를 센다.
+			if (member == null || member.getStatus() == MemberStatus.WITHDRAWN || !passwordMatches
+					|| adminAccount != adminApi) {
+				loginAttemptLimiter.recordFailure(email);
+				throw new BusinessException(ErrorCode.LOGIN_FAILED);
+			}
+			loginAttemptLimiter.reset(email);
+			// 계정 상태는 본인 확인(비밀번호 일치)이 끝난 뒤에만 알려준다.
+			if (member.getStatus() == MemberStatus.SUSPENDED) {
+				throw new BusinessException(ErrorCode.ACCOUNT_SUSPENDED);
+			}
+			return member;
+		} catch (BusinessException e) {
+			if (adminApi || adminAccount) {
+				recordAdminLogin(null, clientIp, email, e.getErrorCode().getStatus().value(), !adminApi);
+			}
+			throw e;
 		}
-		loginAttemptLimiter.reset(email);
-		// 계정 상태는 본인 확인(비밀번호 일치)이 끝난 뒤에만 알려준다.
-		if (member.getStatus() == MemberStatus.SUSPENDED) {
-			throw new BusinessException(ErrorCode.ACCOUNT_SUSPENDED);
-		}
-		return member;
 	}
 
 	private AuthTokens issueTokens(Member member) {

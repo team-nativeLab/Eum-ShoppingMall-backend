@@ -63,7 +63,7 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 
 - AWS 계정의 배포 전용 IAM Identity Center/SSO 권한과 AWS CLI. 액세스 키를 저장소나 채팅에 넣지 않습니다.
 - `ap-northeast-2`의 검증 완료된 ACM 인증서와 그 인증서에 포함된 API 도메인 DNS 권한.
-- AWS Secrets Manager의 `JWT_SECRET`(강한 랜덤 32바이트 이상), `{"username":"shopping_app","password":"..."}` JSON DB 앱 계정 secret, 실제 프론트 CORS origin, 결제 사용 시 Toss secret.
+- AWS Secrets Manager의 `JWT_SECRET`(강한 랜덤 32바이트 이상), `{"username":"shopping_app","password":"..."}` JSON DB 앱 계정 secret, 실제 프론트 CORS origin(관리자 화면 origin은 `cors_admin_origins`에도), 결제 사용 시 Toss secret.
 - Terraform 상태를 보관할 비공개 S3 버킷. `terraform/bootstrap`을 한 번 apply하면 버전 관리, 기본 암호화, 퍼블릭 액세스 차단을 켠 버킷이 만들어집니다. 그 이름을 `terraform/stacks/app/backend.hcl`에 채웁니다. Redis AUTH 값은 Terraform state에도 저장되므로 state 접근 권한을 제한합니다.
 - 앱 secret은 기본 AWS 관리형 KMS 키로 암호화하는 구성을 가정합니다. 고객 관리형 KMS 키를 쓰면 ECS 실행 역할에 해당 키의 `kms:Decrypt` 권한을 정확히 추가해야 합니다.
 - 팀에서 확정한 월 예산과 알림 받을 이메일. 배포 권한에는 AWS Budgets 생성·조회·태그 권한이 있어야 합니다.
