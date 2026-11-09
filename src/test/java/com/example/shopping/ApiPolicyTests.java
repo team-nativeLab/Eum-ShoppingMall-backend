@@ -2,17 +2,25 @@ package com.example.shopping;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.core.MethodParameter;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import com.example.shopping.global.security.ApiPolicy;
@@ -95,6 +103,46 @@ class ApiPolicyTests {
 				.toList();
 
 		assertThat(unlimited).isEmpty();
+	}
+
+	/**
+	 * 요청 본문으로 비밀번호를 받는 API는 비밀번호 대입과 BCrypt 연산을 노린 부하를 막도록 요청 제한을 받는다(#162).
+	 * 본문 필드 이름에 password가 들어가면 비밀번호를 받는 API로 본다.
+	 */
+	@Test
+	void 비밀번호를_받는_API는_요청_제한을_받는다() {
+		List<String> unlimited = new ArrayList<>();
+		handlerMapping.getHandlerMethods().forEach((info, handler) -> {
+			if (!acceptsPassword(handler)) {
+				return;
+			}
+			for (String pattern : info.getPatternValues()) {
+				for (RequestMethod method : info.getMethodsCondition().getMethods()) {
+					Endpoint endpoint = new Endpoint(method.name(), pattern, handler.getBeanType().getSimpleName());
+					if (ApiPolicy.RATE_LIMITS.stream().noneMatch(rule -> rule.method().name().equals(endpoint.method())
+							&& endpoint.matches(rule.pattern()))) {
+						unlimited.add(endpoint.toString());
+					}
+				}
+			}
+		});
+
+		assertThat(unlimited).isEmpty();
+	}
+
+	private static boolean acceptsPassword(HandlerMethod handler) {
+		return Arrays.stream(handler.getMethodParameters())
+				.filter(parameter -> parameter.hasParameterAnnotation(RequestBody.class))
+				.map(MethodParameter::getParameterType)
+				.flatMap(ApiPolicyTests::fieldNames)
+				.anyMatch(name -> name.toLowerCase(Locale.ROOT).contains("password"));
+	}
+
+	private static Stream<String> fieldNames(Class<?> type) {
+		if (type.isRecord()) {
+			return Arrays.stream(type.getRecordComponents()).map(RecordComponent::getName);
+		}
+		return Arrays.stream(type.getDeclaredFields()).map(Field::getName);
 	}
 
 	private List<Endpoint> endpoints() {
