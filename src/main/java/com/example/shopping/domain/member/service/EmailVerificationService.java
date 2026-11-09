@@ -24,7 +24,12 @@ import com.example.shopping.global.validation.ContactFormats;
 /**
  * 이메일 인증번호. 메일로 보낸 인증번호(영문 대소문자·숫자 6자리, 10분 유효)를 확인한다.
  * 회원가입은 맞히면 가입 요청에 넣을 확인 토큰(30분 유효)을 준다. 비밀번호 재설정은 PasswordResetService가 쓴다.
- * 인증번호는 1분에 한 번만 다시 보낼 수 있고, 같은 이메일·용도로는 24시간 동안 5번까지 보낸다.
+ * 인증번호는 1분에 한 번만 다시 보낼 수 있다. 같은 이메일·용도로 24시간 동안 보내는 수는 로봇 확인(app.captcha)에 따라 다르다(#166).
+ * <ul>
+ * <li>로봇 확인을 켜면: 3통까지는 그냥 보내고, 그 뒤로는 로봇 확인을 해야 20통까지 보낸다. 남이 한도를 채워 주인이
+ * 하루 동안 인증번호(비밀번호 재설정 등)를 받지 못하게 막을 수 없다. 남이 메일을 많이 보내게 하려면 한 통마다 로봇 확인을 풀어야 한다.</li>
+ * <li>로봇 확인을 끄면: 5통까지만 보낸다. 메일 폭탄은 막지만, 이메일만 알면 남이 한도를 채워 하루 동안 막아 둘 수 있다.</li>
+ * </ul>
  * 틀린 횟수는 VerificationAttemptGuard가 센다(3번이면 로봇 확인, 5번이면 1시간 차단).
  * 인증번호 하나는 5번 틀리면 다시 받아야 하고, 24시간 동안 틀린 횟수는 모두 합쳐 10번까지 받는다.
  * 인증번호는 서버 비밀 키를 섞어 해시하므로 DB 값만으로는 알아낼 수 없다.
@@ -37,6 +42,10 @@ public class EmailVerificationService {
 	static final Duration RESEND_INTERVAL = Duration.ofMinutes(1);
 	static final Duration DAILY_WINDOW = Duration.ofDays(1);
 	static final int DAILY_SEND_LIMIT = 5;
+	static final int CAPTCHA_AFTER_SENDS = 3;
+	static final int DAILY_SEND_LIMIT_WITH_CAPTCHA = 20;
+	/** 인증번호 받기 화면의 Turnstile 위젯에 프론트가 넣는 action 이름 */
+	public static final String SEND_CAPTCHA_ACTION = "send-code";
 	static final int DAILY_FAILURE_LIMIT = 10;
 
 	private final EmailVerificationRepository verificationRepository;
@@ -66,9 +75,11 @@ public class EmailVerificationService {
 	 * 가입 여부와 상관없이 같은 응답을 준다(#140). 이미 가입된 이메일에는 인증번호 대신 "이미 가입된 이메일" 안내를 보내므로,
 	 * 가입 여부는 그 메일함의 주인만 알 수 있다.
 	 * 인증번호를 여러 번 틀려 막힌 이메일이면 429. 메일 서버가 받지 않으면 503이고, 이때는 바로 다시 요청할 수 있다.
+	 * 로봇 확인을 켰고 24시간 안에 3통을 넘게 보냈으면 captchaToken이 필요하다(CAPTCHA_REQUIRED·CAPTCHA_INVALID).
 	 */
-	public EmailVerificationSendResponse sendSignupCode(String rawEmail) {
+	public EmailVerificationSendResponse sendSignupCode(String rawEmail, String captchaToken, String remoteIp) {
 		String email = ContactFormats.loginEmail(rawEmail);
+		checkSendAllowed(email, VerificationPurpose.SIGNUP, captchaToken, remoteIp);
 		boolean registered = memberRepository.existsByEmail(email);
 		String code = VerificationCodes.newCode();
 		// 가입된 이메일에도 인증번호를 만들어 발송 간격·하루 한도를 똑같이 적용한다. 보내지 않으므로 이 번호로는 인증할 수 없다.
@@ -139,9 +150,25 @@ public class EmailVerificationService {
 	}
 
 	/**
+	 * 인증번호를 보내기 전에 DB 트랜잭션 밖에서 부른다(로봇 확인 서비스를 기다리는 동안 DB 커넥션을 잡지 않는다).
+	 * 로봇 확인을 켰고 24시간 안에 이 이메일·용도로 3통 이상 보냈으면 로봇 확인을 요구한다(#166).
+	 * 가입되지 않은 이메일에도 보내지 않는 인증번호를 만들어 두므로, 로봇 확인 요구로 가입 여부가 드러나지 않는다.
+	 */
+	void checkSendAllowed(String email, VerificationPurpose purpose, String captchaToken, String remoteIp) {
+		if (!attemptGuard.isCaptchaProtected()) {
+			return;
+		}
+		long sent = verificationRepository.countByEmailAndPurposeAndCreatedAtAfter(email, purpose,
+				LocalDateTime.now().minus(DAILY_WINDOW));
+		if (sent >= CAPTCHA_AFTER_SENDS) {
+			attemptGuard.requireCaptcha(captchaToken, SEND_CAPTCHA_ACTION, remoteIp);
+		}
+	}
+
+	/**
 	 * 같은 이메일·용도의 이전 인증번호는 더 쓸 수 없게 하고 새 인증번호를 저장한다.
-	 * 인증번호를 여러 번 틀려 막힌 동안은 429(VERIFICATION_LOCKED),
-	 * 1분 안에 다시 요청하면 429(VERIFICATION_RESEND_TOO_SOON), 24시간 동안 5번을 넘으면 429(VERIFICATION_DAILY_LIMIT_EXCEEDED).
+	 * 인증번호를 여러 번 틀려 막힌 동안은 429(VERIFICATION_LOCKED), 1분 안에 다시 요청하면 429(VERIFICATION_RESEND_TOO_SOON),
+	 * 24시간 동안 보낸 수가 한도(로봇 확인을 켜면 20통, 끄면 5통)에 닿았으면 429(VERIFICATION_DAILY_LIMIT_EXCEEDED).
 	 */
 	EmailVerification issue(String email, VerificationPurpose purpose, String code) {
 		attemptGuard.checkNotLocked(email, purpose);
@@ -151,8 +178,9 @@ public class EmailVerificationService {
 				.ifPresent(latest -> {
 					throw new BusinessException(ErrorCode.VERIFICATION_RESEND_TOO_SOON);
 				});
+		int dailyLimit = attemptGuard.isCaptchaProtected() ? DAILY_SEND_LIMIT_WITH_CAPTCHA : DAILY_SEND_LIMIT;
 		if (verificationRepository.countByEmailAndPurposeAndCreatedAtAfter(email, purpose,
-				now.minus(DAILY_WINDOW)) >= DAILY_SEND_LIMIT) {
+				now.minus(DAILY_WINDOW)) >= dailyLimit) {
 			throw new BusinessException(ErrorCode.VERIFICATION_DAILY_LIMIT_EXCEEDED);
 		}
 		verificationRepository.consumeAll(email, purpose, now);

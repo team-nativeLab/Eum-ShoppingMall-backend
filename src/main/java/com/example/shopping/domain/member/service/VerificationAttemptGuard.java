@@ -87,10 +87,20 @@ public class VerificationAttemptGuard {
 		if (!captchaVerifier.isEnabled() || failures.get(failureKey(email, purpose)) < captchaAfterFailures) {
 			return;
 		}
+		requireCaptcha(captchaToken, CAPTCHA_ACTION, remoteIp);
+	}
+
+	/**
+	 * 로봇 확인 토큰을 확인한다. 없으면 CAPTCHA_REQUIRED(400), 확인에 실패하면 CAPTCHA_INVALID(400).
+	 * 로봇 확인 서비스를 부르므로 DB 트랜잭션 밖에서 부른다.
+	 *
+	 * @param action 토큰을 받은 위젯의 action. 다른 화면의 위젯에서 받은 토큰은 받지 않는다.
+	 */
+	public void requireCaptcha(String captchaToken, String action, String remoteIp) {
 		if (!StringUtils.hasText(captchaToken)) {
 			throw new BusinessException(ErrorCode.CAPTCHA_REQUIRED);
 		}
-		if (!captchaVerifier.verify(captchaToken, CAPTCHA_ACTION, remoteIp)) {
+		if (!captchaVerifier.verify(captchaToken, action, remoteIp)) {
 			throw new BusinessException(ErrorCode.CAPTCHA_INVALID);
 		}
 	}
