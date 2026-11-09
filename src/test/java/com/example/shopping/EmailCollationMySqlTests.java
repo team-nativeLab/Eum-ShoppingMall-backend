@@ -123,7 +123,7 @@ class EmailCollationMySqlTests {
 				.andExpect(jsonPath("$.data.accessToken").doesNotExist());
 	}
 
-	/** admin-xxxxxxxx@example.com 회원을 만든다. */
+	/** admin-xxxxxxxx@example.com 관리자 계정을 만든다. 악센트를 붙일 첫 글자가 a인 이메일이다. */
 	private String insertMember() {
 		String email = "admin-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
 		jdbcTemplate.update("""
@@ -138,8 +138,9 @@ class EmailCollationMySqlTests {
 		return "á" + email.substring(1);
 	}
 
+	/** 관리자 계정은 관리자 로그인으로만 들어온다(#163). */
 	private ResultActions login(String email, String password) throws Exception {
-		return mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+		return mockMvc.perform(post("/api/v1/admin/auth/login").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, password)));
 	}
 }

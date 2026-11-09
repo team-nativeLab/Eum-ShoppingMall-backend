@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -110,6 +111,43 @@ class AdminApiTests {
 		assertThat((String) logins.get(2).get("DETAILS")).contains("admin@example.com");
 		assertThat(logins).allSatisfy(row -> assertThat(String.valueOf(row.get("DETAILS")))
 				.doesNotContain(PASSWORD, "wrong-pass-1234"));
+	}
+
+	@Test
+	@WithAnonymousUser
+	void 관리자_계정은_회원_로그인으로_들어올_수_없고_그_시도는_감사_로그에_남긴다() throws Exception {
+		insertMember("admin@example.com", "관리자", "ADMIN");
+		insertMember("super@example.com", "최고관리자", "SUPER_ADMIN");
+
+		// 비밀번호가 맞아도 틀린 것과 똑같이 응답하고 쿠키도 주지 않는다(#163).
+		for (String email : List.of("admin@example.com", "super@example.com")) {
+			postJson("/api/v1/auth/login", credentials(email, PASSWORD))
+					.andExpect(status().isUnauthorized())
+					.andExpect(jsonPath("$.code").value("LOGIN_FAILED"))
+					.andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
+		}
+		postJson("/api/v1/auth/login", credentials("admin@example.com", "wrong-pass-1234"))
+				.andExpect(status().isUnauthorized());
+
+		var attempts = jdbcTemplate.queryForList("""
+				select actor_member_id, response_status, summary, details from admin_audit_log
+				where action = 'LOGIN' order by id
+				""");
+		assertThat(attempts).hasSize(3).allSatisfy(row -> {
+			assertThat(row.get("ACTOR_MEMBER_ID")).isNull();
+			assertThat(row.get("RESPONSE_STATUS")).isEqualTo(401);
+			assertThat(row.get("SUMMARY")).isEqualTo("관리자 계정 회원 로그인 시도(거절)");
+		});
+		assertThat((String) attempts.get(1).get("DETAILS")).contains("super@example.com");
+
+		// 일반 회원의 로그인 실패는 관리자 감사 로그에 남기지 않는다.
+		insertMember("member@example.com", "홍길동", "USER");
+		postJson("/api/v1/auth/login", credentials("member@example.com", "wrong-pass-1234"))
+				.andExpect(status().isUnauthorized());
+		postJson("/api/v1/auth/login", credentials("member@example.com", PASSWORD)).andExpect(status().isOk());
+		assertThat(jdbcTemplate.queryForObject("select count(*) from admin_audit_log", Long.class)).isEqualTo(3);
+
+		adminLogin("admin@example.com", PASSWORD).andExpect(status().isOk());
 	}
 
 	@Test
@@ -1187,9 +1225,13 @@ class AdminApiTests {
 	}
 
 	private ResultActions adminLogin(String email, String password) throws Exception {
-		return postJson("/api/v1/admin/auth/login", """
+		return postJson("/api/v1/admin/auth/login", credentials(email, password));
+	}
+
+	private static String credentials(String email, String password) {
+		return """
 				{"email":"%s","password":"%s"}
-				""".formatted(email, password));
+				""".formatted(email, password);
 	}
 
 	private long insertMember(String email, String name, String role) {
