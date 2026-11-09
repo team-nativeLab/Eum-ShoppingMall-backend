@@ -120,7 +120,10 @@ public final class ApiPolicy {
 			post("/api/v1/auth/email-verifications/confirm"),
 			post("/api/v1/auth/password-reset"),
 			post("/api/v1/auth/password-reset/confirm"),
-			new RateLimit(HttpMethod.PATCH, "/api/v1/me/password", "PATCH /api/v1/me/password", Limit.DEFAULT),
+			// 현재 비밀번호를 확인하는 회원 API(비밀번호 변경, 탈퇴)는 한 묶음으로 센다(#162).
+			// 탈퇴 API로 바꿔 가며 비밀번호를 넣어 보거나 BCrypt 연산을 늘리지 못하게 한다.
+			new RateLimit(HttpMethod.PATCH, "/api/v1/me/password", "PASSWORD /api/v1/me", Limit.DEFAULT),
+			new RateLimit(HttpMethod.DELETE, "/api/v1/me", "PASSWORD /api/v1/me", Limit.DEFAULT),
 			post("/api/v1/quotes"),
 			post("/api/v1/support/inquiries"),
 			post("/api/v1/orders"),
