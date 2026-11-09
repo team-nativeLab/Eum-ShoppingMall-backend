@@ -22,6 +22,10 @@ public class SecretHashes {
 	public static final String LOGIN_LOCK_KEY = "login-lock-key";
 	public static final String VERIFICATION_LOCK_KEY = "verification-lock-key";
 	public static final String RATE_LIMIT_KEY = "rate-limit-key";
+	public static final String ADMIN_MFA_CHALLENGE = "admin-mfa-challenge";
+	public static final String ADMIN_MFA_FAILURE_KEY = "admin-mfa-failure-key";
+	/** 암호화 키(SecretCipher) 용도 */
+	public static final String ADMIN_MFA_SECRET_ENCRYPTION = "admin-mfa-secret-encryption";
 
 	private final String secret;
 
@@ -32,5 +36,13 @@ public class SecretHashes {
 	/** 용도별 키로 해시하는 함수. 용도 이름은 위 상수를 쓴다. */
 	public KeyedHash forPurpose(String purpose) {
 		return KeyedHash.derive(secret, purpose);
+	}
+
+	/**
+	 * 용도별 키로 암호화하는 함수. 해시와 같은 JWT_SECRET에서 뽑으므로, JWT_SECRET을 바꾸면 전에 암호화한 값(관리자 OTP 비밀 키)을
+	 * 풀 수 없어 관리자가 OTP를 다시 등록해야 한다.
+	 */
+	public SecretCipher cipherFor(String purpose) {
+		return new SecretCipher(KeyedHash.deriveKey(secret, purpose));
 	}
 }

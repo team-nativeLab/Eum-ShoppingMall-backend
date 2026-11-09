@@ -99,6 +99,28 @@ class LoginLockTests {
 	}
 
 	@Test
+	void 다른_쪽_로그인_API에_맞는_비밀번호를_넣으면_실패로_세어_비밀번호가_맞았는지_드러나지_않는다() throws Exception {
+		// 맞았을 때 횟수를 지우면 잠금이 풀리는 것으로 비밀번호가 맞았는지 알 수 있다(#163).
+		insertMember("cross-admin@example.com", "ADMIN");
+		login("cross-admin@example.com", WRONG, "203.0.113.20").andExpect(status().isUnauthorized());
+		login("cross-admin@example.com", WRONG, "203.0.113.20").andExpect(status().isUnauthorized());
+		login("cross-admin@example.com", PASSWORD, "203.0.113.20")
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("LOGIN_FAILED"));
+		postJson("/api/v1/admin/auth/login", credentials("cross-admin@example.com", PASSWORD))
+				.andExpect(status().isTooManyRequests());
+
+		insertMember("cross-member@example.com", "USER");
+		for (int i = 0; i < 2; i++) {
+			postJson("/api/v1/admin/auth/login", credentials("cross-member@example.com", WRONG))
+					.andExpect(status().isUnauthorized());
+		}
+		postJson("/api/v1/admin/auth/login", credentials("cross-member@example.com", PASSWORD))
+				.andExpect(status().isUnauthorized());
+		login("cross-member@example.com", PASSWORD, "203.0.113.21").andExpect(status().isTooManyRequests());
+	}
+
+	@Test
 	void 비밀번호를_재설정하면_막힌_로그인이_풀린다() throws Exception {
 		insertMember("reset-lock@example.com", "USER");
 		for (int i = 0; i < 3; i++) {

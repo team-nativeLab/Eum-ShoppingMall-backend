@@ -17,6 +17,18 @@ import org.springframework.web.util.pattern.PathPatternParser;
 public final class ApiPolicy {
 
 	public static final String ADMIN_LOGIN = "/api/v1/admin/auth/login";
+	public static final String ADMIN_REFRESH = "/api/v1/admin/auth/refresh";
+	public static final String ADMIN_LOGOUT = "/api/v1/admin/auth/logout";
+	public static final String ADMIN_MFA_SETUP = "/api/v1/admin/auth/mfa/setup";
+	public static final String ADMIN_MFA_VERIFY = "/api/v1/admin/auth/mfa/verify";
+
+	/**
+	 * 관리자 로그인(비밀번호·OTP 두 단계, #164)·재발급·로그아웃. 관리자 세션은 회원 세션과 쿠키·경로를 나눠
+	 * 고객 사이트에서 쓸 수 없게 한다(#163). /admin 아래에 있지만 로그인 없이 부른다.
+	 * 로그인 단계별 성공·실패는 AuthService가 감사 로그에 따로 남긴다.
+	 */
+	public static final List<String> ADMIN_AUTH = List.of(ADMIN_LOGIN, ADMIN_MFA_SETUP, ADMIN_MFA_VERIFY,
+			ADMIN_REFRESH, ADMIN_LOGOUT);
 
 	/**
 	 * 로그인 없이 부르는 인증 API. 이 경로에서는 Access 토큰을 읽지 않아, 프론트가 만료된 토큰을 붙인 채
@@ -33,7 +45,11 @@ public final class ApiPolicy {
 			"/api/v1/auth/email-verifications/confirm",
 			"/api/v1/auth/password-reset",
 			"/api/v1/auth/password-reset/confirm",
-			ADMIN_LOGIN);
+			ADMIN_LOGIN,
+			ADMIN_MFA_SETUP,
+			ADMIN_MFA_VERIFY,
+			ADMIN_REFRESH,
+			ADMIN_LOGOUT);
 
 	/** 로그인 없이 조회하는 공개 데이터(GET): 메인, 카테고리, 상품, 공지, FAQ, 고정 콘텐츠, 앱 설정, 배송비 정책, 업로드된 이미지 */
 	public static final List<String> PUBLIC_GET = List.of(
@@ -64,10 +80,14 @@ public final class ApiPolicy {
 
 	/**
 	 * 관리자 API의 변경 요청 중 감사 로그에 남기지 않는 것. 관리자 로그인은 AuthService가 성공·실패를 따로 남기고(본문에 비밀번호가 있다),
-	 * 직접 업로드 주소 발급은 아무것도 바꾸지 않는다(업로드 완료 요청을 남긴다).
+	 * 재발급·로그아웃은 로그인 상태만 바꾼다. 직접 업로드 주소 발급은 아무것도 바꾸지 않는다(업로드 완료 요청을 남긴다).
 	 */
 	public static final List<String> AUDIT_EXCLUDED = List.of(
 			ADMIN_LOGIN,
+			ADMIN_MFA_SETUP,
+			ADMIN_MFA_VERIFY,
+			ADMIN_REFRESH,
+			ADMIN_LOGOUT,
 			"/api/v1/uploads/presigned-url");
 
 	/**
@@ -113,8 +133,13 @@ public final class ApiPolicy {
 			// 회원·관리자 로그인은 한 묶음으로 세어 경로를 바꿔 한도를 피하지 못하게 한다.
 			new RateLimit(HttpMethod.POST, "/api/v1/auth/login", "POST /api/v1/login", Limit.DEFAULT),
 			new RateLimit(HttpMethod.POST, ADMIN_LOGIN, "POST /api/v1/login", Limit.DEFAULT),
+			// OTP 코드 대입도 로그인과 같은 묶음으로 센다.
+			new RateLimit(HttpMethod.POST, ADMIN_MFA_VERIFY, "POST /api/v1/login", Limit.DEFAULT),
+			post(ADMIN_MFA_SETUP),
 			post("/api/v1/auth/signup"),
+			// 회원·관리자 재발급도 한 묶음으로 센다.
 			post("/api/v1/auth/refresh"),
+			new RateLimit(HttpMethod.POST, ADMIN_REFRESH, "POST /api/v1/auth/refresh", Limit.DEFAULT),
 			// 인증번호 발송(메일 비용·스팸)과 확인(번호 대입)
 			post("/api/v1/auth/email-verifications"),
 			post("/api/v1/auth/email-verifications/confirm"),

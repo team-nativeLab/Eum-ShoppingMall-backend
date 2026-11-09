@@ -42,12 +42,21 @@ public class RefreshToken {
 	// 재발급에 사용된 시각. 한 번 쓴 토큰은 다시 쓸 수 없다. 아직 쓰지 않았으면 null
 	private LocalDateTime usedAt;
 
+	// 관리자 세션이 끝나는 시각(#164). 재발급해도 이 시각을 넘지 못하고 새 토큰에 그대로 넘어간다. 회원 세션은 null
+	private LocalDateTime sessionExpiresAt;
+
 	public static RefreshToken create(Long memberId, String tokenHash, LocalDateTime expiresAt, long tokenVersion) {
+		return create(memberId, tokenHash, expiresAt, tokenVersion, null);
+	}
+
+	public static RefreshToken create(Long memberId, String tokenHash, LocalDateTime expiresAt, long tokenVersion,
+			LocalDateTime sessionExpiresAt) {
 		RefreshToken token = new RefreshToken();
 		token.memberId = memberId;
 		token.tokenHash = tokenHash;
 		token.expiresAt = expiresAt;
 		token.tokenVersion = tokenVersion;
+		token.sessionExpiresAt = sessionExpiresAt;
 		return token;
 	}
 }

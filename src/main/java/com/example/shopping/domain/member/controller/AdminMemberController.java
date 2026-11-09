@@ -5,6 +5,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +20,7 @@ import com.example.shopping.domain.member.dto.request.AdminMemberRoleUpdateReque
 import com.example.shopping.domain.member.dto.request.AdminMemberStatusUpdateRequest;
 import com.example.shopping.domain.member.dto.response.AdminMemberSummaryResponse;
 import com.example.shopping.domain.member.service.AdminMemberService;
+import com.example.shopping.domain.member.service.AdminMfaService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.security.CurrentMember;
@@ -31,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 public class AdminMemberController {
 
 	private final AdminMemberService adminMemberService;
+	private final AdminMfaService adminMfaService;
 
 	/** ADM-012 회원 목록 (?keyword=로 이메일·이름 검색) */
 	@GetMapping
@@ -51,6 +54,13 @@ public class AdminMemberController {
 	public ApiResponse<AdminMemberDetailResponse> changeRole(@AuthenticationPrincipal Jwt jwt,
 			@PathVariable Long userId, @Valid @RequestBody AdminMemberRoleUpdateRequest request) {
 		return ApiResponse.ok(adminMemberService.changeRole(CurrentMember.id(jwt), userId, request.role()));
+	}
+
+	/** 최고 관리자가 관리자의 OTP를 지운다(기기 분실·교체, #164). 그 관리자는 다시 로그인해 새로 등록한다. */
+	@DeleteMapping("/{userId}/mfa")
+	public ApiResponse<Void> resetMfa(@AuthenticationPrincipal Jwt jwt, @PathVariable Long userId) {
+		adminMfaService.reset(CurrentMember.id(jwt), userId);
+		return ApiResponse.ok(null);
 	}
 
 	@PatchMapping("/{userId}/status")

@@ -67,6 +67,7 @@ module "api_runtime" {
   database_migration_secret_arn = var.database_migration_secret_arn
   database_master_secret_arn    = module.database.db_master_secret_arn
   cors_allowed_origins          = var.cors_allowed_origins
+  cors_admin_origins            = var.cors_admin_origins
   refresh_cookie_same_site      = var.refresh_cookie_same_site
   upload_storage                = var.upload_storage
 

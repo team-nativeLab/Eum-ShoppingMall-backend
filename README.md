@@ -113,6 +113,26 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 
 IP별 요청 제한과 로그인 잠금은 같은 Redis 카운터 구현(`SharedCounter`)을 쓰고, Redis 장애 중에는 인스턴스별로 셉니다.
 
+## 관리자 로그인과 세션
+
+관리자 계정은 관리자 로그인(`POST /api/v1/admin/auth/login`)으로만 들어오고, 관리자 세션은 회원 세션과 따로 씁니다(#163).
+
+- **회원 로그인:** `POST /api/v1/auth/login`에 관리자 계정을 넣으면 비밀번호가 맞아도 `401 LOGIN_FAILED`로 답하고 실패 횟수를 셉니다. 관리자 로그인에 회원 계정을 넣어도 같습니다. 이 시도는 감사 로그(`kind=LOGIN`)에 "관리자 계정 회원 로그인 시도(거절)"로 남습니다. 관리자가 쇼핑하려면 회원 계정을 따로 만듭니다.
+- **세션 분리:** 관리자 Refresh 토큰은 `admin_refresh_token` 쿠키(Path `/api/v1/admin/auth`)로 주고, 재발급·로그아웃은 `POST /api/v1/admin/auth/refresh`·`POST /api/v1/admin/auth/logout`을 씁니다. 회원 재발급(`/api/v1/auth/refresh`)은 관리자 토큰을, 관리자 재발급은 회원 토큰을 받지 않습니다.
+- **관리자 화면 주소:** 관리자 재발급·로그아웃은 `CORS_ADMIN_ORIGINS`(Terraform `cors_admin_origins`)에서 온 요청만 받습니다. 그래서 고객 사이트에 스크립트 삽입 같은 문제가 생겨도 같은 브라우저의 관리자 세션으로 관리자 토큰을 받을 수 없습니다. 이 주소는 `CORS_ALLOWED_ORIGINS`에도 넣습니다. 비어 있으면 관리자는 Access 토큰이 끝날 때마다(15분) 다시 로그인해야 합니다.
+
+관리자 로그인은 비밀번호와 OTP(TOTP) 두 단계입니다(#164). 「개인정보의 안전성 확보조치 기준」 제6조(접근통제)의 안전한 인증수단과 접속 자동 차단입니다.
+
+1. `POST /api/v1/admin/auth/login`이 비밀번호를 확인하면 쿠키 없이 `mfaToken`(5분, 1회용)을 줍니다. `mfaSetupRequired`가 `true`면 아직 OTP를 등록하지 않은 관리자입니다.
+2. 등록할 때만: `POST /api/v1/admin/auth/mfa/setup`(`{"mfaToken":"..."}`)이 OTP 앱에 넣을 `secret`과 QR 코드용 `otpauthUri`를 줍니다. Google OTP·Microsoft Authenticator 같은 TOTP 앱(30초, 6자리)을 씁니다.
+3. `POST /api/v1/admin/auth/mfa/verify`(`{"mfaToken":"...","code":"123456"}`)가 코드를 확인하고 Access 토큰과 관리자 쿠키를 줍니다. 처음 맞는 코드를 넣으면 등록이 끝납니다.
+
+- **틀린 코드:** 한 번 받은 코드는 다시 받지 않습니다. `mfaToken` 하나로 5번까지 틀릴 수 있습니다. 한 관리자가 15분 안에 10번 틀리면 그동안 `429 ADMIN_MFA_LOCKED`로 막고 담당자에게 알립니다(`manual.check.required{reason=admin_mfa_locked}`). 비밀번호가 샌 것이므로 비밀번호를 바꿉니다.
+- **기기 분실·교체:** `SUPER_ADMIN`이 `DELETE /api/v1/admin/users/{userId}/mfa`로 OTP를 지웁니다. 그 관리자의 로그인이 끊기고, 다음 로그인에서 다시 등록합니다. 최고 관리자가 한 명뿐인데 기기를 잃으면 DB에서 그 관리자의 `admin_mfa` 행을 지웁니다.
+- **비밀 키 보관:** OTP 비밀 키는 `JWT_SECRET`에서 뽑은 키로 암호화해(AES-256-GCM) 둡니다. `JWT_SECRET`을 바꾸면 비밀 키를 풀 수 없으므로 관리자는 다음 로그인에서 다시 등록합니다.
+- **설정:** `ADMIN_MFA_REQUIRED`(기본 `true`)를 끄면 OTP를 등록하지 않은 관리자는 비밀번호만으로 들어옵니다. 등록한 관리자에게는 계속 OTP를 요구합니다. 운영에서는 끄지 않습니다.
+- **접속 자동 차단:** 관리자 세션은 `ADMIN_SESSION_IDLE_TIMEOUT`(기본 30분) 동안 재발급하지 않으면 끝나고, 계속 써도 로그인한 지 `ADMIN_SESSION_MAX_LIFETIME`(기본 8시간)이 지나면 끝납니다. 마지막에 받은 Access 토큰은 그 뒤 최대 15분 더 쓸 수 있습니다. 관리자 화면은 재발급을 타이머로 미리 부르지 말고, 요청이 401로 끝났을 때처럼 사용자가 화면을 쓸 때만 부릅니다. 그래야 자리를 비운 동안 세션이 끝납니다. 회원 세션은 그대로 14일입니다.
+
 ## 로그인 시도 제한
 
 IP별 요청 제한(`RATE_LIMIT_PER_MINUTE`)과 별도로 로그인 이메일마다 실패 횟수를 셉니다. 회원·관리자 로그인에 똑같이 적용합니다.
@@ -144,7 +164,7 @@ IP별 요청 제한(`RATE_LIMIT_PER_MINUTE`)과 별도로 로그인 이메일마
 - **대상:** 매칭된 경로에서 가장 안쪽의 `name/{id}`입니다. `/api/v1/admin/products/{productId}/skus/{skuId}/stock-adjustments`는 `skus`와 SKU ID를, 이미지 업로드는 `uploads`를 기록합니다.
 - **조회:** `GET /api/v1/admin/audit-logs`는 요청한 회원, 대상 종류, 시간, 종류(`kind`: 개인정보 조회 `READ`·변경 `CHANGE`·관리자 로그인 `LOGIN`)로 거를 수 있고 `SUPER_ADMIN`만 쓸 수 있습니다. `fromDate`·`toDate`는 `2026-10-01`이나 `2026-10-01T09:00:00`을 받고, 날짜만 넣은 `toDate`는 그날 전체를 포함합니다.
 
-감사 로그 API에는 수정과 삭제가 없습니다. 로그는 2년(`AUDIT_LOG_RETENTION_DAYS`, 기본 730일) 보관한 뒤 매일 05:15에 1,000건씩 나눠 지웁니다. 개인정보 처리시스템 접속기록 보관 기준에 맞춰 365일보다 짧게는 설정할 수 없습니다. 조회 기록이 더해져 변경 기록보다 훨씬 많아지지만, `created_at` 인덱스(V18)로 나눠 지우므로 정리 시간은 늘어난 건수에 비례합니다. 관리자 2FA는 별도 후속 작업으로 남아 있습니다.
+감사 로그 API에는 수정과 삭제가 없습니다. 로그는 2년(`AUDIT_LOG_RETENTION_DAYS`, 기본 730일) 보관한 뒤 매일 05:15에 1,000건씩 나눠 지웁니다. 개인정보 처리시스템 접속기록 보관 기준에 맞춰 365일보다 짧게는 설정할 수 없습니다. 조회 기록이 더해져 변경 기록보다 훨씬 많아지지만, `created_at` 인덱스(V18)로 나눠 지우므로 정리 시간은 늘어난 건수에 비례합니다. 관리자 로그인은 비밀번호 확인, OTP 확인 실패, OTP 등록·로그인 성공을 나눠 남깁니다(`kind=LOGIN`, #164).
 
 ## 해시 저장 원칙
 
