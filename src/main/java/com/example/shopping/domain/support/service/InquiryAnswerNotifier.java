@@ -20,7 +20,9 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 문의에 답변을 등록하면 카카오톡 채널 알림톡으로 알린다. 받는 번호는 접수 때 받은 연락처, 없으면 회원 정보의 휴대폰 번호다.
  * 비회원은 답변을 볼 화면이 없으므로 답변 내용을 알림에 함께 싣는다.
- * 대행사 콘솔에 등록할 템플릿 예: "#{문의제목} 문의에 답변이 등록되었습니다.\n\n#{답변}"
+ * 대행사 콘솔에 등록할 템플릿 예: "#{접수일}에 접수하신 문의(#{문의번호})에 답변이 등록되었습니다.\n\n#{답변}"
+ * 사용자가 쓴 문의 제목은 싣지 않는다(#165). 연락처는 본인 번호인지 확인하지 않으므로, 제목에 주소나 줄바꿈을 넣어
+ * 남의 휴대폰에 공식 채널 이름으로 피싱 문구를 보내게 할 수 있기 때문이다.
  */
 @Slf4j
 @Component
@@ -50,7 +52,8 @@ public class InquiryAnswerNotifier {
 			return Optional.empty();
 		}
 		Map<String, String> variables = new LinkedHashMap<>();
-		variables.put("문의제목", inquiry.getTitle());
+		variables.put("문의번호", String.valueOf(inquiry.getId()));
+		variables.put("접수일", inquiry.getCreatedAt() == null ? "" : inquiry.getCreatedAt().toLocalDate().toString());
 		variables.put("답변", shorten(inquiry.getAnswer()));
 		return Optional.of(notificationService.enqueueAlimtalk(phone, templateCode, variables, REFERENCE_TYPE,
 				inquiry.getId()));
