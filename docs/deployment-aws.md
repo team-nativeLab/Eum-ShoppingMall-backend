@@ -21,9 +21,9 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 | 구성 | 켜는 변수 | 고정 비용(월) | plan이 만드는 리소스 |
 |---|---|---|---|
 | 기본 | 없음 | $0 | 42개 |
-| 데이터 준비(스키마 작업) | `enable_data_layer` | 약 $39 | 46개 |
-| 개발 검증 배포 | 위 + `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service` | 약 $130 | 62개 |
-| 운영 예시 | 위 + `db_multi_az=true`, `desired_count=2` | 약 $173 | 62개 |
+| 데이터 준비(스키마 작업) | `enable_data_layer` | 약 $39 | 47개 |
+| 개발 검증 배포 | 위 + `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service` | 약 $130 | 63개 |
+| 운영 예시 | 위 + `db_multi_az=true`, `desired_count=2` | 약 $173 | 63개 |
 
 기본 구성은 VPC와 서브넷·라우팅, 보안 그룹, DB·Redis 서브넷 그룹, IAM, ECS 클러스터, ECR, 업로드 S3와 CloudFront, 로그 그룹, 예산 경보만 만듭니다. 이 중 요금이 나오는 것은 ECR, S3, CloudFront, 로그처럼 쓴 만큼 내는 항목뿐입니다. 리소스 수는 `terraform/stacks/app/tests`와 같은 mock provider로 돌린 plan 결과입니다.
 
@@ -70,6 +70,7 @@ ALB의 기본 X-Forwarded-For 처리 모드는 `append`입니다. 앱의 `TRUSTE
 - 인증번호를 여러 번 틀린 요청에 로봇 확인을 붙이려면 Cloudflare Turnstile 위젯의 비밀 키. Cloudflare 대시보드에서 위젯을 만들 때 허용 도메인에 프론트 도메인을 넣습니다. 사이트 키는 프론트에 넣고, 프론트가 위젯을 붙인 뒤 `app_environment`에 `CAPTCHA_ENABLED=true`와 `CAPTCHA_ALLOWED_HOSTNAMES`(위젯을 푸는 프론트 도메인, 쉼표로 구분)를, `application_secret_arns`에 `CAPTCHA_SECRET_KEY`를 넣습니다. 앱이 Turnstile에 토큰을 확인하므로 NAT를 통한 HTTPS 외부 연결이 필요합니다. 키가 없으면 로봇 확인 없이 틀린 횟수 차단만 동작합니다.
 - 결제 금액 불일치 같은 상황을 메일로 받을 담당자 이메일과 SMTP 서버. `app_environment`에 `ALERT_EMAILS`, `MAIL_HOST`, `MAIL_FROM`을, `application_secret_arns`에 `MAIL_USERNAME`, `MAIL_PASSWORD`를 넣습니다. 알림 기준은 README의 "담당자 알림"을 참고합니다.
 - 현재 앱은 운영에서 `ddl-auto: validate`를 사용합니다. 빈 RDS에 테이블을 만드는 마이그레이션이 먼저 필요합니다(Issue #27). 별도 DB 관리자 계정으로 스키마를 만들고 `shopping_app`에는 앱 구동에 필요한 SELECT/INSERT/UPDATE/DELETE 권한만 부여한 후 `enable_ecs_service=true`로 바꿉니다. Terraform은 이 준비가 끝날 때까지 ECS 서비스를 만들지 않습니다.
+- DB 접속은 TLS만 받습니다(#133). RDS 파라미터 그룹이 `require_secure_transport=1`이라 평문 접속은 거절됩니다. 앱은 이미지에 넣은 RDS CA 신뢰 저장소(`/app/rds-truststore.p12`)로만 인증서와 호스트 이름을 검증합니다(`sslMode=VERIFY_IDENTITY`). DB 계정도 `REQUIRE SSL`로 만듭니다. AWS가 RDS CA 묶음을 바꾸면 `docker/rds/global-bundle.pem`과 `Dockerfile`의 체크섬을 함께 바꿉니다. 이 설정은 실제 RDS로는 아직 확인하지 않았으므로, 처음 띄울 때 앱이 DB에 붙는지 확인합니다.
 
 Terraform은 리소스를 생성해 과금할 수 있습니다. 아래 `apply`는 비용 검토와 계정/리전 확인 뒤 운영자가 실행합니다. 이 저장소 변경에서는 AWS 리소스를 만들지 않습니다.
 
@@ -105,7 +106,7 @@ Terraform은 리소스를 생성해 과금할 수 있습니다. 아래 `apply`�
    ```
 
 6. `envs/app/prod.tfvars`의 `image_tag`를 같은 SHA로 설정하고 `enable_data_layer=true`로 바꿉니다. 다시 `terraform plan`을 검토한 뒤에만 `terraform apply`를 실행합니다. Terraform이 Secret Manager에 Redis AUTH 값을 저장하고 ElastiCache/ECS에 전달합니다.
-7. RDS가 생성되면 AWS가 관리하는 `rds_master_secret_arn`으로 승인된 비공개 DB 접속 경로에서 스키마와 제한된 앱 DB 계정을 준비합니다. DB 앱 secret에는 `username`, `password` 키를 넣습니다. `shopping_app`에는 `shopping` 데이터베이스의 `SELECT, INSERT, UPDATE, DELETE` 권한만 주고, 관리자 계정은 앱에 전달하지 않습니다. SQL 마이그레이션(Issue #27) 없이 앱 서비스를 켜지 않습니다.
+7. RDS가 생성되면 AWS가 관리하는 `rds_master_secret_arn`으로 승인된 비공개 DB 접속 경로에서 스키마와 제한된 앱 DB 계정을 준비합니다. DB 앱 secret에는 `username`, `password` 키를 넣습니다. `shopping_app`은 `REQUIRE SSL`로 만들고 `shopping` 데이터베이스의 `SELECT, INSERT, UPDATE, DELETE` 권한만 주며, 관리자 계정은 앱에 전달하지 않습니다. SQL 마이그레이션(Issue #27) 없이 앱 서비스를 켜지 않습니다.
 8. `envs/app/prod.tfvars`에서 `enable_nat_gateway`, `enable_alb`, `enable_efs`, `enable_ecs_service`를 `true`로 바꾸고 `terraform plan`을 검토한 뒤 `terraform apply`를 실행합니다.
 9. ALB DNS를 API 도메인으로 연결하고 `/actuator/health/readiness`, HTTPS 리다이렉트, 로그, 업로드 유지, 신뢰하지 않는 X-Forwarded-For 위조 차단을 실제 AWS에서 확인합니다.
 

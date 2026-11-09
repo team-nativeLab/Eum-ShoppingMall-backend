@@ -155,7 +155,7 @@ run "database_off" {
   assert {
     condition = (
       length(aws_db_instance.main) + length(aws_elasticache_replication_group.main) +
-      length(aws_secretsmanager_secret.redis)
+      length(aws_secretsmanager_secret.redis) + length(aws_db_parameter_group.main)
     ) == 0
     error_message = "기본값으로 RDS, Redis, 시크릿을 만들면 안 됩니다."
   }
@@ -184,6 +184,14 @@ run "database_enabled" {
   assert {
     condition     = length(aws_db_instance.main) == 1 && length(aws_elasticache_replication_group.main) == 1
     error_message = "켜면 RDS와 Redis가 있어야 합니다."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_db_instance.main[0].parameter_group_name == aws_db_parameter_group.main[0].name,
+      contains([for p in aws_db_parameter_group.main[0].parameter : "${p.name}=${p.value}"], "require_secure_transport=1"),
+    ])
+    error_message = "RDS는 TLS 접속만 받아야 합니다(require_secure_transport=1, #133)."
   }
 }
 
