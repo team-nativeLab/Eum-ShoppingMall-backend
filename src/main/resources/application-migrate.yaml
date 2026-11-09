@@ -1,0 +1,15 @@
+# DB 마이그레이션만 하고 끝나는 일회성 실행(#131). ECS의 migrate 작업이 SPRING_PROFILES_ACTIVE=prod,migrate로 띄운다.
+# 마이그레이션 전용 계정(DDL 권한)으로 Flyway를 적용하고, Hibernate가 스키마를 검증한 뒤 MigrationOnlyRunner가 종료 코드 0으로 끝낸다.
+# 운영 API 작업은 SPRING_FLYWAY_ENABLED=false로 마이그레이션을 하지 않고 DML 전용 앱 계정으로 뜬다.
+spring:
+  flyway:
+    enabled: true
+
+server:
+  # 외부에 열지 않는 작업이므로 아무 포트로 띄운다.
+  port: 0
+
+app:
+  scheduling:
+    # 주기 작업이 마이그레이션 작업에서 돌지 않게 한다.
+    enabled: false
