@@ -39,13 +39,15 @@ public class PasswordResetService {
 	private final TransactionTemplate transactionTemplate;
 
 	/**
-	 * 사용 중인 계정(ACTIVE)일 때만 인증번호를 보낸다. 1분 안에 다시 요청하거나 24시간 동안 5통을 넘거나,
+	 * 사용 중인 계정(ACTIVE)일 때만 인증번호를 보낸다. 1분 안에 다시 요청하거나 하루 한도를 넘거나,
 	 * 인증번호를 여러 번 틀려 막힌 동안에는 보내지 않는다. 응답은 언제나 같다.
+	 * 로봇 확인을 켰고 24시간 안에 3통을 넘게 요청했으면 captchaToken이 필요하다(CAPTCHA_REQUIRED·CAPTCHA_INVALID, #166).
 	 * 가입되지 않은 이메일에도 보내지 않는 인증번호를 만들어 둔다. 그래야 재설정 확인에서 인증번호를 다 틀렸을 때의 응답
-	 * (VERIFICATION_ATTEMPTS_EXCEEDED)과 하루 한도가 가입 여부와 상관없이 같다(#140).
+	 * (VERIFICATION_ATTEMPTS_EXCEEDED), 하루 한도, 로봇 확인 요구가 가입 여부와 상관없이 같다(#140).
 	 */
-	public void requestReset(String rawEmail) {
+	public void requestReset(String rawEmail, String captchaToken, String remoteIp) {
 		String email = ContactFormats.loginEmail(rawEmail);
+		verificationService.checkSendAllowed(email, VerificationPurpose.PASSWORD_RESET, captchaToken, remoteIp);
 		String code = VerificationCodes.newCode();
 		boolean issued = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
 			boolean active = findActive(email) != null;

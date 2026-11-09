@@ -46,11 +46,15 @@ public class AuthController {
 		return ApiResponse.ok(authService.signup(request));
 	}
 
-	/** 회원가입 이메일 인증번호를 보낸다. 이미 가입된 이메일이면 인증번호 대신 안내 메일을 보내고 응답은 같다. 1분 안에 다시 요청하면 429 */
+	/**
+	 * 회원가입 이메일 인증번호를 보낸다. 이미 가입된 이메일이면 인증번호 대신 안내 메일을 보내고 응답은 같다. 1분 안에 다시 요청하면 429.
+	 * 로봇 확인을 켰고 하루에 3통을 넘게 요청하면 captchaToken(action=send-code)이 필요하다(#166).
+	 */
 	@PostMapping("/email-verifications")
 	public ApiResponse<EmailVerificationSendResponse> sendEmailVerification(
-			@Valid @RequestBody EmailVerificationSendRequest request) {
-		return ApiResponse.ok(emailVerificationService.sendSignupCode(request.email()));
+			@Valid @RequestBody EmailVerificationSendRequest request, HttpServletRequest httpRequest) {
+		return ApiResponse.ok(emailVerificationService.sendSignupCode(request.email(), request.captchaToken(),
+				httpRequest.getRemoteAddr()));
 	}
 
 	/**
@@ -64,10 +68,14 @@ public class AuthController {
 				request.captchaToken(), httpRequest.getRemoteAddr()));
 	}
 
-	/** 비밀번호 재설정 인증번호를 보낸다. 가입 여부가 드러나지 않도록 가입되지 않은 이메일이어도 똑같이 성공으로 응답한다. */
+	/**
+	 * 비밀번호 재설정 인증번호를 보낸다. 가입 여부가 드러나지 않도록 가입되지 않은 이메일이어도 똑같이 성공으로 응답한다.
+	 * 로봇 확인을 켰고 하루에 3통을 넘게 요청하면 captchaToken(action=send-code)이 필요하다(#166).
+	 */
 	@PostMapping("/password-reset")
-	public ApiResponse<Void> requestPasswordReset(@Valid @RequestBody EmailVerificationSendRequest request) {
-		passwordResetService.requestReset(request.email());
+	public ApiResponse<Void> requestPasswordReset(@Valid @RequestBody EmailVerificationSendRequest request,
+			HttpServletRequest httpRequest) {
+		passwordResetService.requestReset(request.email(), request.captchaToken(), httpRequest.getRemoteAddr());
 		return ApiResponse.ok(null);
 	}
 
