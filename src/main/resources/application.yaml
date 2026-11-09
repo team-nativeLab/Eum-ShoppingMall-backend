@@ -246,5 +246,6 @@ app:
   notification:
     alimtalk:
       # 문의 답변 알림톡 템플릿 코드. 알림톡 대행사 콘솔에서 승인받은 코드를 넣는다.
-      # 템플릿 변수: #{문의제목}, #{답변}. 대행사가 정해지기 전에는 알림을 보내지 않고 SKIPPED로 기록한다.
+      # 템플릿 변수: #{문의번호}, #{접수일}(예: 2026-11-09), #{답변}. 사용자가 쓴 문의 제목은 넣지 않는다(#165).
+      # 대행사가 정해지기 전에는 알림을 보내지 않고 SKIPPED로 기록한다.
       inquiry-answer-template: ${ALIMTALK_INQUIRY_ANSWER_TEMPLATE:INQUIRY_ANSWER}

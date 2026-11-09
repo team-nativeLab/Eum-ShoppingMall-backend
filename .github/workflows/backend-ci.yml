@@ -46,6 +46,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # RDS 파라미터 그룹(log_bin_trust_function_creators=1)과 같게 맞춘다. 바이너리 로그가 켜진 MySQL에서는
+      # 이 값이 없으면 마이그레이션 계정이 감사 로그 보호 트리거(V25)를 만들 수 없다.
+      - name: Allow the migration account to create triggers
+        run: docker exec ${{ job.services.mysql.id }} mysql -uroot -proot -e "SET GLOBAL log_bin_trust_function_creators = 1;"
+
       # 운영의 migrate 작업과 같은 방식으로 돌린다(#131). Flyway를 적용하고 Hibernate가 스키마를 검증한 뒤
       # MigrationOnlyRunner가 종료 코드 0으로 끝나야 통과한다. 운영 API는 Flyway를 끄고 이 결과를 검증만 한다.
       - name: Run the migration task against an empty MySQL database

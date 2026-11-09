@@ -49,6 +49,13 @@ resource "aws_db_parameter_group" "main" {
     name  = "log_output"
     value = "FILE"
   }
+
+  # 마이그레이션 계정이 감사 로그 보호 트리거(V25, #131)를 만들 수 있게 한다.
+  # RDS는 백업 때문에 바이너리 로그가 켜져 있고, 계정에 SUPER 권한이 없어 이 값이 없으면 트리거를 만들 수 없다.
+  parameter {
+    name  = "log_bin_trust_function_creators"
+    value = "1"
+  }
 }
 
 # DB에 직접 접속해 한 일을 남긴다(#132, MariaDB 감사 플러그인).

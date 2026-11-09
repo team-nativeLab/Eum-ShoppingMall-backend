@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -76,8 +77,12 @@ class InquiryAnswerNotificationTests {
 		assertThat(alimtalk.sent).singleElement().satisfies(message -> {
 			assertThat(message.phone()).isEqualTo("01012345678");
 			assertThat(message.templateCode()).isEqualTo("INQUIRY_ANSWER");
-			assertThat(message.variables()).containsEntry("문의제목", "알림 테스트 교환 문의")
+			assertThat(message.variables()).containsOnlyKeys("문의번호", "접수일", "답변")
+					.containsEntry("문의번호", String.valueOf(inquiryId))
+					.containsEntry("접수일", LocalDate.now().toString())
 					.containsEntry("답변", "교환은 수령 후 7일 안에 가능합니다.");
+			// 사용자가 쓴 제목은 공식 알림에 싣지 않는다(#165).
+			assertThat(message.variables().values()).noneMatch(value -> value.contains("알림 테스트"));
 		});
 		mockMvc.perform(get("/api/v1/admin/inquiries/{id}", inquiryId))
 				.andExpect(jsonPath("$.data.answerNotification.status").value("SENT"))
