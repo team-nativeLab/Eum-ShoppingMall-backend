@@ -133,7 +133,7 @@ Terraform은 리소스를 생성해 과금할 수 있습니다. 아래 `apply`�
 | 계정 | 쓰는 곳 | 권한 |
 |---|---|---|
 | 마스터(`rds_master_secret_arn`) | 계정을 만들 때만 | 모두 |
-| `shopping_migrator` | 일회성 `migrate` 작업 | `shopping`의 DDL·DML |
+| `shopping_migrator` | 일회성 `migrate` 작업 | `shopping`의 DDL·DML·트리거 |
 | `shopping_app` | API 서비스 | 표마다 `SELECT, INSERT, UPDATE, DELETE`. 감사 로그(`admin_audit_log`)는 `UPDATE` 빼고 |
 
 ### 계정 만들기
@@ -142,11 +142,12 @@ Terraform은 리소스를 생성해 과금할 수 있습니다. 아래 `apply`�
 
 ```sql
 CREATE USER 'shopping_migrator'@'%' IDENTIFIED BY '<마이그레이션 비밀번호>' REQUIRE SSL;
-GRANT CREATE, ALTER, DROP, INDEX, REFERENCES, SELECT, INSERT, UPDATE, DELETE ON shopping.* TO 'shopping_migrator'@'%';
+GRANT CREATE, ALTER, DROP, INDEX, REFERENCES, TRIGGER, SELECT, INSERT, UPDATE, DELETE ON shopping.* TO 'shopping_migrator'@'%';
 CREATE USER 'shopping_app'@'%' IDENTIFIED BY '<앱 비밀번호>' REQUIRE SSL;
 ```
 
-앱 계정 권한은 표마다 줍니다. 감사 로그는 2년 보관 정리(#67) 때문에 지울 수는 있어야 하지만 고칠 필요는 없으므로 `UPDATE`를 주지 않습니다. 새 표를 만드는 마이그레이션 뒤에는 이 쿼리로 나온 `GRANT` 문을 다시 실행합니다.
+앱 계정 권한은 표마다 줍니다. 감사 로그는 2년 보관 정리(#67) 때문에 지울 수는 있어야 하지만 고칠 필요는 없으므로 `UPDATE`를 주지 않습니다.
+DB 트리거(V25)가 한 번 더 막습니다. 어떤 계정으로 접속해도 감사 로그는 고칠 수 없고, 364일보다 최근 기록은 지울 수 없습니다. 그래서 앱이 뚫려도 최근 감사 로그를 지워 흔적을 없앨 수 없습니다. 트리거를 지우려면 마이그레이션 계정이나 마스터 계정이 있어야 하고, 그 일은 RDS 감사 로그에 남습니다(#132). 트리거를 만들려면 RDS 파라미터 그룹에 `log_bin_trust_function_creators=1`이 있어야 하며, Terraform이 넣습니다. V25 전에 만든 마이그레이션 계정에는 `GRANT TRIGGER ON shopping.* TO 'shopping_migrator'@'%';`를 더 줍니다. 새 표를 만드는 마이그레이션 뒤에는 이 쿼리로 나온 `GRANT` 문을 다시 실행합니다.
 
 ```sql
 SELECT CONCAT('GRANT ', IF(table_name = 'admin_audit_log', 'SELECT, INSERT, DELETE', 'SELECT, INSERT, UPDATE, DELETE'),
