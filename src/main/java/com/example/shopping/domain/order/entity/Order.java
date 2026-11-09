@@ -124,6 +124,9 @@ public class Order extends BaseTimeEntity {
 	@Column(name = "idempotency_key", length = 100)
 	private String idempotencyKey;
 
+	// 보유 기간이 지나 배송지 개인정보를 지운 시각(#134). PersonalDataRetentionCleaner만 채운다.
+	private LocalDateTime personalDataPurgedAt;
+
 	@Version
 	private long version;
 

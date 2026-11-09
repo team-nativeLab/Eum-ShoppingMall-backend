@@ -97,7 +97,21 @@ class VerificationAttemptGuardTests {
 	}
 
 	@Test
-	void 다섯_번_틀리면_그때부터_1시간_동안_막고_지나면_처음부터_다시_센다() {
+	void 로봇_확인을_켜면_다섯_번을_넘게_틀려도_막지_않고_로봇_확인만_요구한다() {
+		for (int i = 0; i < 10; i++) {
+			assertThat(guard.recordFailure(EMAIL, SIGNUP)).isFalse();
+		}
+
+		// 남이 일부러 틀려도 막히지 않으므로 주인은 로봇 확인을 하고 계속 인증할 수 있다(#141).
+		assertThatCode(() -> guard.checkNotLocked(EMAIL, SIGNUP)).doesNotThrowAnyException();
+		assertError(() -> guard.checkAttemptAllowed(EMAIL, SIGNUP, null, null), ErrorCode.CAPTCHA_REQUIRED);
+		assertThatCode(() -> guard.checkAttemptAllowed(EMAIL, SIGNUP, "human", null)).doesNotThrowAnyException();
+		assertThat(guard.isCaptchaProtected()).isTrue();
+	}
+
+	@Test
+	void 로봇_확인을_끄면_다섯_번_틀렸을_때부터_1시간_동안_막고_지나면_처음부터_다시_센다() {
+		captchaEnabled = false;
 		for (int i = 0; i < 4; i++) {
 			assertThat(guard.recordFailure(EMAIL, SIGNUP)).isFalse();
 		}
@@ -118,6 +132,7 @@ class VerificationAttemptGuardTests {
 
 	@Test
 	void 첫_실패부터_1시간이_지나면_틀린_횟수를_다시_센다() {
+		captchaEnabled = false;
 		for (int i = 0; i < 3; i++) {
 			guard.recordFailure(EMAIL, SIGNUP);
 		}

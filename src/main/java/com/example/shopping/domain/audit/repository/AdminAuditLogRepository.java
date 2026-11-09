@@ -20,11 +20,16 @@ public interface AdminAuditLogRepository extends JpaRepository<AdminAuditLog, Lo
 			select a from AdminAuditLog a
 			where (:actorId is null or a.actorMemberId = :actorId)
 			  and (:targetType is null or a.targetType = :targetType)
+			  and (:kind is null
+			       or (:kind = 'READ' and a.action = 'GET')
+			       or (:kind = 'LOGIN' and a.action = 'LOGIN')
+			       or (:kind = 'CHANGE' and a.action not in ('GET', 'LOGIN')))
 			  and (:fromDate is null or a.createdAt >= :fromDate)
 			  and (:toDate is null or a.createdAt < :toDate)
 			order by a.createdAt desc, a.id desc
 			""")
 	Page<AdminAuditLog> search(@Param("actorId") Long actorId, @Param("targetType") String targetType,
+			@Param("kind") String kind,
 			@Param("fromDate") java.time.LocalDateTime fromDate,
 			@Param("toDate") java.time.LocalDateTime toDate, Pageable pageable);
 
