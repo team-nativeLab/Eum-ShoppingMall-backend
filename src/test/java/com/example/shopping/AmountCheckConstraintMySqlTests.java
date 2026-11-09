@@ -41,6 +41,8 @@ class AmountCheckConstraintMySqlTests {
 			.withEnv("MYSQL_USER", "shopping")
 			.withEnv("MYSQL_PASSWORD", "shopping")
 			.withEnv("MYSQL_ROOT_PASSWORD", "root")
+			// RDS 파라미터 그룹과 같게, 바이너리 로그가 켜진 MySQL에서도 마이그레이션이 트리거를 만들 수 있게 한다(V25, #131).
+			.withCommand("--log-bin-trust-function-creators=1")
 			.withExposedPorts(3306)
 			.waitingFor(Wait.forLogMessage(".*ready for connections.*port: 3306.*", 1)
 					.withStartupTimeout(Duration.ofMinutes(3)));

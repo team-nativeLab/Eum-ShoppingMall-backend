@@ -242,6 +242,11 @@ run "database_enabled" {
   }
 
   assert {
+    condition     = contains([for p in aws_db_parameter_group.main[0].parameter : "${p.name}=${p.value}"], "log_bin_trust_function_creators=1")
+    error_message = "마이그레이션 계정이 감사 로그 보호 트리거를 만들 수 있어야 합니다(log_bin_trust_function_creators=1, #131)."
+  }
+
+  assert {
     condition = alltrue([
       contains([for p in aws_db_parameter_group.main[0].parameter : "${p.name}=${p.value}"], "slow_query_log=1"),
       aws_db_instance.main[0].option_group_name == aws_db_option_group.main[0].name,
