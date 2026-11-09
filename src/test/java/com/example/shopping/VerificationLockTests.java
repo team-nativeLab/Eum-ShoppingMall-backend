@@ -247,16 +247,89 @@ class VerificationLockTests {
 		resetPassword(email, WRONG_CODE, null).andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
 	}
 
+	// ───────── 인증번호 발송 한도 (#166) ─────────
+
+	@Test
+	void 로봇_확인을_켜면_하루_3통을_넘는_재설정_요청에_로봇_확인을_요구하고_통과하면_보낸다() throws Exception {
+		// 남이 하루 한도를 채워도 주인은 로봇 확인을 하고 재설정 인증번호를 받을 수 있다.
+		String email = uniqueEmail();
+		insertMember(email);
+		for (int i = 0; i < 3; i++) {
+			requestReset(email).andExpect(status().isOk());
+			pretendResendIntervalPassed(email);
+		}
+		await().atMost(Duration.ofSeconds(5)).until(() -> mailbox.sentTo(email).size() == 3);
+
+		requestReset(email)
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("CAPTCHA_REQUIRED"));
+		requestReset(email, FakeCaptchaVerifier.ROBOT)
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("CAPTCHA_INVALID"));
+		requestReset(email, FakeCaptchaVerifier.HUMAN).andExpect(status().isOk());
+		await().atMost(Duration.ofSeconds(5)).until(() -> mailbox.sentTo(email).size() == 4);
+		assertThat(captcha.calls).containsExactly("send-code:robot-token@" + CLIENT_IP,
+				"send-code:human-token@" + CLIENT_IP);
+
+		// 가입되지 않은 이메일도 똑같이 로봇 확인을 요구하므로 가입 여부가 드러나지 않는다.
+		String nobody = uniqueEmail();
+		for (int i = 0; i < 3; i++) {
+			requestReset(nobody).andExpect(status().isOk());
+			pretendResendIntervalPassed(nobody);
+		}
+		requestReset(nobody)
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("CAPTCHA_REQUIRED"));
+		assertThat(mailbox.sentTo(nobody)).isEmpty();
+	}
+
+	@Test
+	void 로봇_확인을_통과해도_하루_20통까지만_보낸다() throws Exception {
+		String email = uniqueEmail();
+		for (int i = 0; i < 20; i++) {
+			sendSignupCode(email, FakeCaptchaVerifier.HUMAN).andExpect(status().isOk());
+			pretendResendIntervalPassed(email);
+		}
+		sendSignupCode(email, FakeCaptchaVerifier.HUMAN)
+				.andExpect(status().isTooManyRequests())
+				.andExpect(jsonPath("$.code").value("VERIFICATION_DAILY_LIMIT_EXCEEDED"));
+		assertThat(mailbox.sentTo(email)).hasSize(20);
+	}
+
+	@Test
+	void 로봇_확인을_끄면_로봇_확인_없이_하루_5통까지만_보낸다() throws Exception {
+		captcha.enabled = false;
+		String email = uniqueEmail();
+		for (int i = 0; i < 5; i++) {
+			sendSignupCode(email).andExpect(status().isOk());
+			pretendResendIntervalPassed(email);
+		}
+		sendSignupCode(email)
+				.andExpect(status().isTooManyRequests())
+				.andExpect(jsonPath("$.code").value("VERIFICATION_DAILY_LIMIT_EXCEEDED"));
+		assertThat(captcha.calls).isEmpty();
+	}
+
 	private static String uniqueEmail() {
 		return "lock-" + UUID.randomUUID().toString().substring(0, 8) + "@example.com";
 	}
 
 	private ResultActions sendSignupCode(String email) throws Exception {
-		return postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + email + "\"}");
+		return sendSignupCode(email, null);
+	}
+
+	private ResultActions sendSignupCode(String email, String captchaToken) throws Exception {
+		return postJson("/api/v1/auth/email-verifications",
+				"{\"email\":\"" + email + "\"" + captchaField(captchaToken) + "}");
 	}
 
 	private ResultActions requestReset(String email) throws Exception {
-		return postJson("/api/v1/auth/password-reset", "{\"email\":\"" + email + "\"}");
+		return requestReset(email, null);
+	}
+
+	private ResultActions requestReset(String email, String captchaToken) throws Exception {
+		return postJson("/api/v1/auth/password-reset",
+				"{\"email\":\"" + email + "\"" + captchaField(captchaToken) + "}");
 	}
 
 	private ResultActions confirm(String email, String code, String captchaToken) throws Exception {
