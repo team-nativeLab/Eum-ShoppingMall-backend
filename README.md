@@ -102,6 +102,18 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 - **가리기:** 작성자 이름은 첫 글자와 마지막 글자만 남깁니다(`홍*동`). 비밀 문의는 작성자 본인이 아니면 제목을 "비밀 문의입니다."로 바꾸고 내용과 답변을 비웁니다. 탈퇴한 회원은 "탈퇴한 회원"으로 보입니다.
 - **관리자:** `GET /api/v1/admin/product-questions`(`status`=`WAITING`·`ANSWERED`, `productId`), `GET`·`PATCH /api/v1/admin/product-questions/{questionId}`(`answer`, `adminMemo`). 답변을 남기면 답변 완료, 빈 답변이면 답변 대기로 돌아갑니다. 관리자 메모는 고객에게 보이지 않습니다. 비밀 문의와 작성자 이름이 보이므로 조회도 감사 로그에 남깁니다.
 
+## 상품 리뷰
+
+배송이 끝난 주문의 상품마다(주문 품목 하나에) 회원이 리뷰를 하나씩 씁니다. 누구나 목록과 요약을 봅니다.
+
+- **고객:**
+  - `GET /api/v1/products/{productId}/reviews`(`sort`=`latest`(기본)·`rating_high`·`rating_low`, `size`는 50까지), `GET /api/v1/products/{productId}/reviews/summary`(평균 별점, 별점별 수)
+  - `GET /api/v1/me/reviewable-items`: 리뷰를 쓸 수 있는 내 주문 상품(배송 완료, 취소·반품 안 됨, 아직 리뷰 없음)
+  - `POST /api/v1/products/{productId}/reviews`(`orderItemId`, `rating` 1~5, `content`). 남의 품목·다른 상품의 품목·배송 전 품목은 `400 REVIEW_NOT_ALLOWED`, 이미 썼으면 `409 REVIEW_ALREADY_WRITTEN`입니다.
+  - 작성자 이름은 가리고(`홍*동`), 주문할 때 고른 옵션 이름을 함께 보여 줍니다. 사진 리뷰는 아직 받지 않습니다(`photoReviewCount`는 0).
+- **상품 평점:** 상품 목록·상세에 `rating`(소수 첫째 자리, 리뷰가 없으면 null)과 `reviewCount`가 있습니다. 상품에 보이는 리뷰 수와 별점 합계를 저장해 두고, 리뷰를 쓰거나 숨기거나 다시 보일 때 한 쿼리로 바꿉니다.
+- **관리자:** `GET /api/v1/admin/reviews`(`productId`, `visible`, `rating`), `PATCH /api/v1/admin/reviews/{reviewId}`(`visible`, `adminReply`, `adminMemo`). 숨기면 목록과 평점에서 빠집니다. 답변은 고객에게 보이고 메모는 보이지 않습니다. 목록은 작성자 이름이 보여 감사 로그에 남깁니다.
+
 ## 개인정보 보유 기간
 
 보유 기간이 지난 개인정보는 매일 05:30에 지웁니다(`PersonalDataRetentionCleaner`, #134). 값은 개인정보 처리방침의 보유 기간과 맞춥니다.
