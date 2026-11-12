@@ -103,6 +103,7 @@ public final class ApiPolicy {
 			"/api/v1/admin/inquiries/{inquiryId}",
 			"/api/v1/admin/product-questions",
 			"/api/v1/admin/product-questions/{questionId}",
+			"/api/v1/admin/reviews",
 			"/api/v1/admin/quotes",
 			"/api/v1/admin/audit-logs");
 

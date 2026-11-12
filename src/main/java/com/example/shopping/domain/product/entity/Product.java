@@ -93,6 +93,15 @@ public class Product extends BaseTimeEntity {
 	@Column(nullable = false)
 	private long salesCount;
 
+	// 보이는 리뷰 수와 별점 합계. 목록마다 리뷰를 세지 않도록 리뷰를 쓰거나 숨길 때 함께 바꾼다(ProductRepository.adjustReviewStats).
+	@ColumnDefault("0")
+	@Column(nullable = false)
+	private int reviewCount;
+
+	@ColumnDefault("0")
+	@Column(nullable = false)
+	private int ratingSum;
+
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false, length = 20)
@@ -178,6 +187,11 @@ public class Product extends BaseTimeEntity {
 	}
 
 	/** 금액 미표시 상품은 가격을 응답에 싣지 않도록 null을 돌려준다. */
+	/** 보이는 리뷰의 평균 별점(소수 첫째 자리). 리뷰가 없으면 null */
+	public Double getRating() {
+		return reviewCount <= 0 ? null : Math.round(ratingSum * 10.0 / reviewCount) / 10.0;
+	}
+
 	public Long getDisplayPrice() {
 		return priceVisible ? basePrice : null;
 	}

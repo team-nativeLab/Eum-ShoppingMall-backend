@@ -100,7 +100,9 @@ class AmountCheckConstraintMySqlTests {
 				"ck_orders_total_amount", "ck_orders_item_amount", "ck_orders_discount_amount", "ck_orders_shipping_fee",
 				"ck_order_item_order_price", "ck_order_item_quantity",
 				"ck_payment_approved_amount", "ck_payment_balance_amount",
-				"ck_shipping_policy_shipping_fee", "ck_shipping_policy_free_shipping_threshold");
+				"ck_shipping_policy_shipping_fee", "ck_shipping_policy_free_shipping_threshold",
+				// 리뷰 별점(1~5)과 상품의 리뷰 수·별점 합계(V28)
+				"ck_product_review_rating", "ck_product_review_count");
 	}
 
 	private long insertSku() {

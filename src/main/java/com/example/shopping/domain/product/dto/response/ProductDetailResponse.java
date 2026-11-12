@@ -11,10 +11,12 @@ import com.example.shopping.domain.product.entity.ProductStatus;
  *
  * @param listPrice 정가. 없으면 null
  * @param soldOut   품절이면 true (품절로 지정했거나 모든 옵션의 재고가 없음)
+ * @param rating    보이는 리뷰의 평균 별점(소수 첫째 자리). 리뷰가 없으면 null
  */
 public record ProductDetailResponse(Long id, Long categoryId, String name, String brand, String description,
 		String imageUrl, Long price, Long listPrice, boolean priceVisible,
-		List<CertificationResponse> certifications, ProductStatus status, boolean soldOut, List<SkuResponse> skus) {
+		List<CertificationResponse> certifications, ProductStatus status, boolean soldOut, List<SkuResponse> skus,
+		Double rating, int reviewCount) {
 
 	public record SkuResponse(Long id, String optionName, Long price, boolean soldOut) {
 
@@ -33,6 +35,6 @@ public record ProductDetailResponse(Long id, Long categoryId, String name, Strin
 				product.getDescription(), product.getImageUrl(), product.getDisplayPrice(),
 				product.getDisplayListPrice(), product.isPriceVisible(),
 				CertificationResponse.listOf(product.getCertifications()), product.getStatus(), product.isSoldOut(),
-				skus);
+				skus, product.getRating(), product.getReviewCount());
 	}
 }
