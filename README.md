@@ -114,6 +114,15 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 - **상품 평점:** 상품 목록·상세에 `rating`(소수 첫째 자리, 리뷰가 없으면 null)과 `reviewCount`가 있습니다. 상품에 보이는 리뷰 수와 별점 합계를 저장해 두고, 리뷰를 쓰거나 숨기거나 다시 보일 때 한 쿼리로 바꿉니다.
 - **관리자:** `GET /api/v1/admin/reviews`(`productId`, `visible`, `rating`), `PATCH /api/v1/admin/reviews/{reviewId}`(`visible`, `adminReply`, `adminMemo`). 숨기면 목록과 평점에서 빠집니다. 답변은 고객에게 보이고 메모는 보이지 않습니다. 목록은 작성자 이름이 보여 감사 로그에 남깁니다.
 
+## 브랜드
+
+브랜드 목록·상세 페이지의 브랜드 소개입니다. 상품과는 이름으로 이어집니다: 상품의 `brand` 값이 브랜드 `name`과 같으면 그 브랜드의 상품이고, 브랜드 상품 목록은 `GET /api/v1/products?brand={name}`으로 봅니다.
+
+- **고객(로그인 없이):** `GET /api/v1/brands`(보이는 브랜드, 정렬 순서·이름 순, 고객에게 보이는 상품 수 `productCount`), `GET /api/v1/brands/{brandId}`(로고·대표 이미지·주력 분야·원산지·인증·브랜드 스토리), `GET /api/v1/brands/featured`(대표 브랜드, 없으면 `null`)
+- **관리자:** `GET`·`POST /api/v1/admin/brands`, `PUT`·`DELETE /api/v1/admin/brands/{brandId}`. 이름이 같은 브랜드는 `409 BRAND_NAME_DUPLICATED`입니다. 이름을 바꾸면 이전 이름을 쓰던 상품의 브랜드도 함께 바꿉니다. 브랜드를 지워도 상품의 브랜드 값은 그대로입니다.
+- **이미지:** 로고·대표 이미지는 업로드 API가 돌려준 주소만 받고, 참조 없는 이미지 정리가 지우지 않도록 알립니다(`ImageReferences`). 관리자가 입력한 글은 화면에서 텍스트로만 그립니다.
+- 대표 브랜드(`featured`)가 여럿이면 정렬 순서가 앞선 하나를 씁니다.
+
 ## 개인정보 보유 기간
 
 보유 기간이 지난 개인정보는 매일 05:30에 지웁니다(`PersonalDataRetentionCleaner`, #134). 값은 개인정보 처리방침의 보유 기간과 맞춥니다.
