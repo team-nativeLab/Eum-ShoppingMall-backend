@@ -101,6 +101,8 @@ public final class ApiPolicy {
 			"/api/v1/admin/orders/{orderId}",
 			"/api/v1/admin/inquiries",
 			"/api/v1/admin/inquiries/{inquiryId}",
+			"/api/v1/admin/product-questions",
+			"/api/v1/admin/product-questions/{questionId}",
 			"/api/v1/admin/quotes",
 			"/api/v1/admin/audit-logs");
 
@@ -151,6 +153,8 @@ public final class ApiPolicy {
 			new RateLimit(HttpMethod.DELETE, "/api/v1/me", "PASSWORD /api/v1/me", Limit.DEFAULT),
 			post("/api/v1/quotes"),
 			post("/api/v1/support/inquiries"),
+			// 회원만 쓰지만 공개 게시판이라 도배를 막는다.
+			post("/api/v1/products/*/questions"),
 			post("/api/v1/orders"),
 			post("/api/v1/orders/*/cancel"),
 			post("/api/v1/payments/confirm"),
