@@ -94,6 +94,14 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 - **제한:** 회원마다 10개까지 저장합니다(`400 ADDRESS_LIMIT_EXCEEDED`). 남의 배송지는 없는 배송지와 똑같이 `404 ADDRESS_NOT_FOUND`입니다.
 - 주문은 배송지를 따로 복사해 두므로, 주소록을 고치거나 지워도 지난 주문은 그대로입니다.
 
+## 상품 문의
+
+상품 상세의 상품 문의(Q&A)입니다. 누구나 목록을 보고, 회원만 문의를 남깁니다.
+
+- **고객:** `GET /api/v1/products/{productId}/questions`(최근 순, `size`는 50까지), `POST /api/v1/products/{productId}/questions`(`title`, `content`, `isPrivate`). 고객에게 보이는 상품에만 남길 수 있고, 작성은 IP별 요청 제한을 받습니다.
+- **가리기:** 작성자 이름은 첫 글자와 마지막 글자만 남깁니다(`홍*동`). 비밀 문의는 작성자 본인이 아니면 제목을 "비밀 문의입니다."로 바꾸고 내용과 답변을 비웁니다. 탈퇴한 회원은 "탈퇴한 회원"으로 보입니다.
+- **관리자:** `GET /api/v1/admin/product-questions`(`status`=`WAITING`·`ANSWERED`, `productId`), `GET`·`PATCH /api/v1/admin/product-questions/{questionId}`(`answer`, `adminMemo`). 답변을 남기면 답변 완료, 빈 답변이면 답변 대기로 돌아갑니다. 관리자 메모는 고객에게 보이지 않습니다. 비밀 문의와 작성자 이름이 보이므로 조회도 감사 로그에 남깁니다.
+
 ## 개인정보 보유 기간
 
 보유 기간이 지난 개인정보는 매일 05:30에 지웁니다(`PersonalDataRetentionCleaner`, #134). 값은 개인정보 처리방침의 보유 기간과 맞춥니다.
