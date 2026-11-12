@@ -60,6 +60,8 @@ public final class ApiPolicy {
 			"/api/v1/contents/**",
 			"/api/v1/categories/**",
 			"/api/v1/products/**",
+			"/api/v1/brands",
+			"/api/v1/brands/**",
 			"/api/v1/notices/**",
 			"/api/v1/faqs/**");
 

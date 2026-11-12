@@ -70,4 +70,9 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
 			""")
 	int adjustReviewStats(@Param("productId") Long productId, @Param("countDelta") int countDelta,
 			@Param("ratingDelta") int ratingDelta);
+
+	/** 브랜드 이름을 바꿀 때 이전 이름을 쓰던 상품의 브랜드도 바꾼다(삭제된 상품 포함). */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("update Product p set p.brand = :newName where p.brand = :oldName")
+	int renameBrand(@Param("oldName") String oldName, @Param("newName") String newName);
 }
