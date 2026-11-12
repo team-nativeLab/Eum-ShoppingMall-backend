@@ -45,6 +45,8 @@ public enum ErrorCode {
 	ADMIN_MFA_SETUP_REQUIRED(HttpStatus.BAD_REQUEST, "OTP를 먼저 등록해 주세요."),
 	ADMIN_MFA_ALREADY_ENABLED(HttpStatus.CONFLICT, "이미 OTP를 등록했습니다. 기기를 바꾸려면 최고 관리자에게 초기화를 요청해 주세요."),
 	MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "회원을 찾을 수 없습니다."),
+	ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "배송지를 찾을 수 없습니다."),
+	ADDRESS_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "배송지는 10개까지 저장할 수 있습니다. 쓰지 않는 배송지를 지워 주세요."),
 	CURRENT_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "현재 비밀번호가 올바르지 않습니다."),
 	PASSWORD_NOT_CHANGED(HttpStatus.BAD_REQUEST, "새 비밀번호가 현재 비밀번호와 같습니다."),
 	ACCOUNT_HAS_ACTIVE_ORDERS(HttpStatus.CONFLICT, "진행 중인 주문이 있어 탈퇴할 수 없습니다."),
