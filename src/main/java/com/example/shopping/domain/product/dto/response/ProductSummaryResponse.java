@@ -12,16 +12,20 @@ import com.example.shopping.domain.product.entity.ProductStatus;
  * @param soldOut        품절이면 true (품절로 지정했거나 모든 옵션의 재고가 없음)
  * @param optionRequired 옵션이 여러 개라 상세에서 옵션을 골라야 하면 true
  * @param defaultSkuId   옵션이 하나뿐이면 그 옵션 ID. 목록에서 바로 장바구니에 담을 때 쓴다. 아니면 null
+ * @param rating         보이는 리뷰의 평균 별점(소수 첫째 자리). 리뷰가 없으면 null
+ * @param reviewCount    보이는 리뷰 수
  */
 public record ProductSummaryResponse(Long id, Long categoryId, String name, String brand, String imageUrl,
 		Long price, Long listPrice, boolean priceVisible, List<CertificationResponse> certifications,
-		ProductStatus status, boolean soldOut, boolean optionRequired, Long defaultSkuId) {
+		ProductStatus status, boolean soldOut, boolean optionRequired, Long defaultSkuId, Double rating,
+		int reviewCount) {
 
 	public static ProductSummaryResponse from(Product product) {
 		Long categoryId = product.getCategory() == null ? null : product.getCategory().getId();
 		return new ProductSummaryResponse(product.getId(), categoryId, product.getName(), product.getBrand(),
 				product.getImageUrl(), product.getDisplayPrice(), product.getDisplayListPrice(),
 				product.isPriceVisible(), CertificationResponse.listOf(product.getCertifications()),
-				product.getStatus(), product.isSoldOut(), product.isOptionRequired(), product.getDefaultSkuId());
+				product.getStatus(), product.isSoldOut(), product.isOptionRequired(), product.getDefaultSkuId(),
+				product.getRating(), product.getReviewCount());
 	}
 }

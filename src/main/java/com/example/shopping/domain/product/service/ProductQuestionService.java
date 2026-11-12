@@ -1,8 +1,6 @@
 package com.example.shopping.domain.product.service;
 
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -22,7 +20,6 @@ import com.example.shopping.domain.product.repository.ProductQuestionRepository;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
-import com.example.shopping.global.privacy.Masking;
 import com.example.shopping.global.response.PageResponse;
 
 import lombok.RequiredArgsConstructor;
@@ -34,7 +31,6 @@ import lombok.RequiredArgsConstructor;
 public class ProductQuestionService {
 
 	static final int MAX_PAGE_SIZE = 50;
-	private static final String WITHDRAWN_AUTHOR = "탈퇴한 회원";
 
 	private final ProductQuestionRepository questionRepository;
 	private final ProductRepository productRepository;
@@ -49,11 +45,10 @@ public class ProductQuestionService {
 		visibleProduct(productId);
 		Pageable page = PageRequest.of(pageable.getPageNumber(), Math.min(pageable.getPageSize(), MAX_PAGE_SIZE));
 		Page<ProductQuestion> questions = questionRepository.findByProductId(productId, page);
-		Map<Long, Member> authors = memberRepository.findAllById(
-						questions.map(ProductQuestion::getMemberId).toSet())
-				.stream().collect(Collectors.toMap(Member::getId, Function.identity()));
+		Map<Long, Member> authors = AuthorNames.load(memberRepository,
+				questions.map(ProductQuestion::getMemberId).toSet());
 		return PageResponse.from(questions.map(question -> ProductQuestionResponse.of(question,
-				authorName(authors.get(question.getMemberId())), viewerId)));
+				AuthorNames.masked(authors.get(question.getMemberId())), viewerId)));
 	}
 
 	@Transactional
@@ -64,19 +59,12 @@ public class ProductQuestionService {
 				.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 		ProductQuestion question = questionRepository.save(ProductQuestion.create(product, memberId,
 				request.title().trim(), request.content().trim(), Boolean.TRUE.equals(request.isPrivate())));
-		return ProductQuestionResponse.of(question, authorName(author), memberId);
+		return ProductQuestionResponse.of(question, AuthorNames.masked(author), memberId);
 	}
 
 	private Product visibleProduct(Long productId) {
 		return productRepository.findById(productId)
 				.filter(product -> ProductStatus.CUSTOMER_VISIBLE.contains(product.getStatus()))
 				.orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
-	}
-
-	private static String authorName(Member author) {
-		if (author == null || author.getStatus() == MemberStatus.WITHDRAWN) {
-			return WITHDRAWN_AUTHOR;
-		}
-		return Masking.name(author.getName());
 	}
 }
