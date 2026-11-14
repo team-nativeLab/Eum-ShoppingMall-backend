@@ -14,10 +14,12 @@ import com.example.shopping.domain.legal.dto.response.LegalDocumentResponse;
 import com.example.shopping.domain.legal.service.AdminLegalDocumentService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 관리자 약관·정책 문서 관리. 버전마다 저장하며, 시행 중이거나 지난 공개 버전은 고칠 수 없다. */
+@Tag(name = "약관 관리")
 @RestController
 @RequestMapping("/api/v1/admin/legal-documents")
 @RequiredArgsConstructor

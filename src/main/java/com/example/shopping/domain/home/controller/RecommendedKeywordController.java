@@ -9,9 +9,11 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.shopping.domain.home.service.RecommendedKeywordService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 /** 검색 결과가 없을 때 보여 줄 추천 검색어(누구나) */
+@Tag(name = "검색")
 @RestController
 @RequestMapping("/api/v1/search/recommended-keywords")
 @RequiredArgsConstructor
