@@ -51,10 +51,11 @@ public final class ApiPolicy {
 			ADMIN_REFRESH,
 			ADMIN_LOGOUT);
 
-	/** 로그인 없이 조회하는 공개 데이터(GET): 메인, 카테고리, 상품, 공지, FAQ, 고정 콘텐츠, 앱 설정, 배송비 정책, 업로드된 이미지 */
+	/** 로그인 없이 조회하는 공개 데이터(GET): 메인, 사업자 정보, 카테고리, 상품, 브랜드, 공지, FAQ, 고정 콘텐츠, 앱 설정, 배송비 정책, 업로드된 이미지 */
 	public static final List<String> PUBLIC_GET = List.of(
 			"/files/**",
 			"/api/v1/home",
+			"/api/v1/company",
 			"/api/v1/app/config",
 			"/api/v1/shipping-policy",
 			"/api/v1/contents/**",

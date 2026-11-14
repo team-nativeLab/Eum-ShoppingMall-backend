@@ -33,6 +33,8 @@ public enum ErrorCode {
 	INVALID_IMAGE_URL(HttpStatus.BAD_REQUEST, "이미지 주소는 파일 업로드 API가 돌려준 주소만 쓸 수 있습니다."),
 	BANNER_NOT_FOUND(HttpStatus.NOT_FOUND, "배너를 찾을 수 없습니다."),
 	CONTENT_NOT_FOUND(HttpStatus.NOT_FOUND, "콘텐츠를 찾을 수 없습니다."),
+	INVALID_HOME_IMAGE_URL(HttpStatus.BAD_REQUEST, "홈 이미지는 파일 업로드 API가 돌려준 주소나 웹의 정적 이미지(/assets/...)만 쓸 수 있습니다."),
+	HOME_ITEM_ID_DUPLICATED(HttpStatus.BAD_REQUEST, "같은 목록 안에 ID가 겹치는 항목이 있습니다."),
 
 	// 회원
 	EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),

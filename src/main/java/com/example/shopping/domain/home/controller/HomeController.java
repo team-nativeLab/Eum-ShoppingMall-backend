@@ -6,9 +6,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.shopping.domain.home.dto.CompanyInfo;
 import com.example.shopping.domain.home.dto.response.AppConfigResponse;
 import com.example.shopping.domain.home.dto.response.ContentResponse;
 import com.example.shopping.domain.home.dto.response.HomeResponse;
+import com.example.shopping.domain.home.service.CompanyInfoService;
 import com.example.shopping.domain.home.service.HomeService;
 import com.example.shopping.global.response.ApiResponse;
 
@@ -21,12 +23,19 @@ import lombok.RequiredArgsConstructor;
 public class HomeController {
 
 	private final HomeService homeService;
+	private final CompanyInfoService companyInfoService;
 	private final AppConfigResponse appConfig;
 
-	/** WEB-001, 002 메인 콘텐츠 (노출 중인 배너와 신상품) */
+	/** WEB-001, 002 메인 콘텐츠 (관리자 홈 편성, 노출 중인 배너, 신상품) */
 	@GetMapping("/home")
 	public ApiResponse<HomeResponse> home() {
 		return ApiResponse.ok(homeService.getHome());
+	}
+
+	/** 푸터의 사업자·고객센터 정보. 관리자가 아직 저장하지 않았으면 404(CONTENT_NOT_FOUND) */
+	@GetMapping("/company")
+	public ApiResponse<CompanyInfo> company() {
+		return ApiResponse.ok(companyInfoService.get());
 	}
 
 	/** WEB-025 회사소개(company)·이용약관(terms)·개인정보처리방침(privacy-policy) 등 서버가 허용한 고정 콘텐츠. */

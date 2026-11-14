@@ -12,6 +12,12 @@ public final class ValidationPatterns {
 	/** URL_OR_PATH와 같지만 빈 문자열도 허용한다. 수정 요청에서 빈 문자열은 값을 지운다는 뜻이다. */
 	public static final String URL_OR_PATH_OR_EMPTY = "^$|" + URL_OR_PATH;
 
+	/**
+	 * 사이트 안 경로. /로 시작해야 하고, 다른 사이트로 가는 //·/\ 시작(프로토콜 상대 주소)과 공백·제어 문자·역슬래시를 막는다.
+	 * 관리자가 정하는 이동 경로(홈 편성 등)에 쓴다. 인코딩하지 않은 한글 검색어(/search?keyword=안전모)는 받는다.
+	 */
+	public static final String INTERNAL_PATH = "^/(?![/\\\\])[^\\s\\\\\\p{Cntrl}]*$";
+
 	/** 연락처. 숫자 사이 하이픈은 있어도 되고 없어도 된다 (예: 010-1234-5678, 0212345678). 저장할 때는 ContactFormats.phone으로 뺀다. */
 	public static final String PHONE = "^\\d{2,3}-?\\d{3,4}-?\\d{4}$";
 
