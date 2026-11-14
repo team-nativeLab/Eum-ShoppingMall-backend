@@ -3,9 +3,11 @@ package com.example.shopping.domain.product.dto.request;
 import java.util.List;
 
 import com.example.shopping.domain.product.entity.Certification;
+import com.example.shopping.domain.product.entity.ProductDescriptionFormat;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.global.validation.ValidationPatterns;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -19,6 +21,8 @@ import jakarta.validation.constraints.Size;
  *
  * @param certifications 보낸 목록으로 통째로 바꾼다. 빈 목록을 보내면 인증을 모두 지운다.
  * @param priceVisible   금액 공개 여부. false면 금액을 숨기고 견적 문의로만 받는다. 생략하면 그대로 둔다.
+ * @param images         상세 갤러리. 보내면 통째로 바꾸고 첫 이미지가 대표 이미지(imageUrl)가 된다(빈 목록은 둘 다 지움).
+ *                       나머지 상세 정보는 ProductDetailFields 참고
  */
 public record ProductUpdateRequest(
 		Long categoryId,
@@ -54,5 +58,29 @@ public record ProductUpdateRequest(
 
 		ProductStatus status,
 
-		Boolean priceVisible) {
+		Boolean priceVisible,
+
+		@Pattern(regexp = ProductDetailFields.PRODUCT_CODE, message = "상품 코드는 영문·숫자로 시작하고 영문·숫자·-·_ 50자 이내입니다.")
+		String productCode,
+
+		@Size(max = 100, message = "모델명은 100자 이하여야 합니다.")
+		String modelName,
+
+		@Size(max = 300, message = "요약은 300자 이하여야 합니다.")
+		String summary,
+
+		@Size(max = 50, message = "원산지는 50자 이하여야 합니다.")
+		String countryOfOrigin,
+
+		@Size(max = 100, message = "배송 예정 안내는 100자 이하여야 합니다.")
+		String shippingEstimate,
+
+		ProductDescriptionFormat descriptionFormat,
+
+		@Size(max = 10, message = "상세 이미지는 10장까지입니다.")
+		List<@NotNull(message = "이미지를 확인해 주세요.") @Valid ProductImageRequest> images,
+
+		@Size(max = 20, message = "사양은 20줄까지입니다.")
+		List<@NotNull(message = "사양을 확인해 주세요.") @Valid ProductSpecificationRequest> specifications)
+		implements ProductDetailFields {
 }

@@ -33,7 +33,14 @@ MySQL 스키마는 Flyway로 관리합니다. 빈 데이터베이스는 Hibernat
 
 ## 고정 콘텐츠 API
 
-지원하는 콘텐츠 코드는 `company`, `terms`, `privacy-policy`입니다. 고객은 `GET /api/v1/contents/{code}`로 읽습니다(예: `GET /api/v1/contents/company`). 관리자는 `GET /api/v1/admin/contents`와 `GET /api/v1/admin/contents/{code}`로 저장된 콘텐츠를 조회하고, `PUT /api/v1/admin/contents/{code}`에 `{ "title": "...", "body": "..." }`를 보내 만들거나 수정합니다. 본문은 일반 텍스트이고 HTML 태그는 거절합니다. 서버는 법적 문구를 미리 넣어 두지 않습니다.
+지원하는 콘텐츠 코드는 `company`, `terms`, `privacy-policy`입니다. 고객은 `GET /api/v1/contents/{code}`로 읽습니다(예: `GET /api/v1/contents/company`). 관리자는 `GET /api/v1/admin/contents`와 `GET /api/v1/admin/contents/{code}`로 저장된 콘텐츠를 조회하고, `PUT /api/v1/admin/contents/{code}`에 `{ "title": "...", "body": "..." }`를 보내 만들거나 수정합니다. 본문은 일반 텍스트이고 HTML 태그는 거절합니다. 서버는 법적 문구를 미리 넣어 두지 않습니다. 이용약관·개인정보 처리방침은 아래 약관·정책 문서로 버전과 시행일을 붙여 관리하며, `terms`·`privacy-policy`는 이전 방식으로 남아 있습니다.
+
+## 약관·정책 문서
+
+- **종류:** `terms`(이용약관), `privacy`(개인정보 처리방침), `guide`(이용안내), `shipping`(배송 안내). 버전마다 한 행으로 저장해 이전 내용을 그대로 보관합니다.
+- **고객(로그인 없이):** `GET /api/v1/legal-documents/{type}`은 시행일이 오늘이거나 지난 공개 버전 중 가장 최근 것입니다. `?version=2.0`을 붙이면 그 공개 버전(이전·시행 예정)을 줍니다. `GET /api/v1/legal-documents/{type}/versions`는 공개 버전 목록(시행 예정 포함, 본문 제외, `current`는 지금 시행 중인 버전)입니다. 없으면 404(`LEGAL_DOCUMENT_NOT_FOUND`)입니다.
+- **관리자:** `PUT /api/v1/admin/legal-documents/{type}`에 `{version, title, body, effectiveAt(시행일, 예: 2026-11-01), published}`를 보냅니다. 같은 버전이 있으면 고치고 없으면 새로 만듭니다. 시행 중이거나 지난 공개 버전(`locked`)은 고칠 수 없어 409(`LEGAL_DOCUMENT_LOCKED`)이고, 바꾸려면 새 버전으로 등록합니다. `GET /api/v1/admin/legal-documents`는 종류별로 시행일이 가장 늦은 버전, `GET /api/v1/admin/legal-documents/{type}/versions`는 공개하지 않은 버전까지 모든 버전입니다.
+- **운영:** 약관을 바꿀 때는 새 버전을 시행일과 함께 미리 공개해 두면 시행일에 자동으로 바뀌고, 그 전까지는 버전 목록에서 시행 예정으로 보입니다. 본문은 평문이고 HTML 태그는 거절합니다.
 
 ## 홈 편성과 사업자 정보
 
@@ -101,6 +108,17 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 - **기본 배송지:** 처음 등록한 배송지와 `isDefault: true`로 저장한 배송지가 기본이 되고, 회원마다 하나만 남습니다. 기본 배송지를 지우면 최근에 고친 배송지가 기본이 됩니다.
 - **제한:** 회원마다 10개까지 저장합니다(`400 ADDRESS_LIMIT_EXCEEDED`). 남의 배송지는 없는 배송지와 똑같이 `404 ADDRESS_NOT_FOUND`입니다.
 - 주문은 배송지를 따로 복사해 두므로, 주소록을 고치거나 지워도 지난 주문은 그대로입니다.
+
+## 상품 상세 정보
+
+관리자 상품 등록(`POST /api/v1/admin/products`)·수정(`PATCH /api/v1/admin/products/{productId}`)에 상세 화면 정보를 함께 보냅니다. 수정은 보낸 항목만 바꾸고, 글은 빈 문자열을 보내면 지웁니다.
+
+- **갤러리(`images`):** `[{url, alt}]` 10장까지. 업로드 API가 돌려준 주소만 받고(이미 저장된 주소는 다시 보내도 됩니다), 보낸 목록으로 통째로 바꿉니다. 첫 이미지가 대표 이미지(`imageUrl`)가 되며, 빈 목록을 보내면 대표 이미지도 지웁니다. 참조 없는 이미지 정리는 갤러리 이미지를 지우지 않습니다.
+- **사양 표(`specifications`):** `[{label, value}]` 20줄까지, 보낸 목록으로 통째로 바꿉니다. 제조사·재질·크기·중량 같은 항목도 사양 행으로 보냅니다.
+- **글:** `modelName`(모델명), `summary`(한 줄 요약), `countryOfOrigin`(원산지), `shippingEstimate`(배송 예정 안내)
+- **설명 서식(`descriptionFormat`):** `PLAIN`(기본) 또는 `RICH_V1`(굵게·기울임·밑줄·http(s) 링크·목록만 쓰는 제한된 서식). 화면은 어느 쪽이든 HTML로 해석하지 않고 그립니다.
+- **상품 코드(`productCode`):** 관리용 코드로, 영문·숫자로 시작하고 영문·숫자·`-`·`_` 50자 이내입니다. 다른 상품과 겹치면 409(`PRODUCT_CODE_DUPLICATED`)이고, 관리자 응답에만 실립니다.
+- 고객 상품 상세(`GET /api/v1/products/{productId}`)는 상품 코드를 뺀 위 정보를 줍니다. 배송 정책 본문은 약관·정책 문서의 `shipping`을 씁니다.
 
 ## 상품 문의
 
@@ -288,7 +306,7 @@ DB·Redis에는 원래 값 대신 해시를 저장합니다(#136).
 - `shippingFee`가 0이면 무료배송입니다.
 - 관리자가 정책을 저장하기 전에는 100,000원 미만일 때 배송비가 5,000원입니다.
 
-장바구니 예상 금액과 새 주문은 현재 정책을 씁니다. 주문마다 만들 때의 배송비를 저장하므로 정책을 바꿔도 기존 주문은 달라지지 않습니다. `GET /api/v1/shipping-policy`는 쇼핑몰 안내용으로 로그인 없이 정책을 돌려줍니다. 장바구니 응답에는 이제 `discountAmount`가 없습니다. 주문 응답에는 변경 전에 만든 주문을 위해 남아 있고, 새 주문은 0으로 기록합니다.
+장바구니 예상 금액과 새 주문은 현재 정책을 씁니다. 주문마다 만들 때의 배송비를 저장하므로 정책을 바꿔도 기존 주문은 달라지지 않습니다. `GET /api/v1/shipping-policy`는 쇼핑몰 안내용으로 로그인 없이 정책을 돌려줍니다. 주문서 화면은 `GET /api/v1/checkout/options`(로그인 없이)로 배송비·무료배송 기준과 함께 무료배송 적용 범위(`cart`: 한 주문의 상품 합계), 배송비 부담(`customer`), 배송 요청 문구, 배송 방법, 결제 수단(신용카드·계좌이체·가상계좌·휴대폰 결제)을 받습니다. 고른 배송 요청 문구는 주문의 `delivery.deliveryRequest`로 보냅니다. 장바구니 응답에는 이제 `discountAmount`가 없습니다. 주문 응답에는 변경 전에 만든 주문을 위해 남아 있고, 새 주문은 0으로 기록합니다.
 
 ## 상품 조회 캐시
 
@@ -298,5 +316,5 @@ DB·Redis에는 원래 값 대신 해시를 저장합니다(#136).
 
 - **회원가입:** `POST /api/v1/auth/signup`에 `termsAgreed`(이용약관), `privacyAgreed`(개인정보 수집·이용)를 `true`로 보내야 합니다. 빠지거나 `false`면 400입니다. `marketingAgreed`(마케팅 수신)는 선택이고, 보내지 않으면 동의하지 않은 것으로 기록합니다.
 - **비회원 문의·견적:** `POST /api/v1/support/inquiries`, `POST /api/v1/quotes`에 `privacyAgreed: true`가 없으면 `400 PRIVACY_CONSENT_REQUIRED`입니다. 회원은 가입할 때 동의했으므로 보내지 않아도 됩니다.
-- **기록:** 회원 동의는 `member_consent`에 항목별로 동의 여부와 시각을 남깁니다. 비회원 동의는 문의·견적 행의 `privacy_agreed_at`에 남깁니다. 둘 다 그때의 약관·개인정보 처리방침 버전(고정 콘텐츠 `terms`, `privacy-policy`의 수정 시각)을 함께 남기며, 문서가 아직 등록되지 않았으면 버전은 비워 둡니다. 동의 기록은 탈퇴해도 지우지 않습니다.
+- **기록:** 회원 동의는 `member_consent`에 항목별로 동의 여부와 시각을 남깁니다. 비회원 동의는 문의·견적 행의 `privacy_agreed_at`에 남깁니다. 둘 다 그때 시행 중인 약관·개인정보 처리방침 버전(약관 문서의 버전 이름, 예: `2.0`)을 함께 남깁니다. 약관 문서를 아직 공개하지 않았으면 예전처럼 고정 콘텐츠 `terms`, `privacy-policy`의 수정 시각을 남기고, 그것도 없으면 버전은 비워 둡니다. 동의 기록은 탈퇴해도 지우지 않습니다.
 

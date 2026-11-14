@@ -1,5 +1,7 @@
 package com.example.shopping.domain.product.service;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -11,12 +13,15 @@ import org.springframework.util.StringUtils;
 import com.example.shopping.domain.product.dto.response.AdminProductDetailResponse;
 import com.example.shopping.domain.product.dto.response.AdminProductSummaryResponse;
 import com.example.shopping.domain.product.dto.request.ProductCreateRequest;
+import com.example.shopping.domain.product.dto.request.ProductDetailFields;
 import com.example.shopping.domain.product.dto.request.ProductUpdateRequest;
 import com.example.shopping.domain.product.dto.request.SkuCreateRequest;
 import com.example.shopping.domain.product.dto.request.SkuUpdateRequest;
 import com.example.shopping.domain.product.entity.Category;
 import com.example.shopping.domain.product.entity.Product;
+import com.example.shopping.domain.product.entity.ProductImage;
 import com.example.shopping.domain.product.entity.ProductSku;
+import com.example.shopping.domain.product.entity.ProductSpecification;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.CategoryRepository;
 import com.example.shopping.domain.product.repository.ProductRepository;
@@ -59,11 +64,13 @@ public class AdminProductService {
 	public AdminProductDetailResponse create(ProductCreateRequest request) {
 		ProductStatus status = request.status() == null ? ProductStatus.ON_SALE : requireManageable(request.status());
 		uploadService.requireUploadedImageUrl(request.imageUrl());
+		requireUniqueProductCode(request.productCode(), null);
 		boolean priceVisible = request.priceVisible() == null || request.priceVisible();
 		Product product = Product.create(findCategory(request.categoryId()), request.name().trim(),
 				request.description(), request.imageUrl(), request.basePrice(), request.listPrice(), priceVisible,
 				status);
 		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
+		product.updateDetail(detail(request, Set.of()));
 		if (request.skus() != null) {
 			request.skus().forEach(sku -> product.addSku(sku.optionName().trim(), sku.price(), sku.stock()));
 		}
@@ -77,14 +84,23 @@ public class AdminProductService {
 	public AdminProductDetailResponse update(Long productId, ProductUpdateRequest request) {
 		Product product = find(productId);
 		ProductStatus status = request.status() == null ? null : requireManageable(request.status());
+		// 엔티티를 바꾸기 전에 확인한다. 바꾼 뒤에 조회하면 바뀐 코드가 먼저 DB에 반영돼 유니크 키 위반이 난다.
+		requireUniqueProductCode(request.productCode(), productId);
 		// 수정 화면이 기존 값을 그대로 다시 보내도 통과시킨다. 제한 전에 저장한 외부 주소일 수 있다.
 		if (!Objects.equals(request.imageUrl(), product.getImageUrl())) {
 			uploadService.requireUploadedImageUrl(request.imageUrl());
 		}
 		String name = request.name() == null ? null : request.name().trim();
+		// 갤러리에 이미 저장된 이미지는 다시 보내도 통과시킨다(대표 이미지와 같은 이유).
+		Set<String> keptImageUrls = new HashSet<>();
+		product.getImages().forEach(image -> keptImageUrls.add(image.getUrl()));
+		if (product.getImageUrl() != null) {
+			keptImageUrls.add(product.getImageUrl());
+		}
 		product.update(findCategory(request.categoryId()), name, request.description(), request.imageUrl(),
 				request.basePrice(), request.listPrice(), status);
 		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
+		product.updateDetail(detail(request, keptImageUrls));
 		if (request.priceVisible() != null) {
 			product.changePriceVisibility(request.priceVisible());
 		}
@@ -158,6 +174,46 @@ public class AdminProductService {
 		return productRepository.findById(productId)
 				.filter(product -> ProductStatus.MANAGEABLE.contains(product.getStatus()))
 				.orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+	}
+
+	/**
+	 * 요청의 상세 화면 정보. 갤러리 이미지는 업로드 API가 돌려준 주소만 받고, keptImageUrls(이미 저장된 주소)는 그대로 통과시킨다.
+	 * 글은 앞뒤 공백을 지운다(빈 문자열은 지운다는 뜻이라 그대로 넘긴다).
+	 */
+	private Product.Detail detail(ProductDetailFields fields, Set<String> keptImageUrls) {
+		List<ProductImage> images = fields.images() == null ? null : fields.images().stream()
+				.map(image -> {
+					String url = image.url().trim();
+					if (!keptImageUrls.contains(url)) {
+						uploadService.requireUploadedImageUrl(url);
+					}
+					return new ProductImage(url, image.alt() == null ? "" : image.alt().trim());
+				})
+				.toList();
+		List<ProductSpecification> specifications = fields.specifications() == null ? null
+				: fields.specifications().stream()
+						.map(row -> new ProductSpecification(row.label().trim(), row.value().trim()))
+						.toList();
+		return new Product.Detail(trim(fields.productCode()), trim(fields.modelName()), trim(fields.summary()),
+				trim(fields.countryOfOrigin()), trim(fields.shippingEstimate()), fields.descriptionFormat(), images,
+				specifications);
+	}
+
+	/** 다른 상품이 같은 코드를 쓰면 409. 빈 값(코드 없음·지움)은 확인하지 않는다. 동시에 같은 코드로 저장하면 유니크 키가 막는다. */
+	private void requireUniqueProductCode(String productCode, Long productId) {
+		String code = trim(productCode);
+		if (code == null || code.isEmpty()) {
+			return;
+		}
+		boolean taken = productId == null ? productRepository.existsByProductCode(code)
+				: productRepository.existsByProductCodeAndIdNot(code, productId);
+		if (taken) {
+			throw new BusinessException(ErrorCode.PRODUCT_CODE_DUPLICATED);
+		}
+	}
+
+	private static String trim(String value) {
+		return value == null ? null : value.trim();
 	}
 
 	private ProductSku findSku(Product product, Long skuId) {

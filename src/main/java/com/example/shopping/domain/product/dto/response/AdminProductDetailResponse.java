@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.example.shopping.domain.product.entity.Product;
+import com.example.shopping.domain.product.entity.ProductDescriptionFormat;
 import com.example.shopping.domain.product.entity.ProductSku;
 import com.example.shopping.domain.product.entity.ProductStatus;
 
@@ -13,11 +14,16 @@ import com.example.shopping.domain.product.entity.ProductStatus;
  * @param listPrice      정가. 없으면 null
  * @param recommendScore 추천순 정렬 점수 (클수록 앞)
  * @param salesCount     누적 판매 수량 (인기순 정렬 기준)
+ * @param productCode    상품 코드. 없으면 null
+ * @param images         상세 갤러리. 첫 이미지가 대표 이미지(imageUrl)다.
  */
 public record AdminProductDetailResponse(Long id, Long categoryId, String name, String brand, String description,
 		String imageUrl, long basePrice, Long listPrice, boolean priceVisible,
 		List<CertificationResponse> certifications, int recommendScore, long salesCount, ProductStatus status,
-		List<SkuResponse> skus, LocalDateTime createdAt, LocalDateTime updatedAt) {
+		List<SkuResponse> skus, LocalDateTime createdAt, LocalDateTime updatedAt, String productCode,
+		String modelName, String summary, String countryOfOrigin, String shippingEstimate,
+		ProductDescriptionFormat descriptionFormat, List<ProductDetailInfo.Image> images,
+		List<ProductDetailInfo.Specification> specifications) {
 
 	public record SkuResponse(Long id, String optionName, long price, int stock, boolean active) {
 
@@ -33,6 +39,9 @@ public record AdminProductDetailResponse(Long id, Long categoryId, String name, 
 				product.isPriceVisible(), CertificationResponse.listOf(product.getCertifications()),
 				product.getRecommendScore(), product.getSalesCount(),
 				product.getStatus(), product.getSkus().stream().map(SkuResponse::from).toList(),
-				product.getCreatedAt(), product.getUpdatedAt());
+				product.getCreatedAt(), product.getUpdatedAt(), product.getProductCode(), product.getModelName(),
+				product.getSummary(), product.getCountryOfOrigin(), product.getShippingEstimate(),
+				product.getDescriptionFormat(), ProductDetailInfo.images(product),
+				ProductDetailInfo.specifications(product));
 	}
 }
