@@ -2,6 +2,7 @@ package com.example.shopping;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
@@ -179,6 +180,17 @@ class OrderPaymentTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.shippingFee").value(3000))
 				.andExpect(jsonPath("$.data.freeShippingThreshold").value(50000));
+		// 주문서 선택지도 바뀐 정책을 따르고, 결제 수단은 서버가 처리할 수 있는 것만 준다.
+		mockMvc.perform(get("/api/v1/checkout/options").with(anonymous()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.shippingFee").value(3000))
+				.andExpect(jsonPath("$.data.freeShippingThreshold").value(50000))
+				.andExpect(jsonPath("$.data.freeShippingScope").value("cart"))
+				.andExpect(jsonPath("$.data.baseFeeMode").value("customer"))
+				.andExpect(jsonPath("$.data.deliveryRequests[0].id").value("call"))
+				.andExpect(jsonPath("$.data.shippingMethods[0].id").value("standard"))
+				.andExpect(jsonPath("$.data.paymentMethods[*].id")
+						.value(contains("creditCard", "bankTransfer", "virtualAccount", "mobile")));
 
 		// 장바구니 예상 금액과 새 주문은 바뀐 정책을 따른다. (30,000원 1개는 배송비, 2개는 무료배송)
 		jdbcTemplate.update("delete from cart_item where member_id = ?", buyer);

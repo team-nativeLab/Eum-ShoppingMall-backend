@@ -20,10 +20,12 @@ import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.security.CurrentMember;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 상품 상세의 상품 문의(Q&A) */
+@Tag(name = "상품 문의")
 @RestController
 @RequestMapping("/api/v1/products/{productId}/questions")
 @RequiredArgsConstructor

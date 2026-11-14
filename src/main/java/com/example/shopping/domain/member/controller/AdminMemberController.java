@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import com.example.shopping.domain.member.dto.response.AdminMemberDetailResponse;
 import com.example.shopping.domain.member.dto.request.AdminMemberRoleUpdateRequest;
@@ -27,6 +28,7 @@ import com.example.shopping.global.security.CurrentMember;
 
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "회원 관리")
 @RestController
 @RequestMapping("/api/v1/admin/users")
 @RequiredArgsConstructor
@@ -63,6 +65,7 @@ public class AdminMemberController {
 		return ApiResponse.ok(null);
 	}
 
+	/** 회원 정지(SUSPENDED)·해제(ACTIVE). 정지할 때는 사유가 필요하다. */
 	@PatchMapping("/{userId}/status")
 	public ApiResponse<AdminMemberDetailResponse> changeStatus(@AuthenticationPrincipal Jwt jwt,
 			@PathVariable Long userId, @Valid @RequestBody AdminMemberStatusUpdateRequest request) {

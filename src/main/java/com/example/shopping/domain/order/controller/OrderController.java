@@ -28,9 +28,11 @@ import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.security.CurrentMember;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "주문")
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor

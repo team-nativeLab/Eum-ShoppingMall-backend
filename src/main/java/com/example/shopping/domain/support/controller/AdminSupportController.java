@@ -29,9 +29,11 @@ import com.example.shopping.domain.support.service.AdminSupportService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "고객센터 관리")
 @RestController
 @RequestMapping("/api/v1/admin")
 @RequiredArgsConstructor
@@ -59,6 +61,7 @@ public class AdminSupportController {
 		return ApiResponse.ok(adminSupportService.updateNotice(noticeId, request));
 	}
 
+	/** 공지사항 삭제 */
 	@DeleteMapping("/notices/{noticeId}")
 	public ApiResponse<Void> deleteNotice(@PathVariable Long noticeId) {
 		adminSupportService.deleteNotice(noticeId);
@@ -72,12 +75,14 @@ public class AdminSupportController {
 		return ApiResponse.ok(adminSupportService.createFaq(request));
 	}
 
+	/** FAQ 수정. 보낸 항목만 바꾼다. */
 	@PatchMapping("/faqs/{faqId}")
 	public ApiResponse<FaqResponse> updateFaq(@PathVariable Long faqId,
 			@Valid @RequestBody FaqUpdateRequest request) {
 		return ApiResponse.ok(adminSupportService.updateFaq(faqId, request));
 	}
 
+	/** FAQ 삭제 */
 	@DeleteMapping("/faqs/{faqId}")
 	public ApiResponse<Void> deleteFaq(@PathVariable Long faqId) {
 		adminSupportService.deleteFaq(faqId);

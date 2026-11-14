@@ -21,10 +21,12 @@ import com.example.shopping.domain.member.service.MemberAddressService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.security.CurrentMember;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 마이페이지·주문서의 배송지 주소록. 로그인한 회원 본인의 배송지만 다룬다. */
+@Tag(name = "배송지")
 @RestController
 @RequestMapping("/api/v1/me/addresses")
 @RequiredArgsConstructor

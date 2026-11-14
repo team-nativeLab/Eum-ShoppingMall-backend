@@ -65,6 +65,7 @@ public enum ErrorCode {
 
 	// 상품
 	PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
+	PRODUCT_CODE_DUPLICATED(HttpStatus.CONFLICT, "같은 상품 코드를 쓰는 상품이 이미 있습니다."),
 	PRODUCT_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "상품 문의를 찾을 수 없습니다."),
 	REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."),
 	BRAND_NOT_FOUND(HttpStatus.NOT_FOUND, "브랜드를 찾을 수 없습니다."),
@@ -100,6 +101,14 @@ public enum ErrorCode {
 	CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "취소할 수 없는 상태입니다."),
 	CANCEL_PENDING_CONFIRMATION(HttpStatus.ACCEPTED, "취소 결과를 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요."),
 	CANCEL_FAILED(HttpStatus.BAD_GATEWAY, "결제 취소에 실패했습니다. 잠시 후 다시 시도해 주세요."),
+
+	// 이벤트
+	EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "이벤트를 찾을 수 없습니다."),
+	INVALID_EVENT_PERIOD(HttpStatus.BAD_REQUEST, "종료 시각은 시작 시각보다 앞설 수 없습니다."),
+
+	// 약관·정책 문서
+	LEGAL_DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "문서를 찾을 수 없습니다."),
+	LEGAL_DOCUMENT_LOCKED(HttpStatus.CONFLICT, "시행 중이거나 지난 공개 문서는 고칠 수 없습니다. 새 버전으로 등록해 주세요."),
 
 	// 고객지원
 	NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, "공지사항을 찾을 수 없습니다."),

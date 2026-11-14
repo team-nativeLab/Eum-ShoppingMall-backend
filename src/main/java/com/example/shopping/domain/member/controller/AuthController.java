@@ -26,10 +26,12 @@ import com.example.shopping.domain.member.service.EmailVerificationService;
 import com.example.shopping.domain.member.service.PasswordResetService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "인증")
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
