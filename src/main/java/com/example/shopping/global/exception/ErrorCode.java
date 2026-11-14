@@ -65,6 +65,8 @@ public enum ErrorCode {
 	PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
 	PRODUCT_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "상품 문의를 찾을 수 없습니다."),
 	REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."),
+	BRAND_NOT_FOUND(HttpStatus.NOT_FOUND, "브랜드를 찾을 수 없습니다."),
+	BRAND_NAME_DUPLICATED(HttpStatus.CONFLICT, "같은 이름의 브랜드가 이미 있습니다."),
 	REVIEW_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "배송이 끝난 주문의 상품만 리뷰를 쓸 수 있습니다."),
 	REVIEW_ALREADY_WRITTEN(HttpStatus.CONFLICT, "이 주문 상품의 리뷰를 이미 썼습니다."),
 	PRODUCT_NOT_ON_SALE(HttpStatus.CONFLICT, "판매 중인 상품이 아닙니다."),
