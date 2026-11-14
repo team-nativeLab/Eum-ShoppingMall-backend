@@ -18,10 +18,12 @@ import com.example.shopping.domain.event.dto.response.ShopEventResponse;
 import com.example.shopping.domain.event.service.AdminShopEventService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 관리자 이벤트·기획전 관리 */
+@Tag(name = "이벤트 관리")
 @RestController
 @RequestMapping("/api/v1/admin/events")
 @RequiredArgsConstructor

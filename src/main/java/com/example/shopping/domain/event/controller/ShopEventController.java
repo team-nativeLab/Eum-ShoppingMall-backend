@@ -11,9 +11,11 @@ import com.example.shopping.domain.event.dto.response.ShopEventResponse;
 import com.example.shopping.domain.event.service.ShopEventService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 /** 이벤트·기획전 목록·상세(누구나). 숨긴 이벤트는 목록에서 빠지고 상세는 404다. */
+@Tag(name = "이벤트")
 @RestController
 @RequestMapping("/api/v1/events")
 @RequiredArgsConstructor
@@ -27,6 +29,7 @@ public class ShopEventController {
 		return ApiResponse.ok(shopEventService.list());
 	}
 
+	/** 이벤트 상세. 숨긴 이벤트는 404(EVENT_NOT_FOUND) */
 	@GetMapping("/{eventId}")
 	public ApiResponse<ShopEventResponse> event(@PathVariable Long eventId) {
 		return ApiResponse.ok(shopEventService.get(eventId));
