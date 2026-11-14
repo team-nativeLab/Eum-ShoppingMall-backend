@@ -10,10 +10,12 @@ import com.example.shopping.domain.home.dto.RecommendedKeywords;
 import com.example.shopping.domain.home.service.RecommendedKeywordService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 관리자 추천 검색어 관리. 목록을 통째로 저장한다. */
+@Tag(name = "추천 검색어 관리")
 @RestController
 @RequestMapping("/api/v1/admin/search/recommended-keywords")
 @RequiredArgsConstructor
