@@ -168,6 +168,21 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 
 IP별 요청 제한과 로그인 잠금은 같은 Redis 카운터 구현(`SharedCounter`)을 쓰고, Redis 장애 중에는 인스턴스별로 셉니다.
 
+## 웹·앱 로그인
+
+Access 토큰은 웹·앱 모두 응답 본문으로 받아 `Authorization: Bearer …`로 보냅니다(15분). Refresh 토큰을 주고받는 방식만 다릅니다.
+
+| | 웹 (`/api/v1/auth`) | 앱 (`/api/v1/app/auth`) |
+|---|---|---|
+| 로그인 | `POST /login` → Refresh 토큰은 HttpOnly 쿠키(`refresh_token`, Path=/api/v1/auth) | `POST /login` → `accessToken`과 `refreshToken`을 모두 본문으로 받음(쿠키 없음) |
+| 재발급 | `POST /refresh` (쿠키가 자동으로 실림) | `POST /refresh`에 `{"refreshToken": "…"}` |
+| 로그아웃 | `POST /logout` (쿠키 + Authorization 헤더) | `POST /logout`에 `{"refreshToken": "…"}` + Authorization 헤더 |
+| 브라우저 요청 | `CORS_ALLOWED_ORIGINS`의 Origin만 재발급·로그아웃 가능 | Origin 헤더가 있는 요청은 모두 403 |
+
+- **앱 토큰 보관:** 앱은 Refresh 토큰을 기기 보안 저장소(iOS Keychain, Android Keystore)에 두고 로그에 남기지 않습니다. 재발급할 때마다 새 Refresh 토큰으로 바꿔 저장합니다. 한 번 쓴 토큰을 다시 보내면 401이고, 잠시 뒤 다시 쓰면 탈취된 것으로 보고 그 회원의 Refresh 토큰을 모두 폐기합니다(웹과 같음).
+- **앱 API를 브라우저에서 막는 이유:** 앱 API는 Refresh 토큰을 본문으로 주므로, 웹 페이지의 스크립트가 부를 수 있으면 HttpOnly 쿠키 보호가 소용없어집니다. 네이티브 앱의 HTTP 요청에는 Origin 헤더가 없습니다.
+- **같은 규칙:** 로그인 실패 제한·로봇 확인, 관리자 계정 거절, IP별 요청 제한(로그인끼리·재발급끼리 한 묶음)은 웹과 같습니다. 회원가입·이메일 인증·비밀번호 재설정은 앱도 `/api/v1/auth`의 같은 API를 씁니다.
+
 ## 관리자 로그인과 세션
 
 관리자 계정은 관리자 로그인(`POST /api/v1/admin/auth/login`)으로만 들어오고, 관리자 세션은 회원 세션과 따로 씁니다(#163).
