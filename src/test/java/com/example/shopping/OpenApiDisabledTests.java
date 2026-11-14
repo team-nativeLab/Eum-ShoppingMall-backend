@@ -22,7 +22,7 @@ class OpenApiDisabledTests {
 	@Test
 	void 기본_설정에서는_API_문서가_열리지_않는다() throws Exception {
 		mockMvc.perform(get("/v3/api-docs")).andExpect(status().isNotFound());
-		mockMvc.perform(get("/v3/api-docs/shop")).andExpect(status().isNotFound());
+		mockMvc.perform(get("/v3/api-docs/web")).andExpect(status().isNotFound());
 		mockMvc.perform(get("/swagger-ui/index.html")).andExpect(status().isNotFound());
 	}
 }
