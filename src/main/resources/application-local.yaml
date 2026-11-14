@@ -4,7 +4,7 @@
 spring:
   datasource:
     url: jdbc:mysql://localhost:3306/shopping
-    username: shopping
+    username: s
     password: shopping
   jpa:
     hibernate:
