@@ -2,8 +2,31 @@
 # 포트는 이 PC에서만 접속할 수 있게 127.0.0.1로 묶는다. (묶지 않으면 같은 네트워크의 다른 기기에서
 # 알려진 개발용 비밀번호로 DB에, 비밀번호 없이 Redis에 접속할 수 있다.)
 services:
-  mysql:
+  server:
+    container_name: server
+    build:
+      context: .
+      dockerfile: dockerfile
+    ports:
+      -"8080:8080"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  db:
     image: mysql:8.4
+    container_name: db
     environment:
       MYSQL_DATABASE: shopping
       MYSQL_USER: shopping
@@ -11,14 +34,46 @@ services:
       MYSQL_ROOT_PASSWORD: root
       TZ: Asia/Seoul
     ports:
-      - "127.0.0.1:3306:3306"
+      - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+    restarts: always
 
   redis:
+    container_name: redis
     image: redis:7
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
+    restart: always
+    command: ["redis-server", "--requirepass", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  nginx:
+    image: nginx:1.31.7-alpine-slim
+    container_name: nginx
+    ports:
+     - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/usr/share/nginx/html:ro
+      - ./nginx.conf/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/nginx-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   mysql-data:
+  redis-data:
