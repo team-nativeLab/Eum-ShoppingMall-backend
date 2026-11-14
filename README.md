@@ -33,7 +33,14 @@ MySQL 스키마는 Flyway로 관리합니다. 빈 데이터베이스는 Hibernat
 
 ## 고정 콘텐츠 API
 
-지원하는 콘텐츠 코드는 `company`, `terms`, `privacy-policy`입니다. 고객은 `GET /api/v1/contents/{code}`로 읽습니다(예: `GET /api/v1/contents/company`). 관리자는 `GET /api/v1/admin/contents`와 `GET /api/v1/admin/contents/{code}`로 저장된 콘텐츠를 조회하고, `PUT /api/v1/admin/contents/{code}`에 `{ "title": "...", "body": "..." }`를 보내 만들거나 수정합니다. 본문은 일반 텍스트이고 HTML 태그는 거절합니다. 서버는 법적 문구를 미리 넣어 두지 않습니다.
+지원하는 콘텐츠 코드는 `company`, `terms`, `privacy-policy`입니다. 고객은 `GET /api/v1/contents/{code}`로 읽습니다(예: `GET /api/v1/contents/company`). 관리자는 `GET /api/v1/admin/contents`와 `GET /api/v1/admin/contents/{code}`로 저장된 콘텐츠를 조회하고, `PUT /api/v1/admin/contents/{code}`에 `{ "title": "...", "body": "..." }`를 보내 만들거나 수정합니다. 본문은 일반 텍스트이고 HTML 태그는 거절합니다. 서버는 법적 문구를 미리 넣어 두지 않습니다. 이용약관·개인정보 처리방침은 아래 약관·정책 문서로 버전과 시행일을 붙여 관리하며, `terms`·`privacy-policy`는 이전 방식으로 남아 있습니다.
+
+## 약관·정책 문서
+
+- **종류:** `terms`(이용약관), `privacy`(개인정보 처리방침), `guide`(이용안내), `shipping`(배송 안내). 버전마다 한 행으로 저장해 이전 내용을 그대로 보관합니다.
+- **고객(로그인 없이):** `GET /api/v1/legal-documents/{type}`은 시행일이 오늘이거나 지난 공개 버전 중 가장 최근 것입니다. `?version=2.0`을 붙이면 그 공개 버전(이전·시행 예정)을 줍니다. `GET /api/v1/legal-documents/{type}/versions`는 공개 버전 목록(시행 예정 포함, 본문 제외, `current`는 지금 시행 중인 버전)입니다. 없으면 404(`LEGAL_DOCUMENT_NOT_FOUND`)입니다.
+- **관리자:** `PUT /api/v1/admin/legal-documents/{type}`에 `{version, title, body, effectiveAt(시행일, 예: 2026-11-01), published}`를 보냅니다. 같은 버전이 있으면 고치고 없으면 새로 만듭니다. 시행 중이거나 지난 공개 버전(`locked`)은 고칠 수 없어 409(`LEGAL_DOCUMENT_LOCKED`)이고, 바꾸려면 새 버전으로 등록합니다. `GET /api/v1/admin/legal-documents`는 종류별로 시행일이 가장 늦은 버전, `GET /api/v1/admin/legal-documents/{type}/versions`는 공개하지 않은 버전까지 모든 버전입니다.
+- **운영:** 약관을 바꿀 때는 새 버전을 시행일과 함께 미리 공개해 두면 시행일에 자동으로 바뀌고, 그 전까지는 버전 목록에서 시행 예정으로 보입니다. 본문은 평문이고 HTML 태그는 거절합니다.
 
 ## 홈 편성과 사업자 정보
 
@@ -286,5 +293,5 @@ DB·Redis에는 원래 값 대신 해시를 저장합니다(#136).
 
 - **회원가입:** `POST /api/v1/auth/signup`에 `termsAgreed`(이용약관), `privacyAgreed`(개인정보 수집·이용)를 `true`로 보내야 합니다. 빠지거나 `false`면 400입니다. `marketingAgreed`(마케팅 수신)는 선택이고, 보내지 않으면 동의하지 않은 것으로 기록합니다.
 - **비회원 문의·견적:** `POST /api/v1/support/inquiries`, `POST /api/v1/quotes`에 `privacyAgreed: true`가 없으면 `400 PRIVACY_CONSENT_REQUIRED`입니다. 회원은 가입할 때 동의했으므로 보내지 않아도 됩니다.
-- **기록:** 회원 동의는 `member_consent`에 항목별로 동의 여부와 시각을 남깁니다. 비회원 동의는 문의·견적 행의 `privacy_agreed_at`에 남깁니다. 둘 다 그때의 약관·개인정보 처리방침 버전(고정 콘텐츠 `terms`, `privacy-policy`의 수정 시각)을 함께 남기며, 문서가 아직 등록되지 않았으면 버전은 비워 둡니다. 동의 기록은 탈퇴해도 지우지 않습니다.
+- **기록:** 회원 동의는 `member_consent`에 항목별로 동의 여부와 시각을 남깁니다. 비회원 동의는 문의·견적 행의 `privacy_agreed_at`에 남깁니다. 둘 다 그때 시행 중인 약관·개인정보 처리방침 버전(약관 문서의 버전 이름, 예: `2.0`)을 함께 남깁니다. 약관 문서를 아직 공개하지 않았으면 예전처럼 고정 콘텐츠 `terms`, `privacy-policy`의 수정 시각을 남기고, 그것도 없으면 버전은 비워 둡니다. 동의 기록은 탈퇴해도 지우지 않습니다.
 

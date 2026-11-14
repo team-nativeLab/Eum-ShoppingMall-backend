@@ -1,7 +1,6 @@
 package com.example.shopping.domain.home.service;
 
 import java.util.List;
-import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +11,7 @@ import com.example.shopping.domain.home.entity.SiteContent;
 import com.example.shopping.domain.home.repository.SiteContentRepository;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
+import com.example.shopping.global.validation.PlainText;
 
 import lombok.RequiredArgsConstructor;
 
@@ -19,8 +19,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AdminContentService {
-
-	private static final Pattern HTML_TAG = Pattern.compile("<\\s*/?\\s*[a-zA-Z][^>]*>");
 
 	private final SiteContentRepository siteContentRepository;
 
@@ -39,7 +37,7 @@ public class AdminContentService {
 		validateCode(code);
 		String title = request.title().trim();
 		String body = request.body();
-		if (HTML_TAG.matcher(body).find()) {
+		if (PlainText.containsHtmlTag(body)) {
 			throw new BusinessException(ErrorCode.INVALID_INPUT);
 		}
 		SiteContent content = siteContentRepository.findByCode(code)
