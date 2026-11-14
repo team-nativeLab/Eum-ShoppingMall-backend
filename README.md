@@ -178,10 +178,15 @@ IP별 요청 제한과 로그인 잠금은 같은 Redis 카운터 구현(`Shared
 
 ## API 문서(Swagger)
 
-- **열기:** `API_DOCS_ENABLED=true`일 때만 열립니다(기본 꺼짐, `local` 프로파일은 켜짐). 화면은 `/swagger-ui/index.html`, 문서는 `/v3/api-docs/shop`(고객 API)·`/v3/api-docs/admin`(관리자 API)입니다. 운영에서는 켜지 않습니다. 켜면 관리자 API 목록까지 누구나 볼 수 있습니다.
-- **인증:** 로그인 API로 받은 `data.accessToken`을 오른쪽 위 **Authorize**에 넣으면 이후 요청에 `Authorization: Bearer …`가 붙습니다. 토큰은 브라우저에 저장하지 않아 새로 고치면 다시 넣습니다. 자물쇠 표시는 `ApiPolicy`를 따릅니다. 인증 API는 토큰을 읽지 않고(자물쇠 없음), 공개 조회·접수 API는 토큰이 선택이며, 나머지는 토큰이 필요합니다.
-- **설명:** 요약·설명은 컨트롤러 메서드와 DTO(record `@param`)의 Javadoc을 그대로 씁니다(`therapi-runtime-javadoc`이 컴파일할 때 Javadoc을 남깁니다). 태그는 컨트롤러의 `@Tag(name = "…")`입니다. 검색 조건과 페이지(`page`·`size`·`sort`)는 개별 쿼리 파라미터로 보입니다.
-- **새 API를 만들 때:** 컨트롤러에 한국어 `@Tag`를 달고 메서드에 Javadoc을 적습니다. `OpenApiDocsTests`는 태그나 요약이 없는 API가 있으면 실패합니다.
+- **열기:** `API_DOCS_ENABLED=true`일 때만 열립니다(기본 꺼짐, `local` 프로파일은 켜짐). 화면은 `/swagger-ui/index.html`입니다. 운영에서는 켜지 않습니다. 켜면 관리자 API 목록까지 누구나 볼 수 있습니다.
+- **그룹:** 웹·앱·관리자는 로그인과 토큰을 주고받는 방식이 달라 문서를 나눴습니다. 오른쪽 위 목록에서 고르고, 그룹 첫 화면에 그 클라이언트의 로그인 방법이 있습니다.
+  - 웹 API(`/v3/api-docs/web`): 고객 API 가운데 앱 전용(`/api/v1/app/**`)을 뺀 것. 로그인은 쿠키 방식(`/api/v1/auth/login`·`refresh`·`logout`)입니다.
+  - 앱 API(`/v3/api-docs/app`): 고객 API 가운데 웹 쿠키 로그인을 뺀 것. 로그인은 본문 토큰 방식(`/api/v1/app/auth/**`, #203)입니다.
+  - 관리자 API(`/v3/api-docs/admin`): 관리자 로그인·이미지 업로드를 포함합니다.
+- **인증:** 로그인 API로 받은 `accessToken`을 **Authorize**에 넣으면 이후 요청에 `Authorization: Bearer …`가 붙습니다. 토큰은 브라우저에 저장하지 않아 새로 고치면 다시 넣습니다. 자물쇠 표시는 `ApiPolicy`를 따릅니다. 인증 API는 토큰을 읽지 않고(자물쇠 없음), 공개 조회·접수 API는 토큰이 선택이며, 나머지는 토큰이 필요합니다. 재발급·로그아웃·앱 인증 API는 Origin을 확인하므로 Swagger UI에서 부르면 403일 수 있습니다.
+- **실패 응답:** API마다 일어날 수 있는 실패 응답을 붙입니다(`ErrorResponse` 스키마와 예시). 입력이 있으면 400, 토큰이 필요하면 401, 관리자 전용이면 403, 경로에 대상 ID가 있으면 404, 요청 제한을 받으면 429(`Retry-After`)입니다. 그룹 첫 화면의 오류 코드 표는 `ErrorCode`에서 만듭니다.
+- **설명:** 요약·설명은 컨트롤러 메서드와 DTO(record `@param`)의 Javadoc을 그대로 씁니다(`therapi-runtime-javadoc`이 컴파일할 때 Javadoc을 남깁니다). 태그는 컨트롤러의 `@Tag(name = "…")`이고, 태그 설명은 컨트롤러 클래스 Javadoc입니다. 검색 조건과 페이지(`page`·`size`·`sort`)는 개별 쿼리 파라미터로 보이고, 본문 형식은 `application/json`입니다.
+- **새 API를 만들 때:** 컨트롤러에 한국어 `@Tag`와 클래스 Javadoc을 달고 메서드에 Javadoc을 적습니다. 앱 전용 API는 `/api/v1/app/` 아래에 둡니다. `OpenApiDocsTests`는 태그·요약·태그 설명이 없는 API가 있으면 실패합니다.
 
 ## 관리자 로그인과 세션
 
