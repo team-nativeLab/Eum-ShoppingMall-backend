@@ -90,9 +90,14 @@ public class UploadService {
 	 * 외부 주소를 막아 두면 이미지가 사라지거나 바뀌는 일이 없고, 참조 없는 이미지 정리가 우리 파일만 다루면 된다.
 	 */
 	public void requireUploadedImageUrl(String url) {
-		if (StringUtils.hasText(url) && !fileStorage.isStoredUrl(url)) {
+		if (StringUtils.hasText(url) && !isUploadedImageUrl(url)) {
 			throw new BusinessException(ErrorCode.INVALID_IMAGE_URL);
 		}
+	}
+
+	/** 업로드 API가 돌려준 주소인지 */
+	public boolean isUploadedImageUrl(String url) {
+		return fileStorage.isStoredUrl(url);
 	}
 
 	private PresignedUploadStorage presignedStorage() {
