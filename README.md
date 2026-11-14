@@ -139,6 +139,14 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 - **개수:** `limit`은 기본 10, 1~20이고 벗어나면 400입니다. 두 API 모두 상품 조회 캐시를 씁니다.
 - **추천 검색어:** 누구나 `GET /api/v1/search/recommended-keywords`로 읽습니다(정하지 않았으면 빈 배열). 관리자는 `GET`·`PUT /api/v1/admin/search/recommended-keywords`에 `{"keywords": [...]}`를 보내 통째로 바꿉니다. 10개까지, 한 개 30자까지이며, 앞뒤 공백을 지우고 겹치면 처음 것만 남깁니다.
 
+## 이벤트·기획전
+
+- **고객(로그인 없이):** `GET /api/v1/events`는 보이는 이벤트를 정렬 순서(작을수록 앞), 같으면 최근 시작한 순으로 줍니다. 끝난 이벤트도 상태를 달아 포함합니다. `GET /api/v1/events/{eventId}`는 상세이고, 숨긴 이벤트는 404(`EVENT_NOT_FOUND`)입니다.
+- **진행 상태(`status`):** 저장하지 않고 조회 시각으로 정합니다. 시작 전은 `UPCOMING`, 시작부터 종료 시각까지(종료 시각 포함)는 `ONGOING`, 그 뒤는 `ENDED`입니다.
+- **관리자:** `GET`·`POST /api/v1/admin/events`, `PUT`·`DELETE /api/v1/admin/events/{eventId}`. 수정은 전체 수정이고 본문 구성(`sections`, 소제목·본문 10개까지)도 통째로 바꿉니다. 상세 큰 제목(`heroTitle`)은 1~3줄 배열입니다. 종료 시각이 시작 시각보다 앞서면 400(`INVALID_EVENT_PERIOD`)입니다.
+- **시각:** `startAt`·`endAt`은 시간대를 포함한 ISO 8601로 보냅니다(예: `2026-10-01T00:00:00+09:00`, `…Z`). 서버 시간대(Asia/Seoul)로 바꿔 저장하고, 응답에는 `+09:00`을 붙여 줍니다. 시간대가 없는 값은 400입니다.
+- 관리자가 입력한 글은 화면에서 텍스트로만 그립니다.
+
 ## 개인정보 보유 기간
 
 보유 기간이 지난 개인정보는 매일 05:30에 지웁니다(`PersonalDataRetentionCleaner`, #134). 값은 개인정보 처리방침의 보유 기간과 맞춥니다.
