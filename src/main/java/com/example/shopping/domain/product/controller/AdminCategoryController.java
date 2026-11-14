@@ -19,10 +19,12 @@ import com.example.shopping.domain.product.dto.request.CategoryUpdateRequest;
 import com.example.shopping.domain.product.service.AdminCategoryService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** ADM-008 카테고리 관리 */
+@Tag(name = "카테고리 관리")
 @RestController
 @RequestMapping("/api/v1/admin/categories")
 @RequiredArgsConstructor
@@ -36,6 +38,7 @@ public class AdminCategoryController {
 		return ApiResponse.ok(adminCategoryService.getAll());
 	}
 
+	/** 카테고리 등록. 상위 카테고리를 주면 그 아래에 만든다. */
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<AdminCategoryResponse> createCategory(@Valid @RequestBody CategoryCreateRequest request) {

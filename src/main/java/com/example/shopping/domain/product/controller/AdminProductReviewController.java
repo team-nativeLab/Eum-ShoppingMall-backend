@@ -17,10 +17,12 @@ import com.example.shopping.domain.product.service.AdminProductReviewService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 관리자 리뷰 관리. 목록은 작성자 이름이 보이므로 감사 로그에 남는다(ApiPolicy.AUDITED_READS). */
+@Tag(name = "리뷰 관리")
 @RestController
 @RequestMapping("/api/v1/admin/reviews")
 @RequiredArgsConstructor

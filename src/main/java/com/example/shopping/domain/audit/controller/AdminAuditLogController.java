@@ -23,8 +23,10 @@ import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.security.CurrentMember;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "감사 로그")
 @RestController
 @RequestMapping("/api/v1/admin/audit-logs")
 @RequiredArgsConstructor

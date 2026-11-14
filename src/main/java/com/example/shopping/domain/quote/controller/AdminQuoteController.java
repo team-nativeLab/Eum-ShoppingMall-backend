@@ -18,10 +18,12 @@ import com.example.shopping.domain.quote.service.AdminQuoteService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** ADM-009 견적 문의 관리 */
+@Tag(name = "견적 관리")
 @RestController
 @RequestMapping("/api/v1/admin/quotes")
 @RequiredArgsConstructor

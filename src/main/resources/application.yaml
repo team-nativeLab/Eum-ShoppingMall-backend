@@ -105,11 +105,17 @@ cors:
   max-age: 3600
 
 # API 문서 UI는 운영에 노출되지 않도록 기본은 끄고, 로컬 등 필요한 환경에서만 켠다.
+# 문서 설정(인증, 고객·관리자 그룹, 공개 API 표시)은 OpenApiConfig에 있다.
 springdoc:
+  # 검색 조건(@ModelAttribute)과 페이지(Pageable)를 page·size·sort 같은 개별 쿼리 파라미터로 펼쳐 보여 준다.
+  default-flat-param-object: true
   api-docs:
     enabled: ${API_DOCS_ENABLED:false}
   swagger-ui:
     enabled: ${API_DOCS_ENABLED:false}
+    # 태그는 이름순, 응답 시간 표시. 토큰은 브라우저에 저장하지 않는다(새로 고치면 다시 넣는다).
+    tags-sorter: alpha
+    display-request-duration: true
 
 security:
   jwt:

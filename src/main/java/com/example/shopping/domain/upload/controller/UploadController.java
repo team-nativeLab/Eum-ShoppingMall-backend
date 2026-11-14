@@ -15,10 +15,12 @@ import com.example.shopping.domain.upload.dto.response.UploadResponse;
 import com.example.shopping.domain.upload.service.UploadService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 경로가 /admin 밖이지만 모두 관리자 전용이다 (SecurityConfig의 /api/v1/uploads/**). */
+@Tag(name = "이미지 업로드")
 @RestController
 @RequestMapping("/api/v1/uploads")
 @RequiredArgsConstructor
