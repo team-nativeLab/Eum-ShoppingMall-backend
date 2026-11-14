@@ -30,6 +30,16 @@ public final class ApiPolicy {
 	public static final List<String> ADMIN_AUTH = List.of(ADMIN_LOGIN, ADMIN_MFA_SETUP, ADMIN_MFA_VERIFY,
 			ADMIN_REFRESH, ADMIN_LOGOUT);
 
+	public static final String APP_LOGIN = "/api/v1/app/auth/login";
+	public static final String APP_REFRESH = "/api/v1/app/auth/refresh";
+	public static final String APP_LOGOUT = "/api/v1/app/auth/logout";
+
+	/**
+	 * 앱 인증(#203). 웹(쿠키)과 달리 Refresh 토큰을 응답·요청 본문으로 주고받는다.
+	 * 브라우저 요청(Origin 헤더가 있는 요청)은 RefreshCookieOriginFilter가 모두 거절한다.
+	 */
+	public static final List<String> APP_AUTH = List.of(APP_LOGIN, APP_REFRESH, APP_LOGOUT);
+
 	/**
 	 * 로그인 없이 부르는 인증 API. 이 경로에서는 Access 토큰을 읽지 않아, 프론트가 만료된 토큰을 붙인 채
 	 * 로그인·재발급해도 토큰 오류(401)로 막히지 않는다.
@@ -45,6 +55,9 @@ public final class ApiPolicy {
 			"/api/v1/auth/email-verifications/confirm",
 			"/api/v1/auth/password-reset",
 			"/api/v1/auth/password-reset/confirm",
+			APP_LOGIN,
+			APP_REFRESH,
+			APP_LOGOUT,
 			ADMIN_LOGIN,
 			ADMIN_MFA_SETUP,
 			ADMIN_MFA_VERIFY,
@@ -144,15 +157,17 @@ public final class ApiPolicy {
 	 * - 주문·결제·취소: 호출마다 PG사 API나 재고 변경이 따라오므로 반복 호출로 PG 호출 한도를 소진시키지 못하게 한다.
 	 */
 	public static final List<RateLimit> RATE_LIMITS = List.of(
-			// 회원·관리자 로그인은 한 묶음으로 세어 경로를 바꿔 한도를 피하지 못하게 한다.
+			// 회원(웹·앱)·관리자 로그인은 한 묶음으로 세어 경로를 바꿔 한도를 피하지 못하게 한다.
 			new RateLimit(HttpMethod.POST, "/api/v1/auth/login", "POST /api/v1/login", Limit.DEFAULT),
+			new RateLimit(HttpMethod.POST, APP_LOGIN, "POST /api/v1/login", Limit.DEFAULT),
 			new RateLimit(HttpMethod.POST, ADMIN_LOGIN, "POST /api/v1/login", Limit.DEFAULT),
 			// OTP 코드 대입도 로그인과 같은 묶음으로 센다.
 			new RateLimit(HttpMethod.POST, ADMIN_MFA_VERIFY, "POST /api/v1/login", Limit.DEFAULT),
 			post(ADMIN_MFA_SETUP),
 			post("/api/v1/auth/signup"),
-			// 회원·관리자 재발급도 한 묶음으로 센다.
+			// 회원(웹·앱)·관리자 재발급도 한 묶음으로 센다.
 			post("/api/v1/auth/refresh"),
+			new RateLimit(HttpMethod.POST, APP_REFRESH, "POST /api/v1/auth/refresh", Limit.DEFAULT),
 			new RateLimit(HttpMethod.POST, ADMIN_REFRESH, "POST /api/v1/auth/refresh", Limit.DEFAULT),
 			// 인증번호 발송(메일 비용·스팸)과 확인(번호 대입)
 			post("/api/v1/auth/email-verifications"),
