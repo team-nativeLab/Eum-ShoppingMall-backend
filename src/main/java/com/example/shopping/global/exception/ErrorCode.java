@@ -105,6 +105,10 @@ public enum ErrorCode {
 	EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "이벤트를 찾을 수 없습니다."),
 	INVALID_EVENT_PERIOD(HttpStatus.BAD_REQUEST, "종료 시각은 시작 시각보다 앞설 수 없습니다."),
 
+	// 약관·정책 문서
+	LEGAL_DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "문서를 찾을 수 없습니다."),
+	LEGAL_DOCUMENT_LOCKED(HttpStatus.CONFLICT, "시행 중이거나 지난 공개 문서는 고칠 수 없습니다. 새 버전으로 등록해 주세요."),
+
 	// 고객지원
 	NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, "공지사항을 찾을 수 없습니다."),
 	FAQ_NOT_FOUND(HttpStatus.NOT_FOUND, "FAQ를 찾을 수 없습니다."),

@@ -53,7 +53,7 @@ public final class ApiPolicy {
 
 	/**
 	 * 로그인 없이 조회하는 공개 데이터(GET): 메인, 사업자 정보, 추천 검색어, 카테고리, 상품(연관·추천 포함), 브랜드, 이벤트, 공지,
-	 * FAQ, 고정 콘텐츠, 앱 설정, 배송비 정책, 업로드된 이미지
+	 * FAQ, 고정 콘텐츠, 약관 문서, 앱 설정, 배송비 정책, 업로드된 이미지
 	 */
 	public static final List<String> PUBLIC_GET = List.of(
 			"/files/**",
@@ -63,6 +63,7 @@ public final class ApiPolicy {
 			"/api/v1/app/config",
 			"/api/v1/shipping-policy",
 			"/api/v1/contents/**",
+			"/api/v1/legal-documents/**",
 			"/api/v1/categories/**",
 			"/api/v1/products/**",
 			"/api/v1/brands",
