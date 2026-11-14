@@ -6,9 +6,9 @@ services:
     container_name: server
     build:
       context: .
-      dockerfile: dockerfile
+      dockerfile: Dockerfile
     ports:
-      -"8080:8080"
+      - "8080:8080"
     env_file:
       - .env
     depends_on:
@@ -36,8 +36,8 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - mysql-data:/var/lib/mysql
-    restarts: always
+      - mysql_data:/var/lib/mysql
+    restart: always
 
   redis:
     container_name: redis
@@ -45,7 +45,6 @@ services:
     ports:
       - "6379:6379"
     restart: always
-    command: ["redis-server", "--requirepass", "yes"]
     volumes:
       - redis_data:/data
     healthcheck:
@@ -75,5 +74,5 @@ services:
       start_period: 10s
 
 volumes:
-  mysql-data:
-  redis-data:
+  mysql_data:
+  redis_data:
