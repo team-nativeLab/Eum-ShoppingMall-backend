@@ -7,9 +7,11 @@ import com.example.shopping.domain.order.dto.response.CheckoutOptionsResponse;
 import com.example.shopping.domain.order.service.ShippingPolicyService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 /** 주문서 화면의 선택지(누구나) */
+@Tag(name = "주문서")
 @RestController
 @RequiredArgsConstructor
 public class CheckoutController {

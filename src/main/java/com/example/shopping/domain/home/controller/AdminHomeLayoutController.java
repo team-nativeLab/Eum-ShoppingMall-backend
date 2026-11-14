@@ -10,10 +10,12 @@ import com.example.shopping.domain.home.dto.HomeLayout;
 import com.example.shopping.domain.home.service.AdminHomeLayoutService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 관리자 홈 화면 편성(히어로, 프로모션, 서비스 안내, 베스트 상품, 견적 문의 띠). 화면 단위로 통째로 저장한다. */
+@Tag(name = "홈 편성 관리")
 @RestController
 @RequestMapping("/api/v1/admin/home")
 @RequiredArgsConstructor

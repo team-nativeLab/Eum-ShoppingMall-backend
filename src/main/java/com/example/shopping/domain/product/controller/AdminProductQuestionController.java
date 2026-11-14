@@ -21,10 +21,12 @@ import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.security.CurrentMember;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 관리자 상품 문의 관리. 조회는 작성자 정보가 보이므로 감사 로그에 남는다(ApiPolicy.AUDITED_READS). */
+@Tag(name = "상품 문의 관리")
 @RestController
 @RequestMapping("/api/v1/admin/product-questions")
 @RequiredArgsConstructor
@@ -41,6 +43,7 @@ public class AdminProductQuestionController {
 		return ApiResponse.ok(adminProductQuestionService.search(status, productId, pageable));
 	}
 
+	/** 상품 문의 상세. 작성자 정보가 보이므로 조회도 감사 로그에 남는다. */
 	@GetMapping("/{questionId}")
 	public ApiResponse<AdminProductQuestionResponse> question(@PathVariable Long questionId) {
 		return ApiResponse.ok(adminProductQuestionService.get(questionId));

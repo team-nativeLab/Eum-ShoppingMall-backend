@@ -25,10 +25,12 @@ import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.security.CurrentMember;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 상품 리뷰. 목록·요약은 누구나, 작성은 배송이 끝난 주문의 상품을 산 회원만 */
+@Tag(name = "상품 리뷰")
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor

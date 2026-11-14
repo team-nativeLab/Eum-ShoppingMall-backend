@@ -19,9 +19,11 @@ import com.example.shopping.domain.home.dto.request.BannerUpdateRequest;
 import com.example.shopping.domain.home.service.AdminBannerService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "배너 관리")
 @RestController
 @RequestMapping("/api/v1/admin/banners")
 @RequiredArgsConstructor
@@ -42,12 +44,14 @@ public class AdminBannerController {
 		return ApiResponse.ok(adminBannerService.create(request));
 	}
 
+	/** 배너 수정. 보낸 항목만 바꾸고, 연결 주소는 빈 문자열을 보내면 지운다. */
 	@PatchMapping("/{bannerId}")
 	public ApiResponse<BannerResponse> updateBanner(@PathVariable Long bannerId,
 			@Valid @RequestBody BannerUpdateRequest request) {
 		return ApiResponse.ok(adminBannerService.update(bannerId, request));
 	}
 
+	/** 배너 삭제 */
 	@DeleteMapping("/{bannerId}")
 	public ApiResponse<Void> deleteBanner(@PathVariable Long bannerId) {
 		adminBannerService.delete(bannerId);

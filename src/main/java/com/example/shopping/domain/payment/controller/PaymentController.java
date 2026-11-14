@@ -15,9 +15,11 @@ import com.example.shopping.domain.payment.service.PaymentService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.security.CurrentMember;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "결제")
 @RestController
 @RequestMapping("/api/v1/payments")
 @RequiredArgsConstructor
