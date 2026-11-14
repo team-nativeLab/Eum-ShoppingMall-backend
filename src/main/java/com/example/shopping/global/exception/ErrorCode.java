@@ -65,6 +65,7 @@ public enum ErrorCode {
 
 	// 상품
 	PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
+	PRODUCT_CODE_DUPLICATED(HttpStatus.CONFLICT, "같은 상품 코드를 쓰는 상품이 이미 있습니다."),
 	PRODUCT_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "상품 문의를 찾을 수 없습니다."),
 	REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."),
 	BRAND_NOT_FOUND(HttpStatus.NOT_FOUND, "브랜드를 찾을 수 없습니다."),

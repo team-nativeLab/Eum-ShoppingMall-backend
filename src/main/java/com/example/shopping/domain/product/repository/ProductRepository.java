@@ -1,5 +1,6 @@
 package com.example.shopping.domain.product.repository;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -16,10 +17,23 @@ import com.example.shopping.domain.upload.service.ImageReferences;
 
 public interface ProductRepository extends JpaRepository<Product, Long>, ProductSearchRepository, ImageReferences {
 
-	/** 참조 없는 이미지 정리용. 삭제 처리된 상품도 행이 남아 있으므로 그 이미지도 지우지 않는다. */
+	/** 참조 없는 이미지 정리용(대표 이미지와 상세 갤러리). 삭제 처리된 상품도 행이 남아 있으므로 그 이미지도 지우지 않는다. */
 	@Override
+	default List<String> findAllImageUrls() {
+		List<String> urls = new ArrayList<>(findAllMainImageUrls());
+		urls.addAll(findAllGalleryImageUrls());
+		return urls;
+	}
+
 	@Query("select distinct p.imageUrl from Product p where p.imageUrl is not null")
-	List<String> findAllImageUrls();
+	List<String> findAllMainImageUrls();
+
+	@Query("select distinct i.url from Product p join p.images i")
+	List<String> findAllGalleryImageUrls();
+
+	boolean existsByProductCode(String productCode);
+
+	boolean existsByProductCodeAndIdNot(String productCode, Long id);
 
 	/** 관리자용 검색. 카테고리·검색어는 선택 조건이며 넘겨준 상태의 상품만 조회한다. */
 	@Query("""
