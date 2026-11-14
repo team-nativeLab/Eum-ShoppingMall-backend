@@ -24,6 +24,9 @@ public class SiteSetting extends BaseTimeEntity {
 	/** 푸터의 사업자·고객센터 정보(CompanyInfo) */
 	public static final String COMPANY_INFO = "company-info";
 
+	/** 검색 결과가 없을 때 보여 줄 추천 검색어(RecommendedKeywords) */
+	public static final String RECOMMENDED_KEYWORDS = "recommended-keywords";
+
 	@Id
 	@Column(name = "setting_key", length = 50)
 	private String key;
