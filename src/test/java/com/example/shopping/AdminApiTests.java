@@ -628,6 +628,24 @@ class AdminApiTests {
 	}
 
 	@Test
+	void 관리자_상품_검색어의_퍼센트와_밑줄은_글자_그대로_찾는다() throws Exception {
+		for (String name : List.of("안전모 A_1", "안전모 AB1", "50% 할인 장갑")) {
+			postJson("/api/v1/admin/products", """
+					{"name":"%s","basePrice":10000,"skus":[{"optionName":"기본","price":10000,"stock":1}]}
+					""".formatted(name)).andExpect(status().isCreated());
+		}
+
+		mockMvc.perform(get("/api/v1/admin/products").param("keyword", "A_1"))
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].name").value("안전모 A_1"));
+		mockMvc.perform(get("/api/v1/admin/products").param("keyword", "%"))
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].name").value("50% 할인 장갑"));
+		mockMvc.perform(get("/api/v1/admin/products").param("keyword", "\\"))
+				.andExpect(jsonPath("$.data.totalElements").value(0));
+	}
+
+	@Test
 	void 고객에게_노출되는_상품에는_옵션이_필요하다() throws Exception {
 		postJson("/api/v1/admin/products", """
 				{"name":"옵션 없는 판매 상품","basePrice":5000}
