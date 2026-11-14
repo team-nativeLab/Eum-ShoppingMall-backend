@@ -24,6 +24,7 @@ import com.example.shopping.domain.product.repository.ProductSkuRepository;
 import com.example.shopping.domain.upload.service.UploadService;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
+import com.example.shopping.global.persistence.LikePatterns;
 import com.example.shopping.global.response.PageResponse;
 import com.example.shopping.global.validation.SortValidator;
 
@@ -45,8 +46,8 @@ public class AdminProductService {
 			Pageable pageable) {
 		SortValidator.requireAllowed(pageable, Product.SORTABLE);
 		Set<ProductStatus> statuses = status == null ? ProductStatus.MANAGEABLE : Set.of(requireManageable(status));
-		String trimmed = StringUtils.hasText(keyword) ? keyword.trim() : null;
-		return PageResponse.from(productRepository.search(statuses, categoryId, trimmed, pageable)
+		String namePattern = StringUtils.hasText(keyword) ? LikePatterns.contains(keyword.trim()) : null;
+		return PageResponse.from(productRepository.search(statuses, categoryId, namePattern, pageable)
 				.map(AdminProductSummaryResponse::from));
 	}
 
