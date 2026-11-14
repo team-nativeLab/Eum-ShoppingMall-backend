@@ -10,10 +10,12 @@ import com.example.shopping.domain.home.dto.CompanyInfo;
 import com.example.shopping.domain.home.service.CompanyInfoService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 관리자 사업자·고객센터 정보(푸터) */
+@Tag(name = "사업자 정보 관리")
 @RestController
 @RequestMapping("/api/v1/admin/company")
 @RequiredArgsConstructor

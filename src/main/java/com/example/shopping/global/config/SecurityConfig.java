@@ -84,7 +84,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, paths(ApiPolicy.PUBLIC_GET)).permitAll()
 						.requestMatchers(HttpMethod.POST, paths(ApiPolicy.PUBLIC_POST)).permitAll()
 						.requestMatchers(paths(ApiPolicy.PUBLIC_OPERATIONS)).permitAll()
-						.requestMatchers(paths(ApiPolicy.ADMIN_API)).hasRole("ADMIN")
+						.requestMatchers(paths(ApiPolicy.ADMIN_API)).hasRole("ADMIN") //admin API는 admin만 접근 가능
 						.requestMatchers(paths(ApiPolicy.ADMIN_OPERATIONS)).hasRole("ADMIN")
 						.anyRequest().authenticated())
 				// Authorization: Bearer 헤더의 Access 토큰을 검증해 로그인 회원으로 인증한다.
