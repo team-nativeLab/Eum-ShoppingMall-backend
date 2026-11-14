@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -44,24 +46,29 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import com.example.shopping.global.redis.RedisCircuitBreaker;
 import com.example.shopping.global.security.AccessTokenValidator;
+import com.example.shopping.global.security.AdminSecurityProperties;
 import com.example.shopping.global.security.ApiPolicy;
 import com.example.shopping.global.security.JwtProperties;
 import com.example.shopping.global.security.JwtTokenProvider;
 import com.example.shopping.global.security.RateLimitFilter;
 import com.example.shopping.global.security.RefreshCookieOriginFilter;
 import com.example.shopping.global.security.RequestSizeLimitFilter;
+import com.example.shopping.global.security.SecretHashes;
 import com.example.shopping.global.security.SecurityErrorHandler;
 
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({ JwtProperties.class, AdminSecurityProperties.class })
 public class SecurityConfig {
+
+	private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity http, SecurityErrorHandler errorHandler,
 			@Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
 			@Value("${cors.allowed-origins}") List<String> allowedOrigins,
-			StringRedisTemplate redisTemplate, RedisCircuitBreaker redisCircuitBreaker,
+			@Value("${cors.admin-origins:}") List<String> adminOrigins, AdminSecurityProperties adminSecurity,
+			StringRedisTemplate redisTemplate, RedisCircuitBreaker redisCircuitBreaker, SecretHashes secretHashes,
 			@Value("${security.rate-limit.requests-per-minute}") int requestsPerMinute,
 			@Value("${security.rate-limit.public-product-requests-per-minute:300}") int publicProductRequestsPerMinute,
 			@Value("${security.request.max-body-bytes}") long maxBodyBytes) throws Exception {
@@ -92,11 +99,29 @@ public class SecurityConfig {
 				.addFilterBefore(new RequestSizeLimitFilter(maxBodyBytes, exceptionResolver),
 						BearerTokenAuthenticationFilter.class)
 				.addFilterBefore(new RateLimitFilter(requestsPerMinute, publicProductRequestsPerMinute,
-						exceptionResolver, Clock.systemUTC(), redisTemplate, redisCircuitBreaker),
+						exceptionResolver, Clock.systemUTC(), redisTemplate, redisCircuitBreaker,
+						secretHashes.forPurpose(SecretHashes.RATE_LIMIT_KEY)),
 						BearerTokenAuthenticationFilter.class)
-				.addFilterBefore(new RefreshCookieOriginFilter(allowedOrigins, exceptionResolver),
+				.addFilterBefore(new RefreshCookieOriginFilter(allowedOrigins, adminOrigins, exceptionResolver),
 						BearerTokenAuthenticationFilter.class);
+		warnIfAdminOriginsMisconfigured(allowedOrigins, adminOrigins);
+		if (!adminSecurity.mfaRequired()) {
+			log.warn("ADMIN_MFA_REQUIRED=false: OTP를 등록하지 않은 관리자는 비밀번호만으로 로그인합니다. 운영에서는 켜 두어야 합니다.");
+		}
 		return http.build();
+	}
+
+	/**
+	 * 관리자 화면 주소가 없거나 CORS 허용 목록에 없으면 관리자 화면이 로그인을 유지할 수 없다. 값이 없어도 앱은 뜨게 두고 알린다.
+	 * 관리자 Refresh 쿠키는 이 주소에서 온 요청만 받으므로(#163), 비어 있으면 관리자는 Access 토큰이 끝날 때마다 다시 로그인한다.
+	 */
+	private static void warnIfAdminOriginsMisconfigured(List<String> allowedOrigins, List<String> adminOrigins) {
+		if (adminOrigins.isEmpty()) {
+			log.warn("CORS_ADMIN_ORIGINS가 비어 있어 브라우저의 관리자 재발급·로그아웃 요청을 모두 거절합니다.");
+		}
+		adminOrigins.stream()
+				.filter(origin -> !allowedOrigins.contains(origin))
+				.forEach(origin -> log.warn("관리자 화면 주소 {}가 CORS_ALLOWED_ORIGINS에 없어 브라우저가 API를 부를 수 없습니다.", origin));
 	}
 
 	/**

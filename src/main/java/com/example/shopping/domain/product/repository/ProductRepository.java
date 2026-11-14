@@ -56,4 +56,23 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
 			  and p.status = com.example.shopping.domain.product.entity.ProductStatus.DELETED
 			""")
 	int detachDeletedProductsFromCategory(@Param("categoryId") Long categoryId);
+
+	/**
+	 * 보이는 리뷰 수와 별점 합계를 바꾼다. 리뷰를 쓰거나 다시 보이면 더하고, 숨기면 음수를 넘겨 뺀다.
+	 * 동시에 여러 리뷰가 들어와도 값이 어긋나지 않도록 한 쿼리로 바꾸고, 0 아래로는 내려가지 않게 한다.
+	 */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+			update Product p
+			set p.reviewCount = case when p.reviewCount + :countDelta < 0 then 0 else p.reviewCount + :countDelta end,
+			    p.ratingSum = case when p.ratingSum + :ratingDelta < 0 then 0 else p.ratingSum + :ratingDelta end
+			where p.id = :productId
+			""")
+	int adjustReviewStats(@Param("productId") Long productId, @Param("countDelta") int countDelta,
+			@Param("ratingDelta") int ratingDelta);
+
+	/** 브랜드 이름을 바꿀 때 이전 이름을 쓰던 상품의 브랜드도 바꾼다(삭제된 상품 포함). */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("update Product p set p.brand = :newName where p.brand = :oldName")
+	int renameBrand(@Param("oldName") String oldName, @Param("newName") String newName);
 }

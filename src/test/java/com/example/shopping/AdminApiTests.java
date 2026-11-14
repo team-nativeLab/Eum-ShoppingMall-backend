@@ -1,6 +1,7 @@
 package com.example.shopping;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
@@ -12,11 +13,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
@@ -111,6 +115,43 @@ class AdminApiTests {
 
 	@Test
 	@WithAnonymousUser
+	void 관리자_계정은_회원_로그인으로_들어올_수_없고_그_시도는_감사_로그에_남긴다() throws Exception {
+		insertMember("admin@example.com", "관리자", "ADMIN");
+		insertMember("super@example.com", "최고관리자", "SUPER_ADMIN");
+
+		// 비밀번호가 맞아도 틀린 것과 똑같이 응답하고 쿠키도 주지 않는다(#163).
+		for (String email : List.of("admin@example.com", "super@example.com")) {
+			postJson("/api/v1/auth/login", credentials(email, PASSWORD))
+					.andExpect(status().isUnauthorized())
+					.andExpect(jsonPath("$.code").value("LOGIN_FAILED"))
+					.andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
+		}
+		postJson("/api/v1/auth/login", credentials("admin@example.com", "wrong-pass-1234"))
+				.andExpect(status().isUnauthorized());
+
+		var attempts = jdbcTemplate.queryForList("""
+				select actor_member_id, response_status, summary, details from admin_audit_log
+				where action = 'LOGIN' order by id
+				""");
+		assertThat(attempts).hasSize(3).allSatisfy(row -> {
+			assertThat(row.get("ACTOR_MEMBER_ID")).isNull();
+			assertThat(row.get("RESPONSE_STATUS")).isEqualTo(401);
+			assertThat(row.get("SUMMARY")).isEqualTo("관리자 계정 회원 로그인 시도(거절)");
+		});
+		assertThat((String) attempts.get(1).get("DETAILS")).contains("super@example.com");
+
+		// 일반 회원의 로그인 실패는 관리자 감사 로그에 남기지 않는다.
+		insertMember("member@example.com", "홍길동", "USER");
+		postJson("/api/v1/auth/login", credentials("member@example.com", "wrong-pass-1234"))
+				.andExpect(status().isUnauthorized());
+		postJson("/api/v1/auth/login", credentials("member@example.com", PASSWORD)).andExpect(status().isOk());
+		assertThat(jdbcTemplate.queryForObject("select count(*) from admin_audit_log", Long.class)).isEqualTo(3);
+
+		adminLogin("admin@example.com", PASSWORD).andExpect(status().isOk());
+	}
+
+	@Test
+	@WithAnonymousUser
 	void 설정된_초기_관리자_계정은_없을_때만_만들고_기존_계정은_건드리지_않는다() throws Exception {
 		insertMember("existing@example.com", "기존회원", "USER");
 		long existingAdminId = insertMember("existing-admin@example.com", "기존 관리자", "ADMIN");
@@ -138,6 +179,17 @@ class AdminApiTests {
 		adminLogin("boot@example.com", PASSWORD).andExpect(status().isOk());
 		// 기존 회원의 비밀번호가 설정값으로 덮어써지지 않았다.
 		adminLogin("existing@example.com", "another-pass-1234").andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void 초기_관리자_이메일에_영문_외_문자가_있으면_기동을_멈춘다() {
+		AdminAccountInitializer initializer = new AdminAccountInitializer(
+				new AdminBootstrapProperties("ádmin@example.com", PASSWORD), memberRepository, passwordEncoder,
+				refreshTokenService);
+
+		assertThatThrownBy(() -> initializer.run(null)).isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("ADMIN_EMAIL");
+		assertThat(jdbcTemplate.queryForObject("select count(*) from member", Long.class)).isZero();
 	}
 
 	@Test
@@ -228,6 +280,27 @@ class AdminApiTests {
 	}
 
 	@Test
+	void 회원_검색어의_퍼센트와_밑줄은_글자_그대로_찾고_이메일은_대소문자를_가리지_않는다() throws Exception {
+		insertMember("hong@example.com", "홍길동", "USER");
+		insertMember("a_b@example.com", "밑줄", "USER");
+		insertMember("axb@example.com", "엑스", "USER");
+
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "_"))
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].email").value("a_b@example.com"));
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "a_b"))
+				.andExpect(jsonPath("$.data.totalElements").value(1));
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "%"))
+				.andExpect(jsonPath("$.data.totalElements").value(0));
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "\\"))
+				.andExpect(jsonPath("$.data.totalElements").value(0));
+		// 이메일은 소문자로 저장하므로 대문자로 찾아도 나온다.
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "HONG@"))
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].name").value("홍길동"));
+	}
+
+	@Test
 	void 관리자_변경을_기록하고_최고관리자만_감사로그를_조회한다() throws Exception {
 		long superAdminId = insertMember("audit-super@example.com", "최고관리자", "SUPER_ADMIN");
 		long adminId = insertMember("audit-admin@example.com", "관리자", "ADMIN");
@@ -249,10 +322,45 @@ class AdminApiTests {
 
 		mockMvc.perform(get("/api/v1/admin/audit-logs").with(admin(adminId)))
 				.andExpect(status().isForbidden());
-		mockMvc.perform(get("/api/v1/admin/audit-logs").with(superAdmin(superAdminId)))
+		mockMvc.perform(get("/api/v1/admin/audit-logs").param("kind", "CHANGE").with(superAdmin(superAdminId)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.totalElements").value(1))
 				.andExpect(jsonPath("$.data.content[0].details").value(Matchers.containsString("서비스 이용 약관")));
+		// 권한이 없어 거절된 감사 로그 조회 시도도 조회 기록으로 남는다(#138).
+		mockMvc.perform(get("/api/v1/admin/audit-logs").param("kind", "READ")
+				.param("actorMemberId", String.valueOf(adminId)).with(superAdmin(superAdminId)))
+				.andExpect(jsonPath("$.data.totalElements").value(1))
+				.andExpect(jsonPath("$.data.content[0].actorMemberId").value(adminId))
+				.andExpect(jsonPath("$.data.content[0].responseStatus").value(403));
+	}
+
+	@Test
+	void 개인정보가_보이는_관리자_조회는_누가_어떤_대상을_어떤_조건으로_봤는지_남기고_응답은_남기지_않는다() throws Exception {
+		long adminId = insertMember("reader-admin@example.com", "관리자", "ADMIN");
+		long memberId = insertMember("hong-read@example.com", "홍길동", "USER");
+
+		mockMvc.perform(get("/api/v1/admin/users").param("keyword", "hong").param("page", "0").with(admin(adminId)))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/admin/users/{userId}", memberId).with(admin(adminId)))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/admin/orders").param("status", "PAID").with(admin(adminId)))
+				.andExpect(status().isOk());
+		// 개인정보가 없는 조회(상품·대시보드)는 남기지 않는다.
+		mockMvc.perform(get("/api/v1/admin/products").with(admin(adminId))).andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/admin/dashboard").with(admin(adminId))).andExpect(status().isOk());
+
+		List<Map<String, Object>> reads = jdbcTemplate.queryForList("""
+				select action, target_type, target_id, details from admin_audit_log
+				where actor_member_id = ? order by id
+				""", adminId);
+		assertThat(reads).extracting(row -> row.get("ACTION") + " " + row.get("TARGET_TYPE") + "/" + row.get("TARGET_ID")
+				+ " " + row.get("DETAILS"))
+				.containsExactly("GET users/null {\"keyword\":\"hong\",\"page\":\"0\"}",
+						"GET users/" + memberId + " null",
+						"GET orders/null {\"status\":\"PAID\"}");
+		// 응답 본문(이름·연락처 등 개인정보)은 남기지 않는다.
+		assertThat(reads).allSatisfy(row -> assertThat(String.valueOf(row.get("DETAILS")))
+				.doesNotContain("홍길동", "01012345678"));
 	}
 
 	@Test
@@ -1117,9 +1225,13 @@ class AdminApiTests {
 	}
 
 	private ResultActions adminLogin(String email, String password) throws Exception {
-		return postJson("/api/v1/admin/auth/login", """
+		return postJson("/api/v1/admin/auth/login", credentials(email, password));
+	}
+
+	private static String credentials(String email, String password) {
+		return """
 				{"email":"%s","password":"%s"}
-				""".formatted(email, password));
+				""".formatted(email, password);
 	}
 
 	private long insertMember(String email, String name, String role) {

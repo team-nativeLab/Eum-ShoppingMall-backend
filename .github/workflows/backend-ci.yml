@@ -46,9 +46,16 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Start application against an empty MySQL database
+      # RDS 파라미터 그룹(log_bin_trust_function_creators=1)과 같게 맞춘다. 바이너리 로그가 켜진 MySQL에서는
+      # 이 값이 없으면 마이그레이션 계정이 감사 로그 보호 트리거(V25)를 만들 수 없다.
+      - name: Allow the migration account to create triggers
+        run: docker exec ${{ job.services.mysql.id }} mysql -uroot -proot -e "SET GLOBAL log_bin_trust_function_creators = 1;"
+
+      # 운영의 migrate 작업과 같은 방식으로 돌린다(#131). Flyway를 적용하고 Hibernate가 스키마를 검증한 뒤
+      # MigrationOnlyRunner가 종료 코드 0으로 끝나야 통과한다. 운영 API는 Flyway를 끄고 이 결과를 검증만 한다.
+      - name: Run the migration task against an empty MySQL database
         env:
-          SPRING_PROFILES_ACTIVE: migration
+          SPRING_PROFILES_ACTIVE: migrate
           DB_URL: jdbc:mysql://127.0.0.1:3306/shopping
           DB_USERNAME: shopping
           DB_PASSWORD: shopping
@@ -58,31 +65,19 @@ jobs:
         run: |
           set -euo pipefail
           log_file="$(mktemp)"
-          bash gradlew bootRun --no-daemon --console=plain >"$log_file" 2>&1 &
-          app_pid=$!
-          trap 'kill "$app_pid" 2>/dev/null || true; wait "$app_pid" 2>/dev/null || true; cat "$log_file"' EXIT
-
-          for attempt in $(seq 1 90); do
-            if grep -q 'Started ShoppingApplication' "$log_file"; then
-              exit 0
-            fi
-            if ! kill -0 "$app_pid" 2>/dev/null; then
-              cat "$log_file"
-              exit 1
-            fi
-            sleep 1
-          done
-
-          cat "$log_file"
-          echo "Application did not start with Flyway migration and Hibernate validation."
-          exit 1
+          trap 'cat "$log_file"' EXIT
+          if ! timeout 300 bash gradlew bootRun --no-daemon --console=plain >"$log_file" 2>&1; then
+            echo "Migration task did not finish with Flyway migration and Hibernate validation."
+            exit 1
+          fi
+          grep -q 'Started ShoppingApplication' "$log_file"
 
   terraform:
     name: Validate AWS infrastructure
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: terraform
+        working-directory: terraform/stacks/app
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -93,13 +88,18 @@ jobs:
           terraform_version: 1.10.5
 
       - name: Check Terraform formatting
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -recursive ../..
 
       - name: Initialize providers without AWS credentials
         run: terraform init -backend=false -input=false
 
       - name: Validate Terraform configuration
         run: terraform validate
+
+      - name: Validate the state bucket bootstrap
+        run: |
+          terraform -chdir=../../bootstrap init -backend=false -input=false
+          terraform -chdir=../../bootstrap validate
 
       - name: Test Terraform plans with a mocked AWS provider
         run: terraform test
@@ -110,6 +110,15 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v6
+
+      # 이미지는 Gradle 공식 이미지로 빌드한다(Dockerfile). wrapper와 버전이 다르면 로컬·CI와 다른 Gradle로 빌드되므로 막는다.
+      - name: Check that Dockerfile uses the wrapper's Gradle version
+        run: |
+          wrapper_version="$(sed -n 's/^distributionUrl=.*gradle-\(.*\)-bin\.zip$/\1/p' gradle/wrapper/gradle-wrapper.properties)"
+          if ! grep -q "^FROM gradle:${wrapper_version}-jdk21 AS build$" Dockerfile; then
+            echo "Dockerfile의 Gradle 이미지 버전을 wrapper 버전(${wrapper_version})과 맞춰 주세요."
+            exit 1
+          fi
 
       - name: Build container image
         run: docker build --tag eum-shopping-backend:ci .

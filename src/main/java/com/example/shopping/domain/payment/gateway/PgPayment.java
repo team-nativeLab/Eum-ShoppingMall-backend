@@ -5,16 +5,17 @@ import java.time.LocalDateTime;
 /**
  * PG가 알려준 결제 상태.
  *
+ * 응답 원문은 담지 않는다. 결제 수단 정보가 들어 있어 저장하지 않기 때문이다(#144).
+ *
  * @param totalAmount   PG가 실제로 승인한 금액. 주문 금액과 반드시 다시 대조한다.
  * @param balanceAmount 취소하고 남은 금액
- * @param raw           PG 응답 원문
  */
 public record PgPayment(String paymentKey, String orderNo, PgStatus status, long totalAmount, long balanceAmount,
-		String method, LocalDateTime approvedAt, String raw, PgVirtualAccount virtualAccount, String secret) {
+		String method, LocalDateTime approvedAt, PgVirtualAccount virtualAccount, String secret) {
 
 	public PgPayment(String paymentKey, String orderNo, PgStatus status, long totalAmount, long balanceAmount,
-			String method, LocalDateTime approvedAt, String raw) {
-		this(paymentKey, orderNo, status, totalAmount, balanceAmount, method, approvedAt, raw, null, null);
+			String method, LocalDateTime approvedAt) {
+		this(paymentKey, orderNo, status, totalAmount, balanceAmount, method, approvedAt, null, null);
 	}
 
 	public enum PgStatus {

@@ -42,26 +42,30 @@ public class RateLimitFilter extends OncePerRequestFilter {
 	private final HandlerExceptionResolver resolver;
 	private final Clock clock;
 	private final SharedCounter counter;
+	private final KeyedHash clientKeyHashes;
 
 	public RateLimitFilter(int requestsPerMinute, HandlerExceptionResolver resolver, Clock clock,
-			StringRedisTemplate redisTemplate) {
-		this(requestsPerMinute, 120, resolver, clock, redisTemplate);
-	}
-
-	public RateLimitFilter(int requestsPerMinute, int publicProductRequestsPerMinute,
-			HandlerExceptionResolver resolver, Clock clock, StringRedisTemplate redisTemplate) {
-		this(requestsPerMinute, publicProductRequestsPerMinute, resolver, clock, redisTemplate,
-				new RedisCircuitBreaker(clock));
+			StringRedisTemplate redisTemplate, KeyedHash clientKeyHashes) {
+		this(requestsPerMinute, 120, resolver, clock, redisTemplate, clientKeyHashes);
 	}
 
 	public RateLimitFilter(int requestsPerMinute, int publicProductRequestsPerMinute,
 			HandlerExceptionResolver resolver, Clock clock, StringRedisTemplate redisTemplate,
-			RedisCircuitBreaker redisCircuitBreaker) {
+			KeyedHash clientKeyHashes) {
+		this(requestsPerMinute, publicProductRequestsPerMinute, resolver, clock, redisTemplate,
+				new RedisCircuitBreaker(clock), clientKeyHashes);
+	}
+
+	/** @param clientKeyHashes Redis 키에 넣을 클라이언트 IP를 해시한다(SecretHashes.RATE_LIMIT_KEY). */
+	public RateLimitFilter(int requestsPerMinute, int publicProductRequestsPerMinute,
+			HandlerExceptionResolver resolver, Clock clock, StringRedisTemplate redisTemplate,
+			RedisCircuitBreaker redisCircuitBreaker, KeyedHash clientKeyHashes) {
 		this.requestsPerMinute = requestsPerMinute;
 		this.publicProductRequestsPerMinute = publicProductRequestsPerMinute;
 		this.resolver = resolver;
 		this.clock = clock;
 		this.counter = new SharedCounter("rate-limit", redisTemplate, redisCircuitBreaker, clock, MAX_TRACKED_KEYS);
+		this.clientKeyHashes = clientKeyHashes;
 	}
 
 	@Override
@@ -75,7 +79,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
 		long now = clock.millis();
 		// 분 단위 구간마다 센다. 주문번호가 달라도 같은 API면 한 묶음이다.
-		String key = "rate-limit:" + now / WINDOW_MILLIS + ":" + request.getRemoteAddr() + " " + rule.bucket;
+		String key = "rate-limit:" + now / WINDOW_MILLIS + ":" + clientKey(request) + " " + rule.bucket;
 		long count = counter.increment(key, Duration.ofMillis(WINDOW_MILLIS));
 		int limit = switch (rule.limit) {
 			case DEFAULT -> requestsPerMinute;
@@ -90,6 +94,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
 			return;
 		}
 		chain.doFilter(request, response);
+	}
+
+	/** Redis 키에 클라이언트 IP를 그대로 남기지 않는다(#136). 서버 키로 해시해 Redis를 볼 수 있어도 접속 IP를 알 수 없다. */
+	String clientKey(HttpServletRequest request) {
+		return clientKeyHashes.hash(request.getRemoteAddr());
 	}
 
 	private record Rule(String bucket, RequestMatcher matcher, ApiPolicy.Limit limit) {

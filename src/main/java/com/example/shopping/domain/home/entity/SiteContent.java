@@ -20,7 +20,9 @@ import lombok.NoArgsConstructor;
 public class SiteContent extends BaseTimeEntity {
 
 	public static final String COMPANY = "company";
-	public static final Set<String> ALLOWED_CODES = Set.of(COMPANY, "terms", "privacy-policy");
+	public static final String TERMS = "terms";
+	public static final String PRIVACY_POLICY = "privacy-policy";
+	public static final Set<String> ALLOWED_CODES = Set.of(COMPANY, TERMS, PRIVACY_POLICY);
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)

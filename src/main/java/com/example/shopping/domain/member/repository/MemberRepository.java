@@ -21,14 +21,18 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
 	boolean existsByEmail(String email);
 
-	/** 검색어는 선택 조건이며 이메일·이름에서 찾는다. */
+	/**
+	 * 검색어는 선택 조건이며 이메일·이름에서 찾는다. 두 패턴은 LikePatterns로 만들고 함께 null이거나 함께 값이 있다.
+	 * 이메일은 소문자로 저장하므로 이메일 패턴도 소문자로 넘긴다.
+	 */
 	@Query("""
 			select m from Member m
-			where :keyword is null
-			   or m.email like concat('%', :keyword, '%')
-			   or m.name like concat('%', :keyword, '%')
+			where :emailPattern is null
+			   or m.email like :emailPattern escape '\\'
+			   or m.name like :namePattern escape '\\'
 			""")
-	Page<Member> search(@Param("keyword") String keyword, Pageable pageable);
+	Page<Member> search(@Param("emailPattern") String emailPattern, @Param("namePattern") String namePattern,
+			Pageable pageable);
 
 	long countByRoleAndCreatedAtGreaterThanEqual(MemberRole role, LocalDateTime from);
 

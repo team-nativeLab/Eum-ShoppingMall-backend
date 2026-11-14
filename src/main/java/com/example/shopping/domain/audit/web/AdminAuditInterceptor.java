@@ -15,6 +15,7 @@ import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.WebUtils;
 
 import com.example.shopping.domain.audit.service.AdminAuditLogService;
+import com.example.shopping.domain.audit.service.AdminBulkReadMonitor;
 import com.example.shopping.domain.audit.service.AuditDetails;
 import com.example.shopping.global.security.ApiPolicy;
 
@@ -25,8 +26,10 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * 관리자 변경 요청을 누가, 어떤 대상을, 무엇으로 바꾸려 했는지(요청 본문, 민감한 값 제외) 남긴다.
+ * 개인정보가 보이는 관리자 조회(ApiPolicy.AUDITED_READS)도 누가 어떤 대상을 어떤 조건으로 봤는지(쿼리 문자열) 남기고,
+ * 응답(개인정보)은 남기지 않는다(#138). 짧은 시간에 많이 조회하면 담당자에게 알린다(AdminBulkReadMonitor).
  * 성공한 요청과 권한이 없어 거절된 요청(403)을 남기고, 입력 오류(400)·없는 대상(404) 같은 실패는 남기지 않는다.
- * 기록은 변경이 커밋된 뒤 따로 저장한다. 저장에 실패하면 내용 전체를 오류 로그로 남기고
+ * 기록은 변경이 커밋된 뒤 따로 저장한다. 저장에 실패하면 누가 어떤 대상을 바꿨는지(요청 본문 제외)를 오류 로그로 남기고
  * admin.audit.record.failures 지표를 올려 알림으로 잡을 수 있게 한다.
  */
 @Component
@@ -35,10 +38,13 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
 	private static final Logger log = LoggerFactory.getLogger(AdminAuditInterceptor.class);
 
 	private final AdminAuditLogService auditLogService;
+	private final AdminBulkReadMonitor bulkReadMonitor;
 	private final Counter recordFailures;
 
-	public AdminAuditInterceptor(AdminAuditLogService auditLogService, MeterRegistry meterRegistry) {
+	public AdminAuditInterceptor(AdminAuditLogService auditLogService, AdminBulkReadMonitor bulkReadMonitor,
+			MeterRegistry meterRegistry) {
 		this.auditLogService = auditLogService;
+		this.bulkReadMonitor = bulkReadMonitor;
 		this.recordFailures = Counter.builder("admin.audit.record.failures")
 				.description("Admin audit log entries that could not be saved")
 				.register(meterRegistry);
@@ -49,8 +55,10 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
 			Exception exception) {
 		String path = request.getRequestURI();
 		String method = request.getMethod();
+		boolean read = ApiPolicy.isAuditedRead(method, path);
 		// 컨트롤러까지 온 요청만 남긴다. 없는 경로로 보낸 요청이 기록을 채우지 못하게 한다.
-		if (!(handler instanceof HandlerMethod) || !isAudited(request) || !isRecordedStatus(response.getStatus())) {
+		if (!(handler instanceof HandlerMethod) || !(read || isAudited(request))
+				|| !isRecordedStatus(response.getStatus())) {
 			return;
 		}
 		Long actorId = authenticatedMemberId();
@@ -58,14 +66,18 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
 			return;
 		}
 		Target target = target(request);
-		String details = details(request);
+		String details = read ? AuditDetails.fromQueryParameters(request.getParameterMap()) : details(request);
+		if (read) {
+			bulkReadMonitor.recordRead(actorId);
+		}
 		try {
 			auditLogService.record(actorId, request.getRemoteAddr(), method, target.type(), target.id(),
 					method + " " + path, details, response.getStatus());
 		} catch (RuntimeException e) {
 			recordFailures.increment();
-			log.error("관리자 변경 감사 로그 저장 실패: actor={}, ip={}, method={}, path={}, status={}, details={}", actorId,
-					request.getRemoteAddr(), method, path, response.getStatus(), details, e);
+			// 요청 본문(details)은 가리고 남겨도 개인정보가 섞일 수 있어 앱 로그에는 남기지 않는다(#139).
+			log.error("관리자 감사 로그 저장 실패: actor={}, ip={}, method={}, path={}, target={}:{}, status={}", actorId,
+					request.getRemoteAddr(), method, path, target.type(), target.id(), response.getStatus(), e);
 		}
 	}
 

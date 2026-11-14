@@ -19,7 +19,9 @@ spring:
     baseline-version: 1
 
 cors:
-  allowed-origins: http://localhost:3000
+  # 웹(Next.js)과 관리자 화면(Vite) 개발 서버
+  allowed-origins: http://localhost:3000,http://localhost:5173
+  admin-origins: http://localhost:5173
 
 springdoc:
   api-docs:

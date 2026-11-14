@@ -7,8 +7,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -94,6 +97,40 @@ class EmailVerificationApiTests {
 	}
 
 	@Test
+	void 인증번호는_대소문자를_구분하는_영문과_숫자_6자리이고_DB_값만으로는_알아낼_수_없다() throws Exception {
+		postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}").andExpect(status().isOk());
+		RecordingEmailSender.SentMail mail = mailbox.lastTo(EMAIL);
+		String code = mail.code();
+		assertThat(code).matches("^[A-HJ-NP-Za-km-z2-9]{6}$");
+		assertThat(mail.text()).contains("대소문자를 구분");
+
+		// DB에는 서버 비밀 키를 섞은 해시만 남아, 키 없이 계산한 해시로는 맞혀 볼 수 없다. (#130)
+		entityManager.flush();
+		String stored = jdbcTemplate.queryForObject("select code_hash from email_verification where email = ?",
+				String.class, EMAIL);
+		assertThat(stored).hasSize(64).isNotEqualTo(sha256("SIGNUP:" + EMAIL + ":" + code));
+
+		String swapped = swapCase(code);
+		if (!swapped.equals(code)) {
+			confirm(EMAIL, swapped).andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
+		}
+		confirm(EMAIL, code).andExpect(status().isOk());
+	}
+
+	@Test
+	void 가입_확인_토큰도_서버_키로_해시해_저장한다() throws Exception {
+		String token = verifiedToken(EMAIL);
+
+		// 키 없는 SHA-256과 다르므로 DB 값만으로는 토큰을 알아낼 수 없다(#136).
+		entityManager.flush();
+		String stored = jdbcTemplate.queryForObject(
+				"select token_hash from email_verification where email = ? and token_hash is not null", String.class,
+				EMAIL);
+		assertThat(stored).hasSize(64).isNotEqualTo(sha256(token));
+		signup(EMAIL, token).andExpect(status().isCreated());
+	}
+
+	@Test
 	void 다른_이메일로_받은_토큰으로는_가입할_수_없다() throws Exception {
 		String token = verifiedToken("first@example.com");
 
@@ -104,18 +141,39 @@ class EmailVerificationApiTests {
 	}
 
 	@Test
-	void 이미_가입된_이메일은_인증번호를_보내지_않고_1분_안에는_다시_보낼_수_없다() throws Exception {
+	void 이미_가입된_이메일도_같은_응답을_주고_인증번호_대신_안내_메일을_보내며_1분_안에는_다시_보낼_수_없다() throws Exception {
 		insertMember("member@example.com");
-		postJson("/api/v1/auth/email-verifications", "{\"email\":\"member@example.com\"}")
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"));
+		// 가입 여부와 상관없이 응답이 같아, 가입 여부는 메일함 주인만 알 수 있다(#140).
+		for (String email : new String[] { "member@example.com", EMAIL }) {
+			postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + email + "\"}")
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.expiresAt").exists());
+			postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + email + "\"}")
+					.andExpect(status().isTooManyRequests())
+					.andExpect(jsonPath("$.code").value("VERIFICATION_RESEND_TOO_SOON"));
+		}
 
-		postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}").andExpect(status().isOk());
-		postJson("/api/v1/auth/email-verifications", "{\"email\":\"" + EMAIL + "\"}")
-				.andExpect(status().isTooManyRequests())
-				.andExpect(jsonPath("$.code").value("VERIFICATION_RESEND_TOO_SOON"));
 		assertThat(mailbox.sentTo(EMAIL)).hasSize(1);
-		assertThat(mailbox.sentTo("member@example.com")).isEmpty();
+		assertThat(mailbox.lastTo(EMAIL).code()).isNotNull();
+		assertThat(mailbox.sentTo("member@example.com")).hasSize(1);
+		RecordingEmailSender.SentMail notice = mailbox.lastTo("member@example.com");
+		assertThat(notice.subject()).contains("이미 가입된 이메일");
+		assertThat(notice.text()).contains("비밀번호 찾기").doesNotContain("인증번호:");
+	}
+
+	@Test
+	void 비밀번호_재설정_확인은_가입_여부와_상관없이_같은_오류를_준다() throws Exception {
+		insertMember("member@example.com");
+		for (String email : new String[] { "member@example.com", "nobody@example.com" }) {
+			postJson("/api/v1/auth/password-reset", "{\"email\":\"" + email + "\"}").andExpect(status().isOk());
+			// 인증번호 하나를 다 틀릴 때까지의 응답이 가입 여부와 상관없이 같다(#140).
+			for (int i = 0; i < 4; i++) {
+				resetPassword(email, "000000", "new-pass-5678")
+						.andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
+			}
+			resetPassword(email, "000000", "new-pass-5678")
+					.andExpect(jsonPath("$.code").value("VERIFICATION_ATTEMPTS_EXCEEDED"));
+		}
 	}
 
 	@Test
@@ -249,7 +307,10 @@ class EmailVerificationApiTests {
 		postJson("/api/v1/auth/password-reset", "{\"email\":\"suspended@example.com\"}")
 				.andExpect(status().isOk());
 
-		assertThat(jdbcTemplate.queryForObject("select count(*) from email_verification", Integer.class)).isZero();
+		// 보내지 않는 인증번호는 만들어 두어 재설정 확인의 응답이 가입된 이메일과 같게 한다(#140).
+		assertThat(jdbcTemplate.queryForObject("select count(*) from email_verification", Integer.class)).isEqualTo(2);
+		assertThat(mailbox.sentTo("nobody@example.com")).isEmpty();
+		assertThat(mailbox.sentTo("suspended@example.com")).isEmpty();
 		resetPassword("nobody@example.com", "123456", "new-pass-5678")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VERIFICATION_CODE_INVALID"));
@@ -282,7 +343,7 @@ class EmailVerificationApiTests {
 	private ResultActions signup(String email, String token) throws Exception {
 		String tokenField = token == null ? "" : ",\"emailVerificationToken\":\"" + token + "\"";
 		return postJson("/api/v1/auth/signup",
-				"{\"email\":\"%s\",\"password\":\"%s\",\"name\":\"홍길동\"%s}".formatted(email, PASSWORD, tokenField));
+				"{\"email\":\"%s\",\"password\":\"%s\",\"name\":\"홍길동\",\"termsAgreed\":true,\"privacyAgreed\":true%s}".formatted(email, PASSWORD, tokenField));
 	}
 
 	private ResultActions resetPassword(String email, String code, String newPassword) throws Exception {
@@ -313,8 +374,21 @@ class EmailVerificationApiTests {
 		entityManager.clear();
 	}
 
-	/** 맞는 인증번호와 다른 6자리 숫자 */
+	private static String sha256(String value) throws Exception {
+		return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+				.digest(value.getBytes(StandardCharsets.UTF_8)));
+	}
+
+	private static String swapCase(String value) {
+		StringBuilder swapped = new StringBuilder(value.length());
+		for (char c : value.toCharArray()) {
+			swapped.append(Character.isUpperCase(c) ? Character.toLowerCase(c) : Character.toUpperCase(c));
+		}
+		return swapped.toString();
+	}
+
+	/** 맞는 인증번호와 다른 6자리. 인증번호에는 0과 1을 쓰지 않으므로 000000은 언제나 틀린 번호다. */
 	private String wrong(String code) {
-		return code.equals("000000") ? "111111" : "000000";
+		return "000000";
 	}
 }

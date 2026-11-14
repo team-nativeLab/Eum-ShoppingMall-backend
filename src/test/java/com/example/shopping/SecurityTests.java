@@ -13,8 +13,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -32,6 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.shopping.domain.member.dto.request.EmailVerificationConfirmRequest;
 import com.example.shopping.domain.member.dto.request.LoginRequest;
 import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
 import com.example.shopping.domain.member.dto.request.PasswordResetConfirmRequest;
@@ -52,6 +57,10 @@ class SecurityTests {
 	private static final String EMAIL = "member@example.com";
 	private static final String PASSWORD = "test-pass-1234";
 	private static final String REFRESH_COOKIE = "refresh_token";
+	private static final String ADMIN_REFRESH_COOKIE = "admin_refresh_token";
+	/** application-test.yaml의 cors.admin-origins. 고객 사이트는 http://localhost:3000 */
+	private static final String ADMIN_ORIGIN = "http://localhost:5173";
+	private static final String WEB_ORIGIN = "http://localhost:3000";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -111,6 +120,114 @@ class SecurityTests {
 	// ───────── Refresh 토큰 ─────────
 
 	@Test
+	void 관리자는_관리자_전용_쿠키로_재발급받고_회원_재발급으로는_관리자_토큰을_받을_수_없다() throws Exception {
+		insertMember(EMAIL, "ADMIN");
+
+		MockHttpServletResponse loginResponse = mockMvc.perform(post("/api/v1/admin/auth/login")
+						.contentType(MediaType.APPLICATION_JSON).content(credentials(EMAIL, PASSWORD)))
+				.andExpect(status().isOk())
+				.andReturn().getResponse();
+		assertThat(loginResponse.getCookie(REFRESH_COOKIE)).isNull();
+		Cookie first = loginResponse.getCookie(ADMIN_REFRESH_COOKIE);
+		assertThat(first).isNotNull();
+		assertThat(loginResponse.getHeader(HttpHeaders.SET_COOKIE))
+				.contains("HttpOnly", "SameSite=Strict", "Path=/api/v1/admin/auth");
+
+		MockHttpServletResponse refreshed = adminRefresh(first).andExpect(status().isOk()).andReturn().getResponse();
+		Cookie second = refreshed.getCookie(ADMIN_REFRESH_COOKIE);
+		assertThat(second.getValue()).isNotEqualTo(first.getValue());
+		String accessToken = JsonPath.read(refreshed.getContentAsString(), "$.data.accessToken");
+		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+				.andExpect(status().isOk());
+
+		// 고객 사이트의 재발급 API는 관리자 토큰을 받지 않는다. 쿠키 이름을 바꿔 보내도 같다.
+		refresh(new Cookie(REFRESH_COOKIE, second.getValue())).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void 관리자_세션은_30분_동안_재발급하지_않으면_끝나고_계속_써도_로그인한_지_8시간이_지나면_끝난다() throws Exception {
+		insertMember(EMAIL, "ADMIN");
+
+		// 관리자 쿠키·토큰은 30분만 쓰고(회원은 14일), 세션은 로그인부터 8시간 뒤에 끝난다(#164).
+		Cookie first = adminLoginResponse(EMAIL).getCookie(ADMIN_REFRESH_COOKIE);
+		assertThat(first.getMaxAge()).isBetween(1790, 1800);
+		LocalDateTime expiresAt = jdbcTemplate.queryForObject("select expires_at from refresh_token",
+				LocalDateTime.class);
+		LocalDateTime sessionExpiresAt = jdbcTemplate.queryForObject("select session_expires_at from refresh_token",
+				LocalDateTime.class);
+		assertThat(Duration.between(LocalDateTime.now(), expiresAt))
+				.isBetween(Duration.ofMinutes(29), Duration.ofMinutes(30));
+		assertThat(Duration.between(LocalDateTime.now(), sessionExpiresAt))
+				.isBetween(Duration.ofHours(8).minusMinutes(1), Duration.ofHours(8));
+
+		// 30분 동안 재발급하지 않으면 끝난다.
+		jdbcTemplate.update("update refresh_token set expires_at = ?", LocalDateTime.now().minusSeconds(1));
+		entityManager.clear();
+		adminRefresh(first).andExpect(status().isUnauthorized());
+
+		// 재발급한 토큰도 세션이 끝나는 시각을 넘기지 못한다.
+		Cookie second = adminLoginResponse(EMAIL).getCookie(ADMIN_REFRESH_COOKIE);
+		jdbcTemplate.update("update refresh_token set session_expires_at = ? where used_at is null",
+				LocalDateTime.now().plusMinutes(5));
+		entityManager.clear();
+		Cookie third = adminRefresh(second).andExpect(status().isOk()).andReturn().getResponse()
+				.getCookie(ADMIN_REFRESH_COOKIE);
+		assertThat(third.getMaxAge()).isBetween(290, 300);
+
+		jdbcTemplate.update("update refresh_token set session_expires_at = ? where used_at is null",
+				LocalDateTime.now().minusSeconds(1));
+		entityManager.clear();
+		adminRefresh(third).andExpect(status().isUnauthorized());
+
+		// 세션 종료 시각이 없는 관리자 토큰(#164 전에 받은 것)은 재발급하지 않아 다시 로그인하게 한다.
+		Cookie beforeChange = adminLoginResponse(EMAIL).getCookie(ADMIN_REFRESH_COOKIE);
+		jdbcTemplate.update("update refresh_token set session_expires_at = null");
+		entityManager.clear();
+		adminRefresh(beforeChange).andExpect(status().isUnauthorized());
+
+		// 회원 세션은 그대로 14일이다.
+		insertMember("shopper@example.com", "USER");
+		assertThat(login("shopper@example.com", PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE)
+				.getMaxAge()).isEqualTo(1209600);
+	}
+
+	@Test
+	void OTP를_요구하지_않는_설정에서도_OTP를_등록한_관리자에게는_요구한다() throws Exception {
+		long adminId = insertMember(EMAIL, "ADMIN");
+		jdbcTemplate.update("""
+				insert into admin_mfa (member_id, secret_ciphertext, enabled_at, last_used_step, created_at, updated_at)
+				values (?, 'v1:test', now(), 0, now(), now())
+				""", adminId);
+
+		mockMvc.perform(post("/api/v1/admin/auth/login")
+						.contentType(MediaType.APPLICATION_JSON).content(credentials(EMAIL, PASSWORD)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.mfaRequired").value(true))
+				.andExpect(jsonPath("$.data.mfaSetupRequired").value(false))
+				.andExpect(jsonPath("$.data.accessToken").doesNotExist())
+				.andExpect(result -> assertThat(result.getResponse().getHeader(HttpHeaders.SET_COOKIE)).isNull());
+	}
+
+	@Test
+	void 관리자_재발급은_회원_토큰을_받지_않고_관리자_로그아웃은_관리자_쿠키를_지운다() throws Exception {
+		insertMember(EMAIL, "USER");
+		Cookie memberCookie = login(EMAIL, PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE);
+		adminRefresh(new Cookie(ADMIN_REFRESH_COOKIE, memberCookie.getValue())).andExpect(status().isUnauthorized());
+
+		insertMember("admin@example.com", "ADMIN");
+		Cookie adminCookie = mockMvc.perform(post("/api/v1/admin/auth/login")
+						.contentType(MediaType.APPLICATION_JSON).content(credentials("admin@example.com", PASSWORD)))
+				.andReturn().getResponse().getCookie(ADMIN_REFRESH_COOKIE);
+		MockHttpServletResponse logout = mockMvc.perform(post("/api/v1/admin/auth/logout")
+						.header("Origin", ADMIN_ORIGIN).cookie(adminCookie))
+				.andExpect(status().isOk())
+				.andReturn().getResponse();
+		assertThat(logout.getHeader(HttpHeaders.SET_COOKIE))
+				.contains(ADMIN_REFRESH_COOKIE + "=", "Max-Age=0", "Path=/api/v1/admin/auth");
+		adminRefresh(adminCookie).andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void 로그인하면_스크립트가_읽을_수_없는_쿠키로_Refresh_토큰을_받고_재발급하면_토큰이_교체된다() throws Exception {
 		insertMember(EMAIL, "USER");
 
@@ -139,6 +256,28 @@ class SecurityTests {
 		// 한 번 쓴 토큰은 다시 쓸 수 없고, 새 토큰은 계속 쓸 수 있다.
 		refresh(first).andExpect(status().isUnauthorized());
 		refresh(second).andExpect(status().isOk());
+	}
+
+	@Test
+	void Refresh_토큰은_서버_키로_해시하고_이전에_SHA_256으로_저장한_토큰도_한_번은_재발급받을_수_있다() throws Exception {
+		long memberId = insertMember(EMAIL, "USER");
+		Cookie issued = login(EMAIL, PASSWORD).andReturn().getResponse().getCookie(REFRESH_COOKIE);
+		// 키 없는 SHA-256과 다르므로 DB 값만으로는 토큰을 넣어 보며 맞힐 수 없다(#136).
+		assertThat(jdbcTemplate.queryForObject("select token_hash from refresh_token", String.class))
+				.hasSize(64).isNotEqualTo(sha256Hex(issued.getValue()));
+
+		// 배포 전에 받은 토큰은 키 없는 SHA-256으로 저장돼 있다.
+		String legacyToken = "legacy-refresh-token-0123456789abcdefghij";
+		jdbcTemplate.update("""
+				insert into refresh_token (member_id, token_hash, expires_at, used_at, token_version)
+				values (?, ?, ?, null, 0)
+				""", memberId, sha256Hex(legacyToken), LocalDateTime.now().plusDays(1));
+
+		Cookie rotated = refresh(new Cookie(REFRESH_COOKIE, legacyToken))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getCookie(REFRESH_COOKIE);
+		refresh(new Cookie(REFRESH_COOKIE, legacyToken)).andExpect(status().isUnauthorized());
+		refresh(rotated).andExpect(status().isOk());
 	}
 
 	@Test
@@ -341,6 +480,17 @@ class SecurityTests {
 	}
 
 	@Test
+	void 관리자_재발급과_로그아웃은_고객_사이트에서_온_요청을_거부한다() throws Exception {
+		// 고객 사이트도 CORS는 허용하지만 관리자 쿠키는 관리자 화면 주소에서 온 요청만 받는다(#163).
+		mockMvc.perform(post("/api/v1/admin/auth/refresh").header("Origin", WEB_ORIGIN))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(post("/api/v1/admin/auth/logout").header("Origin", WEB_ORIGIN))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(post("/api/v1/admin/auth/refresh").header("Origin", ADMIN_ORIGIN))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void 지나치게_큰_요청_본문은_읽지_않고_413으로_거절한다() throws Exception {
 		String hugeBody = "{\"email\":\"a@example.com\",\"password\":\"" + "x".repeat(2 * 1024 * 1024) + "\"}";
 
@@ -352,13 +502,18 @@ class SecurityTests {
 
 	@Test
 	void 비밀번호가_담긴_요청_객체는_문자열로_바꿔도_비밀번호가_드러나지_않는다() {
-		assertThat(new LoginRequest(EMAIL, PASSWORD).toString()).contains(EMAIL).doesNotContain(PASSWORD);
-		assertThat(new SignupRequest(EMAIL, PASSWORD, "홍길동", null, "verification-token").toString())
+		assertThat(new LoginRequest(EMAIL, PASSWORD, "captcha-token").toString()).contains(EMAIL).doesNotContain(PASSWORD, "captcha-token");
+		assertThat(new SignupRequest(EMAIL, PASSWORD, "홍길동", null, "verification-token", true, true, false).toString())
 				.doesNotContain(PASSWORD)
 				.doesNotContain("verification-token");
-		assertThat(new PasswordResetConfirmRequest(EMAIL, "123456", "new-pass-5678").toString())
-				.doesNotContain("123456")
-				.doesNotContain("new-pass-5678");
+		assertThat(new PasswordResetConfirmRequest(EMAIL, "Ab3dE9", "new-pass-5678", "captcha-token").toString())
+				.doesNotContain("Ab3dE9")
+				.doesNotContain("new-pass-5678")
+				.doesNotContain("captcha-token");
+		assertThat(new EmailVerificationConfirmRequest(EMAIL, "Ab3dE9", "captcha-token").toString())
+				.contains(EMAIL)
+				.doesNotContain("Ab3dE9")
+				.doesNotContain("captcha-token");
 		assertThat(new PasswordChangeRequest(PASSWORD, "new-pass-5678").toString())
 				.doesNotContain(PASSWORD)
 				.doesNotContain("new-pass-5678");
@@ -420,6 +575,23 @@ class SecurityTests {
 
 	private ResultActions refresh(Cookie cookie) throws Exception {
 		return mockMvc.perform(post("/api/v1/auth/refresh").cookie(cookie));
+	}
+
+	private MockHttpServletResponse adminLoginResponse(String email) throws Exception {
+		return mockMvc.perform(post("/api/v1/admin/auth/login")
+						.contentType(MediaType.APPLICATION_JSON).content(credentials(email, PASSWORD)))
+				.andExpect(status().isOk())
+				.andReturn().getResponse();
+	}
+
+	private ResultActions adminRefresh(Cookie cookie) throws Exception {
+		return mockMvc.perform(post("/api/v1/admin/auth/refresh").header("Origin", ADMIN_ORIGIN).cookie(cookie));
+	}
+
+	/** 서버 키 없이 계산하는 SHA-256(16진수). #136 전에 Refresh 토큰을 저장하던 방식 */
+	private static String sha256Hex(String value) throws Exception {
+		return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+				.digest(value.getBytes(StandardCharsets.UTF_8)));
 	}
 
 	private String credentials(String email, String password) {

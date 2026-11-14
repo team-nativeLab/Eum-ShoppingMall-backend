@@ -29,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 public class PasswordResetService {
 
 	private final EmailVerificationService verificationService;
+	private final VerificationAttemptGuard attemptGuard;
 	private final MemberRepository memberRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final RefreshTokenService refreshTokenService;
@@ -38,19 +39,21 @@ public class PasswordResetService {
 	private final TransactionTemplate transactionTemplate;
 
 	/**
-	 * 사용 중인 계정(ACTIVE)일 때만 인증번호를 보낸다. 1분 안에 다시 요청하거나 24시간 동안 5통을 넘으면 보내지 않는다.
-	 * 응답은 언제나 같다.
+	 * 사용 중인 계정(ACTIVE)일 때만 인증번호를 보낸다. 1분 안에 다시 요청하거나 하루 한도를 넘거나,
+	 * 인증번호를 여러 번 틀려 막힌 동안에는 보내지 않는다. 응답은 언제나 같다.
+	 * 로봇 확인을 켰고 24시간 안에 3통을 넘게 요청했으면 captchaToken이 필요하다(CAPTCHA_REQUIRED·CAPTCHA_INVALID, #166).
+	 * 가입되지 않은 이메일에도 보내지 않는 인증번호를 만들어 둔다. 그래야 재설정 확인에서 인증번호를 다 틀렸을 때의 응답
+	 * (VERIFICATION_ATTEMPTS_EXCEEDED), 하루 한도, 로봇 확인 요구가 가입 여부와 상관없이 같다(#140).
 	 */
-	public void requestReset(String rawEmail) {
+	public void requestReset(String rawEmail, String captchaToken, String remoteIp) {
 		String email = ContactFormats.loginEmail(rawEmail);
+		verificationService.checkSendAllowed(email, VerificationPurpose.PASSWORD_RESET, captchaToken, remoteIp);
 		String code = VerificationCodes.newCode();
 		boolean issued = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
-			if (findActive(email) == null) {
-				return false;
-			}
+			boolean active = findActive(email) != null;
 			try {
 				verificationService.issue(email, VerificationPurpose.PASSWORD_RESET, code);
-				return true;
+				return active;
 			} catch (BusinessException sendLimited) {
 				return false;
 			}
@@ -61,14 +64,19 @@ public class PasswordResetService {
 
 					인증번호: %s
 
-					10분 안에 입력해 주세요. 직접 요청하지 않았다면 이 메일은 무시해 주세요. 비밀번호는 바뀌지 않습니다.
+					영문 대소문자를 구분해 10분 안에 입력해 주세요. 직접 요청하지 않았다면 이 메일은 무시해 주세요. 비밀번호는 바뀌지 않습니다.
 					""".formatted(code));
 		}
 	}
 
-	/** 인증번호가 맞으면 비밀번호를 바꾼다. 비밀번호 해시 계산 동안에는 DB 커넥션을 잡지 않는다. */
-	public void resetPassword(String rawEmail, String code, String newPassword) {
+	/**
+	 * 인증번호가 맞으면 비밀번호를 바꾼다. 비밀번호 해시 계산과 로봇 확인 동안에는 DB 커넥션을 잡지 않는다.
+	 * 틀린 횟수에 따른 로봇 확인·차단은 VerificationAttemptGuard를 따른다.
+	 */
+	public void resetPassword(String rawEmail, String code, String newPassword, String captchaToken,
+			String remoteIp) {
 		String email = ContactFormats.loginEmail(rawEmail);
+		attemptGuard.checkAttemptAllowed(email, VerificationPurpose.PASSWORD_RESET, captchaToken, remoteIp);
 		String passwordHash = passwordEncoder.encode(newPassword);
 		BusinessException failure = transactionTemplate.execute(status -> {
 			try {
@@ -91,6 +99,7 @@ public class PasswordResetService {
 		if (failure != null) {
 			throw failure;
 		}
+		attemptGuard.reset(email, VerificationPurpose.PASSWORD_RESET);
 		// 본인이 비밀번호를 새로 정했으므로 로그인 실패로 막힌 상태도 푼다.
 		loginAttemptLimiter.reset(email);
 	}

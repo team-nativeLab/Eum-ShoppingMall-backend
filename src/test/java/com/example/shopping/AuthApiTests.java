@@ -92,6 +92,25 @@ class AuthApiTests {
 	}
 
 	@Test
+	void 영문_외_문자가_든_이메일로는_가입_로그인_인증번호_요청을_할_수_없다() throws Exception {
+		// MySQL은 악센트를 구분하지 않고 비교할 수 있어 'ádmin@…'이 'admin@…' 계정으로 잡힐 수 있다(#137).
+		String variant = "ádmin@example.com";
+
+		signup(variant, PASSWORD, "홍길동", null)
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors[0].field").value("email"));
+		login(variant, PASSWORD)
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+		for (String path : new String[] { "/api/v1/auth/email-verifications", "/api/v1/auth/password-reset" }) {
+			mockMvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(json("email", variant)))
+					.andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.errors[0].field").value("email"));
+		}
+		assertThat(jdbcTemplate.queryForObject("select count(*) from member", Long.class)).isZero();
+	}
+
+	@Test
 	void 한글이_섞인_비밀번호는_가입할_수_없다() throws Exception {
 		signup(EMAIL, "비밀번호password1", "홍길동", null)
 				.andExpect(status().isBadRequest())
@@ -160,8 +179,9 @@ class AuthApiTests {
 		insertMember("super-admin@example.com", PASSWORD, "SUPER_ADMIN", "ACTIVE");
 
 		String memberToken = loginAndGetToken(EMAIL, PASSWORD);
-		String adminToken = loginAndGetToken("admin@example.com", PASSWORD);
-		String superAdminToken = loginAndGetToken("super-admin@example.com", PASSWORD);
+		// 관리자 계정은 관리자 로그인으로만 들어온다(#163).
+		String adminToken = loginAndGetToken("/api/v1/admin/auth/login", "admin@example.com", PASSWORD);
+		String superAdminToken = loginAndGetToken("/api/v1/admin/auth/login", "super-admin@example.com", PASSWORD);
 
 		mockMvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, "Bearer " + memberToken))
 				.andExpect(status().isForbidden());
@@ -221,6 +241,8 @@ class AuthApiTests {
 		String body = phone == null
 				? json("email", email, "password", password, "name", name)
 				: json("email", email, "password", password, "name", name, "phone", phone);
+		// 필수 동의(#21)를 함께 보낸다.
+		body = body.substring(0, body.length() - 1) + ",\"termsAgreed\":true,\"privacyAgreed\":true}";
 		return mockMvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 
@@ -231,7 +253,13 @@ class AuthApiTests {
 	}
 
 	private String loginAndGetToken(String email, String password) throws Exception {
-		String body = login(email, password)
+		return loginAndGetToken("/api/v1/auth/login", email, password);
+	}
+
+	private String loginAndGetToken(String path, String email, String password) throws Exception {
+		String body = mockMvc.perform(post(path)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(json("email", email, "password", password)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.expiresIn").value(900))
 				.andReturn().getResponse().getContentAsString();

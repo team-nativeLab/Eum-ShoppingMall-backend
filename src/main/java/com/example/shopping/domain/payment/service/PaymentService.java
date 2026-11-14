@@ -42,6 +42,7 @@ public class PaymentService {
 	private final PaymentRepository paymentRepository;
 	private final PaymentGateway paymentGateway;
 	private final VirtualAccountReconciler virtualAccountReconciler;
+	private final PaymentWebhookSecrets webhookSecrets;
 	private final ManualCheckAlerts alerts;
 
 	public OrderDetailResponse confirm(Long memberId, PaymentConfirmRequest request) {
@@ -125,7 +126,7 @@ public class PaymentService {
 		return orderRepository.findByOrderNo(data.orderId())
 				.flatMap(order -> paymentRepository.findFirstByOrderIdOrderByIdDesc(order.getId())
 						.filter(Payment::isVirtualAccount)
-						.filter(payment -> payment.matchesWebhookSecret(data.secret()))
+						.filter(payment -> webhookSecrets.matches(payment, data.secret()))
 						.filter(payment -> data.paymentKey() == null || payment.getPaymentKey().equals(data.paymentKey()))
 						.map(payment -> new VirtualAccountPayment(order, payment)));
 	}

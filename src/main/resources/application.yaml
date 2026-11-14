@@ -53,6 +53,10 @@ spring:
     log-resolved-exception: false
 
 logging:
+  level:
+    # Hibernate는 SQL 오류 메시지를 그대로 남기는데, 중복 오류에는 겹친 값(이메일 등)이 들어 있다(#139).
+    # 예외는 GlobalExceptionHandler가 종류와 제약 이름만 남기고, 예상하지 못한 오류는 스택 트레이스와 함께 남긴다.
+    org.hibernate.orm.jdbc.error: off
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} [%thread] [requestId=%X{requestId:-}] %-5level %logger{36} - %msg%n%ex"
   structured:
@@ -90,7 +94,11 @@ management:
       enabled: true
 
 cors:
+  # 쿠키를 쓰는 프론트엔드 주소 전체(고객 사이트와 관리자 화면). 회원 Refresh 쿠키(재발급·로그아웃)는 이 Origin에서 온 요청만 받는다.
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  # 위 목록 중 관리자 화면 주소. 관리자 Refresh 쿠키는 이 Origin에서 온 요청만 받아, 고객 사이트에서는 관리자 세션을 쓸 수 없다(#163).
+  # 비어 있으면 브라우저의 관리자 재발급을 모두 거절해, 관리자는 Access 토큰이 끝날 때마다(15분) 다시 로그인해야 한다.
+  admin-origins: ${CORS_ADMIN_ORIGINS:}
   allowed-methods: GET, POST, PUT, DELETE, OPTIONS
   allowed-headers: "*"
   allow-credentials: true
@@ -120,8 +128,28 @@ security:
     # 한 사무실 직원들이 같은 공인 IP로 접속하므로 넉넉하게 둔다. 크롤링 같은 대량 요청은 프록시·WAF에서 막는다.
     public-product-requests-per-minute: ${PUBLIC_PRODUCT_RATE_LIMIT_PER_MINUTE:300}
   login-lock:
-    # 한 이메일이 첫 실패부터 10분 안에 이만큼 틀리면 그 10분 동안 로그인을 막는다. IP를 바꿔 가며 비밀번호를 넣어 보는 공격 대비.
+    # 한 이메일이 첫 실패부터 10분 안에 이만큼 틀리면 다음 로그인부터 로봇 확인을 요구한다(app.captcha를 켰을 때). IP를 바꿔 가며 비밀번호를 넣어 보는 공격 대비.
+    # 막지 않으므로 남이 일부러 틀려도 주인은 로그인할 수 있다(#141).
+    captcha-after-failures: ${LOGIN_CAPTCHA_AFTER_FAILURES:5}
+    # 로봇 확인을 껐을 때만: 이만큼 틀리면 그 10분 동안 로그인을 막는다.
     max-failures: ${LOGIN_LOCK_MAX_FAILURES:10}
+  verification-lock:
+    # 이메일 인증번호(회원가입·비밀번호 재설정)를 첫 실패부터 1시간 안에 이만큼 틀리면 다음부터 로봇 확인을 요구한다(app.captcha를 켰을 때).
+    captcha-after-failures: 3
+    # 이만큼 틀리면 그때부터 1시간 동안 그 이메일로 인증번호를 받거나 확인할 수 없다.
+    max-failures: 5
+  admin:
+    # 관리자 로그인에 OTP(TOTP) 2단계 인증을 요구한다(#164). 끄더라도 OTP를 등록한 관리자는 OTP를 확인한다. 운영에서는 끄지 않는다.
+    mfa-required: ${ADMIN_MFA_REQUIRED:true}
+    # OTP 앱에 보일 서비스 이름
+    mfa-issuer: ${ADMIN_MFA_ISSUER:Eum Shopping}
+    # 관리자가 이 시간 동안 재발급하지 않으면(쓰지 않으면) 다시 로그인해야 한다. 개인정보의 안전성 확보조치 기준 제6조의 접속 자동 차단
+    session-idle-timeout: ${ADMIN_SESSION_IDLE_TIMEOUT:30m}
+    # 로그인한 뒤 이 시간이 지나면 계속 쓰고 있어도 다시 로그인해야 한다.
+    session-max-lifetime: ${ADMIN_SESSION_MAX_LIFETIME:8h}
+  audit:
+    # 관리자 한 명이 10분 안에 개인정보 조회 API(ApiPolicy.AUDITED_READS)를 이만큼 부르면 담당자에게 알린다(#138).
+    bulk-read-alert-threshold: ${ADMIN_BULK_READ_ALERT_THRESHOLD:100}
   request:
     # JSON 요청 본문의 최대 크기(바이트). 파일 업로드는 위의 multipart 설정이 따로 제한한다.
     max-body-bytes: ${MAX_REQUEST_BODY_BYTES:1048576}
@@ -158,12 +186,34 @@ upload:
     max-deletes-per-run: ${UPLOAD_CLEANUP_MAX_DELETES_PER_RUN:1000}
 
 app:
+  audit:
+    # 관리자 감사 로그 보존 기간(일). 지난 로그는 매일 05:15에 지운다. 접속기록 보관 기준에 맞춰 365 이상만 받는다.
+    retention-days: ${AUDIT_LOG_RETENTION_DAYS:730}
+  retention:
+    # 개인정보 보유 기간(일, #134). 지나면 매일 05:30에 개인정보만 지운다(PersonalDataRetentionCleaner). 개인정보 처리방침과 맞춘다.
+    # 끝난 주문의 배송지. 전자상거래법 계약·대금결제·재화 공급 기록(5년)보다 짧게는 받지 않는다.
+    order-days: ${ORDER_PERSONAL_DATA_RETENTION_DAYS:1825}
+    # 답변한 1:1 문의의 연락처·내용. 소비자 불만·분쟁 처리 기록(3년)보다 짧게는 받지 않는다.
+    inquiry-days: ${INQUIRY_PERSONAL_DATA_RETENTION_DAYS:1095}
+    # 완료한 견적 문의의 회사·담당자·연락처·내용
+    quote-days: ${QUOTE_PERSONAL_DATA_RETENTION_DAYS:1095}
+    # 보냈거나 최종 실패한 알림 발송 기록(수신 번호·답변 내용)
+    notification-days: ${NOTIFICATION_RETENTION_DAYS:90}
   alert:
     # 확인이 필요한 상황을 메일로 받을 담당자 이메일(쉼표로 구분). 비어 있으면 로그와 지표로만 남긴다. 메일 서버(MAIL_HOST)도 설정해야 보낸다.
     emails: ${ALERT_EMAILS:}
   auth:
     # true면 회원가입에 이메일 인증 토큰이 필요하다. 프론트가 인증 화면을 붙이고 메일 서버(MAIL_HOST)를 설정한 뒤 켠다.
     signup-email-verification-required: ${SIGNUP_EMAIL_VERIFICATION_REQUIRED:false}
+  captcha:
+    # 인증번호를 여러 번 틀린 요청에 로봇 확인(Cloudflare Turnstile)을 요구한다.
+    # 프론트가 Turnstile 위젯(사이트 키)을 붙이고 서버에 비밀 키를 넣은 뒤 켠다. 꺼 두면 틀린 횟수 차단(security.verification-lock)만 동작한다.
+    enabled: ${CAPTCHA_ENABLED:false}
+    secret-key: ${CAPTCHA_SECRET_KEY:}
+    # 위젯을 풀 수 있는 프론트 도메인(쉼표로 구분, 예: shop.example.com). 다른 사이트에서 푼 토큰은 받지 않는다. 켜면 필수다.
+    allowed-hostnames: ${CAPTCHA_ALLOWED_HOSTNAMES:}
+    # Turnstile 토큰 확인 주소
+    verify-url: https://challenges.cloudflare.com/turnstile/v0/siteverify
   mail:
     host: ${MAIL_HOST:}
     port: ${MAIL_PORT:587}
@@ -196,5 +246,6 @@ app:
   notification:
     alimtalk:
       # 문의 답변 알림톡 템플릿 코드. 알림톡 대행사 콘솔에서 승인받은 코드를 넣는다.
-      # 템플릿 변수: #{문의제목}, #{답변}. 대행사가 정해지기 전에는 알림을 보내지 않고 SKIPPED로 기록한다.
+      # 템플릿 변수: #{문의번호}, #{접수일}(예: 2026-11-09), #{답변}. 사용자가 쓴 문의 제목은 넣지 않는다(#165).
+      # 대행사가 정해지기 전에는 알림을 보내지 않고 SKIPPED로 기록한다.
       inquiry-answer-template: ${ALIMTALK_INQUIRY_ANSWER_TEMPLATE:INQUIRY_ANSWER}
