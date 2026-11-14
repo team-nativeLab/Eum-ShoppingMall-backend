@@ -35,6 +35,14 @@ MySQL 스키마는 Flyway로 관리합니다. 빈 데이터베이스는 Hibernat
 
 지원하는 콘텐츠 코드는 `company`, `terms`, `privacy-policy`입니다. 고객은 `GET /api/v1/contents/{code}`로 읽습니다(예: `GET /api/v1/contents/company`). 관리자는 `GET /api/v1/admin/contents`와 `GET /api/v1/admin/contents/{code}`로 저장된 콘텐츠를 조회하고, `PUT /api/v1/admin/contents/{code}`에 `{ "title": "...", "body": "..." }`를 보내 만들거나 수정합니다. 본문은 일반 텍스트이고 HTML 태그는 거절합니다. 서버는 법적 문구를 미리 넣어 두지 않습니다.
 
+## 홈 편성과 사업자 정보
+
+- **홈 편성:** 관리자는 `GET /api/v1/admin/home`으로 읽고 `PUT /api/v1/admin/home`으로 통째로 저장합니다. 히어로 슬라이드(5개까지), 프로모션 배너(6개까지), 배송·서비스 안내(8개까지), 베스트 상품 ID(20개까지), 하단 견적 문의 띠(`ctaBand`, 끄려면 `null`)를 함께 보내야 하고, 빠진 목록은 지운다는 뜻으로 보지 않고 400으로 거절합니다. 목록 항목의 `id`는 관리자 화면이 만들며 같은 목록 안에서 겹치면 400(`HOME_ITEM_ID_DUPLICATED`)입니다.
+- **고객 홈:** `GET /api/v1/home`이 기존 `banners`·`newProducts`와 함께 `heroSlides`, `promoBanners`, `serviceBenefits`, `featuredProducts`, `ctaBand`를 줍니다. 저장한 적이 없으면 빈 목록과 `null`입니다. 베스트 상품은 관리자가 고른 순서대로 고객에게 보이는 상품(판매중·품절)만 주며, 숨기거나 삭제한 상품은 저장돼 있어도 빠집니다. 저장 즉시 상품 조회 캐시를 비웁니다.
+- **입력 제한:** 이미지는 업로드 API가 돌려준 주소나 웹이 함께 배포하는 정적 이미지(`/assets/...`)만 받고, 외부 주소는 400(`INVALID_HOME_IMAGE_URL`)입니다. 이동 경로(`destination`)는 `/`로 시작하는 사이트 안 경로만 받습니다. `javascript:`, `https://…`, `//…`처럼 사이트 밖으로 나가는 값은 400입니다. 홈 편성의 업로드 이미지는 참조 없는 이미지 정리가 지우지 않습니다.
+- **사업자 정보:** 푸터의 사업자·고객센터 정보는 누구나 `GET /api/v1/company`로 읽고, 저장하기 전에는 404(`CONTENT_NOT_FOUND`)입니다. 관리자는 `GET`·`PUT /api/v1/admin/company`로 읽고 통째로 저장합니다(저장 전 `GET`은 `data: null`). 상호, 대표자, 사업자등록번호(`000-00-00000`), 주소, 이메일, 고객센터 번호·운영 시간은 필수입니다. 통신판매업 신고번호와 개인정보 보호책임자는 비워 둘 수 있지만 전자상거래법상 사이트에 표시해야 하는 항목이므로 운영 전에 채웁니다.
+- **저장 방식:** 둘 다 `site_setting` 표에 화면 단위 JSON 문서로 저장합니다(`home-layout`, `company-info`).
+
 ## 이미지 저장소
 
 업로드 파일은 기본적으로 로컬 디스크에 저장합니다(`UPLOAD_STORAGE=local`).
@@ -122,6 +130,22 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 - **관리자:** `GET`·`POST /api/v1/admin/brands`, `PUT`·`DELETE /api/v1/admin/brands/{brandId}`. 이름이 같은 브랜드는 `409 BRAND_NAME_DUPLICATED`입니다. 이름을 바꾸면 이전 이름을 쓰던 상품의 브랜드도 함께 바꿉니다. 브랜드를 지워도 상품의 브랜드 값은 그대로입니다.
 - **이미지:** 로고·대표 이미지는 업로드 API가 돌려준 주소만 받고, 참조 없는 이미지 정리가 지우지 않도록 알립니다(`ImageReferences`). 관리자가 입력한 글은 화면에서 텍스트로만 그립니다.
 - 대표 브랜드(`featured`)가 여럿이면 정렬 순서가 앞선 하나를 씁니다.
+
+## 연관·추천 상품과 추천 검색어
+
+- **연관 상품:** `GET /api/v1/products/{productId}/related?limit=`는 상품 상세의 "함께 구매하면 좋은 제품"입니다. 기준 상품과 같은 최상위 카테고리(하위 카테고리 포함)의 상품을 추천순으로 고르고, 모자라면 전체 상품을 추천순으로 채웁니다. 기준 상품은 빠지며, 고객에게 보이지 않는 기준 상품이면 404입니다.
+- **추천 상품:** `GET /api/v1/products/recommended?limit=`는 검색 결과가 없을 때의 추천 상품입니다.
+- **추천순:** 고객에게 보이는 상품(판매중·품절)을 관리자가 정한 추천 점수(`recommendScore`)가 높은 순, 같으면 최근 등록순으로 놓습니다. 상품 목록의 추천순과 같습니다.
+- **개수:** `limit`은 기본 10, 1~20이고 벗어나면 400입니다. 두 API 모두 상품 조회 캐시를 씁니다.
+- **추천 검색어:** 누구나 `GET /api/v1/search/recommended-keywords`로 읽습니다(정하지 않았으면 빈 배열). 관리자는 `GET`·`PUT /api/v1/admin/search/recommended-keywords`에 `{"keywords": [...]}`를 보내 통째로 바꿉니다. 10개까지, 한 개 30자까지이며, 앞뒤 공백을 지우고 겹치면 처음 것만 남깁니다.
+
+## 이벤트·기획전
+
+- **고객(로그인 없이):** `GET /api/v1/events`는 보이는 이벤트를 정렬 순서(작을수록 앞), 같으면 최근 시작한 순으로 줍니다. 끝난 이벤트도 상태를 달아 포함합니다. `GET /api/v1/events/{eventId}`는 상세이고, 숨긴 이벤트는 404(`EVENT_NOT_FOUND`)입니다.
+- **진행 상태(`status`):** 저장하지 않고 조회 시각으로 정합니다. 시작 전은 `UPCOMING`, 시작부터 종료 시각까지(종료 시각 포함)는 `ONGOING`, 그 뒤는 `ENDED`입니다.
+- **관리자:** `GET`·`POST /api/v1/admin/events`, `PUT`·`DELETE /api/v1/admin/events/{eventId}`. 수정은 전체 수정이고 본문 구성(`sections`, 소제목·본문 10개까지)도 통째로 바꿉니다. 상세 큰 제목(`heroTitle`)은 1~3줄 배열입니다. 종료 시각이 시작 시각보다 앞서면 400(`INVALID_EVENT_PERIOD`)입니다.
+- **시각:** `startAt`·`endAt`은 시간대를 포함한 ISO 8601로 보냅니다(예: `2026-10-01T00:00:00+09:00`, `…Z`). 서버 시간대(Asia/Seoul)로 바꿔 저장하고, 응답에는 `+09:00`을 붙여 줍니다. 시간대가 없는 값은 400입니다.
+- 관리자가 입력한 글은 화면에서 텍스트로만 그립니다.
 
 ## 개인정보 보유 기간
 

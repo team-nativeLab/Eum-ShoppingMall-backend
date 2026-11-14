@@ -67,9 +67,26 @@ public class ProductController {
 		return ApiResponse.ok(productService.suggest(query));
 	}
 
+	/** 검색 결과가 없을 때의 추천 상품. 고객에게 보이는 상품을 추천순(관리자 추천 점수 → 최근 등록)으로 limit개(기본 10, 최대 20) */
+	@GetMapping("/products/recommended")
+	public ApiResponse<List<ProductSummaryResponse>> recommended(
+			@RequestParam(defaultValue = "" + ProductService.DEFAULT_COLLECTION_LIMIT) int limit) {
+		return ApiResponse.ok(productService.getRecommended(limit));
+	}
+
 	/** WEB-005, 006 상품 상세 */
 	@GetMapping("/products/{productId}")
 	public ApiResponse<ProductDetailResponse> product(@PathVariable Long productId) {
 		return ApiResponse.ok(productService.getDetail(productId));
+	}
+
+	/**
+	 * 상품 상세의 "함께 구매하면 좋은 제품". 같은 최상위 카테고리의 상품을 추천순으로, 모자라면 전체 추천순으로 채워
+	 * limit개(기본 10, 최대 20). 기준 상품은 빠지고, 고객에게 보이지 않는 기준 상품이면 404다.
+	 */
+	@GetMapping("/products/{productId}/related")
+	public ApiResponse<List<ProductSummaryResponse>> related(@PathVariable Long productId,
+			@RequestParam(defaultValue = "" + ProductService.DEFAULT_COLLECTION_LIMIT) int limit) {
+		return ApiResponse.ok(productService.getRelated(productId, limit));
 	}
 }

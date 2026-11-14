@@ -49,9 +49,14 @@ public class ProductService {
 	private static final TypeReference<List<CategoryResponse>> CATEGORY_LIST = new TypeReference<>() {};
 	private static final TypeReference<List<ProductSuggestionResponse>> SUGGESTION_LIST = new TypeReference<>() {};
 	private static final TypeReference<PageResponse<ProductSummaryResponse>> SEARCH_PAGE = new TypeReference<>() {};
+	private static final TypeReference<List<ProductSummaryResponse>> SUMMARY_LIST = new TypeReference<>() {};
 
 	/** 검색창 자동 완성에 보여 줄 최대 개수 */
 	private static final int SUGGESTION_LIMIT = 5;
+
+	/** 연관·추천 상품의 기본 개수와 최대 개수 */
+	public static final int DEFAULT_COLLECTION_LIMIT = 10;
+	public static final int MAX_COLLECTION_LIMIT = 20;
 
 	/** 검색어 길이와 한 번에 고를 수 있는 브랜드 수. 매우 긴 검색어나 수천 개의 브랜드로 DB에 부하를 주지 못하게 한다. */
 	private static final int MAX_KEYWORD_LENGTH = 100;
@@ -155,10 +160,78 @@ public class ProductService {
 
 
 	public ProductDetailResponse getDetail(Long productId) {
-		Product product = productRepository.findById(productId)
+		return ProductDetailResponse.from(visibleProduct(productId));
+	}
+
+	/**
+	 * 상품 상세의 "함께 구매하면 좋은 제품". 기준 상품과 같은 최상위 카테고리의 상품을 추천순(관리자 추천 점수 → 최근 등록)으로
+	 * 고르고, 모자라면 전체 상품을 추천순으로 채운다. 기준 상품은 빼며, 고객에게 보이지 않는 기준 상품이면 404다.
+	 */
+	public List<ProductSummaryResponse> getRelated(Long productId, int limit) {
+		requireCollectionLimit(limit);
+		Product base = visibleProduct(productId);
+		Long categoryId = base.getCategory() == null ? null : base.getCategory().getId();
+		return readCache.getOrLoad(new CollectionKey("related", productId, limit), SUMMARY_LIST, () -> {
+			List<Product> picked = new ArrayList<>(limit);
+			Set<Long> scope = sameRootCategories(categoryId);
+			if (scope != null) {
+				addUntil(picked, recommended(scope, limit + 1), base.getId(), limit);
+			}
+			if (picked.size() < limit) {
+				addUntil(picked, recommended(null, limit + picked.size() + 1), base.getId(), limit);
+			}
+			return picked.stream().map(ProductSummaryResponse::from).toList();
+		});
+	}
+
+	/** 검색 결과가 없을 때 보여 줄 추천 상품. 고객에게 보이는 상품을 추천순(관리자 추천 점수 → 최근 등록)으로 */
+	public List<ProductSummaryResponse> getRecommended(int limit) {
+		requireCollectionLimit(limit);
+		return readCache.getOrLoad(new CollectionKey("recommended", null, limit), SUMMARY_LIST,
+				() -> recommended(null, limit).stream().map(ProductSummaryResponse::from).toList());
+	}
+
+	private List<Product> recommended(Set<Long> categoryIds, int limit) {
+		return productRepository.findTop(ProductSearchCondition.of(ProductStatus.CUSTOMER_VISIBLE, categoryIds, null),
+				ProductSort.RECOMMENDED, limit);
+	}
+
+	/** 카테고리가 속한 최상위 카테고리와 그 아래 모든 카테고리. 카테고리가 없으면 null */
+	private Set<Long> sameRootCategories(Long categoryId) {
+		if (categoryId == null) {
+			return null;
+		}
+		List<Category> all = categoryRepository.findAll();
+		Map<Long, Category> byId = new HashMap<>();
+		all.forEach(category -> byId.put(category.getId(), category));
+		Category root = rootOf(byId, categoryId);
+		return root == null ? null : withDescendants(all, root.getId());
+	}
+
+	/** 기준 상품과 이미 고른 상품을 빼고 limit개가 될 때까지 담는다. */
+	private static void addUntil(List<Product> picked, List<Product> candidates, Long excludedId, int limit) {
+		Set<Long> pickedIds = new HashSet<>();
+		picked.forEach(product -> pickedIds.add(product.getId()));
+		for (Product candidate : candidates) {
+			if (picked.size() >= limit) {
+				return;
+			}
+			if (!candidate.getId().equals(excludedId) && pickedIds.add(candidate.getId())) {
+				picked.add(candidate);
+			}
+		}
+	}
+
+	private static void requireCollectionLimit(int limit) {
+		if (limit < 1 || limit > MAX_COLLECTION_LIMIT) {
+			throw new BusinessException(ErrorCode.INVALID_INPUT);
+		}
+	}
+
+	private Product visibleProduct(Long productId) {
+		return productRepository.findById(productId)
 				.filter(p -> ProductStatus.CUSTOMER_VISIBLE.contains(p.getStatus()))
 				.orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
-		return ProductDetailResponse.from(product);
 	}
 
 	/** 노출 중인 카테고리. 상위 카테고리가 비노출이면 하위 카테고리도 함께 숨긴다. */
@@ -254,6 +327,10 @@ public class ProductService {
 	}
 
 	private record ReadKey(String operation, Long categoryId, String query) {
+	}
+
+	/** 연관·추천 상품 캐시 키. 추천 상품은 productId가 null이다. */
+	private record CollectionKey(String operation, Long productId, int limit) {
 	}
 
 	private record SearchKey(Long categoryId, String query, List<String> brands, Long minPrice, Long maxPrice,

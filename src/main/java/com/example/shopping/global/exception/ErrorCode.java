@@ -33,6 +33,8 @@ public enum ErrorCode {
 	INVALID_IMAGE_URL(HttpStatus.BAD_REQUEST, "이미지 주소는 파일 업로드 API가 돌려준 주소만 쓸 수 있습니다."),
 	BANNER_NOT_FOUND(HttpStatus.NOT_FOUND, "배너를 찾을 수 없습니다."),
 	CONTENT_NOT_FOUND(HttpStatus.NOT_FOUND, "콘텐츠를 찾을 수 없습니다."),
+	INVALID_HOME_IMAGE_URL(HttpStatus.BAD_REQUEST, "홈 이미지는 파일 업로드 API가 돌려준 주소나 웹의 정적 이미지(/assets/...)만 쓸 수 있습니다."),
+	HOME_ITEM_ID_DUPLICATED(HttpStatus.BAD_REQUEST, "같은 목록 안에 ID가 겹치는 항목이 있습니다."),
 
 	// 회원
 	EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
@@ -98,6 +100,10 @@ public enum ErrorCode {
 	CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "취소할 수 없는 상태입니다."),
 	CANCEL_PENDING_CONFIRMATION(HttpStatus.ACCEPTED, "취소 결과를 확인 중입니다. 잠시 후 주문 내역에서 확인해 주세요."),
 	CANCEL_FAILED(HttpStatus.BAD_GATEWAY, "결제 취소에 실패했습니다. 잠시 후 다시 시도해 주세요."),
+
+	// 이벤트
+	EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "이벤트를 찾을 수 없습니다."),
+	INVALID_EVENT_PERIOD(HttpStatus.BAD_REQUEST, "종료 시각은 시작 시각보다 앞설 수 없습니다."),
 
 	// 고객지원
 	NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, "공지사항을 찾을 수 없습니다."),
