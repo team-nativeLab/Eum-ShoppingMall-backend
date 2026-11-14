@@ -11,9 +11,11 @@ import com.example.shopping.domain.product.dto.response.BrandResponse;
 import com.example.shopping.domain.product.service.BrandService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 /** 브랜드 목록·상세(누구나). 브랜드의 상품은 GET /api/v1/products?brand={name}으로 본다. */
+@Tag(name = "브랜드")
 @RestController
 @RequestMapping("/api/v1/brands")
 @RequiredArgsConstructor
@@ -33,6 +35,7 @@ public class BrandController {
 		return ApiResponse.ok(brandService.featured());
 	}
 
+	/** 브랜드 상세. 숨긴 브랜드는 404(BRAND_NOT_FOUND) */
 	@GetMapping("/{brandId}")
 	public ApiResponse<BrandResponse.Detail> brand(@PathVariable Long brandId) {
 		return ApiResponse.ok(brandService.get(brandId));

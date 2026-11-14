@@ -16,9 +16,11 @@ import com.example.shopping.domain.member.service.MemberService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.security.CurrentMember;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "내 정보")
 @RestController
 @RequestMapping("/api/v1/me")
 @RequiredArgsConstructor
@@ -47,6 +49,7 @@ public class MemberController {
 		return ApiResponse.ok(null);
 	}
 
+	/** 회원 탈퇴. 현재 비밀번호를 확인한다. */
 	@DeleteMapping
 	public ApiResponse<Void> withdraw(@AuthenticationPrincipal Jwt jwt,
 			@Valid @RequestBody com.example.shopping.domain.member.dto.request.AccountWithdrawalRequest request) {

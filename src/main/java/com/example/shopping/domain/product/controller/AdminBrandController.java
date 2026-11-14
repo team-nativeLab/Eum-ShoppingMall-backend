@@ -18,10 +18,12 @@ import com.example.shopping.domain.product.dto.response.BrandResponse;
 import com.example.shopping.domain.product.service.AdminBrandService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /** 관리자 브랜드 관리 */
+@Tag(name = "브랜드 관리")
 @RestController
 @RequestMapping("/api/v1/admin/brands")
 @RequiredArgsConstructor
@@ -35,6 +37,7 @@ public class AdminBrandController {
 		return ApiResponse.ok(adminBrandService.list());
 	}
 
+	/** 브랜드 등록. 같은 이름의 브랜드가 있으면 409(BRAND_NAME_DUPLICATED) */
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<BrandResponse.Admin> create(@Valid @RequestBody BrandRequest request) {

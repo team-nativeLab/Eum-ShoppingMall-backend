@@ -9,8 +9,10 @@ import com.example.shopping.domain.dashboard.dto.response.DashboardResponse;
 import com.example.shopping.domain.dashboard.service.AdminDashboardService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "대시보드")
 @RestController
 @RequestMapping("/api/v1/admin/dashboard")
 @RequiredArgsConstructor

@@ -27,9 +27,11 @@ import com.example.shopping.domain.product.service.AdminProductService;
 import com.example.shopping.global.response.ApiResponse;
 import com.example.shopping.global.response.PageResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+@Tag(name = "상품 관리")
 @RestController
 @RequestMapping("/api/v1/admin/products")
 @RequiredArgsConstructor

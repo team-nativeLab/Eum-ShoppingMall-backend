@@ -22,6 +22,7 @@ import com.example.shopping.domain.member.service.AuthService;
 import com.example.shopping.domain.member.service.AuthService.AdminLoginResult;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ import lombok.RequiredArgsConstructor;
  * 재발급·로그아웃은 관리자 화면 주소(CORS_ADMIN_ORIGINS)에서 온 요청만 받는다(RefreshCookieOriginFilter).
  * 로그인은 비밀번호와 OTP 두 단계다(#164). 세션은 30분 동안 쓰지 않거나 로그인한 지 8시간이 지나면 끝난다.
  */
+@Tag(name = "관리자 인증")
 @RestController
 @RequestMapping("/api/v1/admin/auth")
 @RequiredArgsConstructor
