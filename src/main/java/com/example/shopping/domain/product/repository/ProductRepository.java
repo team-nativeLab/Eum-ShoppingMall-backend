@@ -35,15 +35,18 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
 
 	boolean existsByProductCodeAndIdNot(String productCode, Long id);
 
-	/** 관리자용 검색. 카테고리·검색어는 선택 조건이며 넘겨준 상태의 상품만 조회한다. */
+	/**
+	 * 관리자용 검색. 카테고리·검색어는 선택 조건이며 넘겨준 상태의 상품만 조회한다.
+	 * namePattern은 LikePatterns로 만든 LIKE 패턴이다. 검색어의 %·_를 글자 그대로 찾도록 이스케이프한다.
+	 */
 	@Query("""
 			select p from Product p
 			where p.status in :statuses
 			  and (:categoryId is null or p.category.id = :categoryId)
-			  and (:keyword is null or p.name like concat('%', :keyword, '%'))
+			  and (:namePattern is null or p.name like :namePattern escape '\\')
 			""")
 	Page<Product> search(@Param("statuses") Collection<ProductStatus> statuses, @Param("categoryId") Long categoryId,
-			@Param("keyword") String keyword, Pageable pageable);
+			@Param("namePattern") String namePattern, Pageable pageable);
 
 	/** 홈 화면의 신상품 */
 	List<Product> findTop8ByStatusInOrderByIdDesc(Collection<ProductStatus> statuses);

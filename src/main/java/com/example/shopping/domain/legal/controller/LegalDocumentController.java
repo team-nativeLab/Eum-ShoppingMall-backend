@@ -12,9 +12,11 @@ import com.example.shopping.domain.legal.dto.response.LegalDocumentResponse;
 import com.example.shopping.domain.legal.service.LegalDocumentService;
 import com.example.shopping.global.response.ApiResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 /** 약관·정책 문서(누구나). 종류는 terms(이용약관), privacy(개인정보 처리방침), guide(이용안내), shipping(배송 안내) */
+@Tag(name = "약관")
 @RestController
 @RequestMapping("/api/v1/legal-documents")
 @RequiredArgsConstructor
