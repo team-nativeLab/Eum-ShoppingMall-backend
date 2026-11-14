@@ -29,6 +29,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderColumn;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -110,6 +111,43 @@ public class Product extends BaseTimeEntity {
 	@OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
 	private List<ProductSku> skus = new ArrayList<>();
 
+	// 관리자가 붙이는 상품 코드. 상품끼리 겹치지 않는다. 없으면 null
+	@Column(unique = true, length = 50)
+	private String productCode;
+
+	@Column(length = 100)
+	private String modelName;
+
+	// 목록·상세 위쪽에 보이는 한 줄 요약
+	@Column(length = 300)
+	private String summary;
+
+	@Column(length = 50)
+	private String countryOfOrigin;
+
+	// 상품별 배송 예정 안내(예: 평일 기준 2~3일 이내 출고)
+	@Column(length = 100)
+	private String shippingEstimate;
+
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@ColumnDefault("'PLAIN'")
+	@Column(nullable = false, length = 20)
+	private ProductDescriptionFormat descriptionFormat = ProductDescriptionFormat.PLAIN;
+
+	// 상세 갤러리. 첫 이미지가 대표 이미지(imageUrl)다.
+	@ElementCollection
+	@CollectionTable(name = "product_image", joinColumns = @JoinColumn(name = "product_id"),
+			foreignKey = @ForeignKey(name = "fk_product_image_product"))
+	@OrderColumn(name = "sort_order")
+	private List<ProductImage> images = new ArrayList<>();
+
+	@ElementCollection
+	@CollectionTable(name = "product_specification", joinColumns = @JoinColumn(name = "product_id"),
+			foreignKey = @ForeignKey(name = "fk_product_specification_product"))
+	@OrderColumn(name = "sort_order")
+	private List<ProductSpecification> specifications = new ArrayList<>();
+
 	/** @param listPrice 정가. 없으면 null 또는 0 */
 	public static Product create(Category category, String name, String description, String imageUrl, long basePrice,
 			Long listPrice, boolean priceVisible, ProductStatus status) {
@@ -167,6 +205,46 @@ public class Product extends BaseTimeEntity {
 		if (recommendScore != null) {
 			this.recommendScore = recommendScore;
 		}
+	}
+
+	/**
+	 * 상세 화면 정보. null인 항목은 바꾸지 않는다. 글은 빈 문자열을 주면 지우고, 갤러리·사양은 보낸 목록으로 통째로 바꾼다.
+	 * 갤러리를 바꾸면 대표 이미지도 첫 이미지로 맞춘다(갤러리를 비우면 대표 이미지도 지운다).
+	 */
+	public void updateDetail(Detail detail) {
+		if (detail.productCode() != null) {
+			this.productCode = blankToNull(detail.productCode());
+		}
+		if (detail.modelName() != null) {
+			this.modelName = blankToNull(detail.modelName());
+		}
+		if (detail.summary() != null) {
+			this.summary = blankToNull(detail.summary());
+		}
+		if (detail.countryOfOrigin() != null) {
+			this.countryOfOrigin = blankToNull(detail.countryOfOrigin());
+		}
+		if (detail.shippingEstimate() != null) {
+			this.shippingEstimate = blankToNull(detail.shippingEstimate());
+		}
+		if (detail.descriptionFormat() != null) {
+			this.descriptionFormat = detail.descriptionFormat();
+		}
+		if (detail.images() != null) {
+			this.images.clear();
+			this.images.addAll(detail.images());
+			this.imageUrl = images.isEmpty() ? null : images.get(0).getUrl();
+		}
+		if (detail.specifications() != null) {
+			this.specifications.clear();
+			this.specifications.addAll(detail.specifications());
+		}
+	}
+
+	/** 상세 화면 정보. 의미는 updateDetail 참고 */
+	public record Detail(String productCode, String modelName, String summary, String countryOfOrigin,
+			String shippingEstimate, ProductDescriptionFormat descriptionFormat, List<ProductImage> images,
+			List<ProductSpecification> specifications) {
 	}
 
 	public void addSku(String optionName, long price, int stock) {
