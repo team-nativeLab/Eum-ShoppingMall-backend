@@ -20,6 +20,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 내 정보 조회·수정, 비밀번호 변경, 회원 탈퇴 */
 @Tag(name = "내 정보")
 @RestController
 @RequestMapping("/api/v1/me")

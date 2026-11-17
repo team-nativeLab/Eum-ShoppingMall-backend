@@ -24,6 +24,7 @@ import com.example.shopping.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
+/** 카테고리, 상품 목록·검색·필터 개수·자동 완성·상세, 연관·추천 상품(누구나) */
 @Tag(name = "상품")
 @RestController
 @RequestMapping("/api/v1")

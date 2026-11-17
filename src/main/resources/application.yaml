@@ -105,10 +105,13 @@ cors:
   max-age: 3600
 
 # API 문서 UI는 운영에 노출되지 않도록 기본은 끄고, 로컬 등 필요한 환경에서만 켠다.
-# 문서 설정(인증, 고객·관리자 그룹, 공개 API 표시)은 OpenApiConfig에 있다.
+# 문서 설정(웹·앱·관리자 그룹, 인증, 공개 API 표시, 실패 응답)은 OpenApiConfig에 있다.
 springdoc:
   # 검색 조건(@ModelAttribute)과 페이지(Pageable)를 page·size·sort 같은 개별 쿼리 파라미터로 펼쳐 보여 준다.
   default-flat-param-object: true
+  # 요청·응답 본문 형식을 */* 대신 application/json으로 적는다(파일 업로드는 컨트롤러가 정한 multipart).
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
   api-docs:
     enabled: ${API_DOCS_ENABLED:false}
   swagger-ui:

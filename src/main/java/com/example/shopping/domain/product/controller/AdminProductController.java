@@ -31,6 +31,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 관리자 상품·옵션(SKU)·재고 관리. 숨기거나 삭제한 상품도 다룬다. */
 @Tag(name = "상품 관리")
 @RestController
 @RequestMapping("/api/v1/admin/products")

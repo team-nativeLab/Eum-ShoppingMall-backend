@@ -28,6 +28,7 @@ import com.example.shopping.global.security.CurrentMember;
 
 import lombok.RequiredArgsConstructor;
 
+/** 관리자 회원 관리(조회, 권한 변경, 정지·해제, OTP 초기화). 개인정보가 보이는 조회는 감사 로그에 남는다. */
 @Tag(name = "회원 관리")
 @RestController
 @RequestMapping("/api/v1/admin/users")

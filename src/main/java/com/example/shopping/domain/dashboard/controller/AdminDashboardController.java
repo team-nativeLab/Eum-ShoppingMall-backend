@@ -12,6 +12,7 @@ import com.example.shopping.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
+/** 관리자 첫 화면의 운영 현황 집계 */
 @Tag(name = "대시보드")
 @RestController
 @RequestMapping("/api/v1/admin/dashboard")
