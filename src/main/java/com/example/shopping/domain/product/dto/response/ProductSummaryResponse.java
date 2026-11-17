@@ -14,11 +14,13 @@ import com.example.shopping.domain.product.entity.ProductStatus;
  * @param defaultSkuId   옵션이 하나뿐이면 그 옵션 ID. 목록에서 바로 장바구니에 담을 때 쓴다. 아니면 null
  * @param rating         보이는 리뷰의 평균 별점(소수 첫째 자리). 리뷰가 없으면 null
  * @param reviewCount    보이는 리뷰 수
+ * @param featured  베스트 상품으로 지정했는지(#207)
+ * @param todayDeal 오늘의 상품으로 지정했는지(#207)
  */
 public record ProductSummaryResponse(Long id, Long categoryId, String name, String brand, String imageUrl,
 		Long price, Long listPrice, boolean priceVisible, List<CertificationResponse> certifications,
 		ProductStatus status, boolean soldOut, boolean optionRequired, Long defaultSkuId, Double rating,
-		int reviewCount) {
+		int reviewCount, boolean featured, boolean todayDeal) {
 
 	public static ProductSummaryResponse from(Product product) {
 		Long categoryId = product.getCategory() == null ? null : product.getCategory().getId();
@@ -26,6 +28,6 @@ public record ProductSummaryResponse(Long id, Long categoryId, String name, Stri
 				product.getImageUrl(), product.getDisplayPrice(), product.getDisplayListPrice(),
 				product.isPriceVisible(), CertificationResponse.listOf(product.getCertifications()),
 				product.getStatus(), product.isSoldOut(), product.isOptionRequired(), product.getDefaultSkuId(),
-				product.getRating(), product.getReviewCount());
+				product.getRating(), product.getReviewCount(), product.isFeatured(), product.isTodayDeal());
 	}
 }

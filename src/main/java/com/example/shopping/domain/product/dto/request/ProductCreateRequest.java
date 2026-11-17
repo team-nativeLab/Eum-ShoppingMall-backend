@@ -24,6 +24,8 @@ import jakarta.validation.constraints.Size;
  * @param recommendScore  추천순 정렬 점수. 클수록 앞에 나온다. 생략하면 0
  * @param status          생략하면 판매중(ON_SALE)
  * @param skus            옵션 목록. 고객에게 노출하는 상품은 하나 이상 필요하고, 비공개 상품은 생략 가능
+ * @param featured        베스트 상품 목록(?collection=featured)에 넣을지(#207). 없으면 false
+ * @param todayDeal       오늘의 상품 목록(?collection=today)에 넣을지(#207). 없으면 false
  * @param images          상세 갤러리. 보내면 첫 이미지가 대표 이미지(imageUrl)가 된다. 나머지 상세 정보는 ProductDetailFields 참고
  */
 public record ProductCreateRequest(
@@ -86,6 +88,10 @@ public record ProductCreateRequest(
 		List<@NotNull(message = "이미지를 확인해 주세요.") @Valid ProductImageRequest> images,
 
 		@Size(max = 20, message = "사양은 20줄까지입니다.")
-		List<@NotNull(message = "사양을 확인해 주세요.") @Valid ProductSpecificationRequest> specifications)
+		List<@NotNull(message = "사양을 확인해 주세요.") @Valid ProductSpecificationRequest> specifications,
+
+		Boolean featured,
+
+		Boolean todayDeal)
 		implements ProductDetailFields {
 }

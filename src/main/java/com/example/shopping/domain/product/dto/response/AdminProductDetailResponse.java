@@ -23,7 +23,7 @@ public record AdminProductDetailResponse(Long id, Long categoryId, String name, 
 		List<SkuResponse> skus, LocalDateTime createdAt, LocalDateTime updatedAt, String productCode,
 		String modelName, String summary, String countryOfOrigin, String shippingEstimate,
 		ProductDescriptionFormat descriptionFormat, List<ProductDetailInfo.Image> images,
-		List<ProductDetailInfo.Specification> specifications) {
+		List<ProductDetailInfo.Specification> specifications, boolean featured, boolean todayDeal) {
 
 	public record SkuResponse(Long id, String optionName, long price, int stock, boolean active) {
 
@@ -42,6 +42,6 @@ public record AdminProductDetailResponse(Long id, Long categoryId, String name, 
 				product.getCreatedAt(), product.getUpdatedAt(), product.getProductCode(), product.getModelName(),
 				product.getSummary(), product.getCountryOfOrigin(), product.getShippingEstimate(),
 				product.getDescriptionFormat(), ProductDetailInfo.images(product),
-				ProductDetailInfo.specifications(product));
+				ProductDetailInfo.specifications(product), product.isFeatured(), product.isTodayDeal());
 	}
 }
