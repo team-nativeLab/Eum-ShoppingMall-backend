@@ -18,16 +18,17 @@ import com.example.shopping.domain.product.entity.ProductStatus;
  * @param certifications 이 중 하나라도 인증을 받은 상품만
  * @param certifiedOnly  true면 어떤 인증이든 하나 이상 받은 상품만
  * @param excludeSoldOut true면 품절 상품을 뺀다
+ * @param collection     베스트·오늘의 상품으로 지정한 상품만(#207). null이면 전체
  */
 public record ProductSearchCondition(Collection<ProductStatus> statuses, Collection<Long> categoryIds,
 		String keyword, List<String> brands, Long minPrice, Long maxPrice, Set<Certification> certifications,
-		boolean certifiedOnly, boolean excludeSoldOut) {
+		boolean certifiedOnly, boolean excludeSoldOut, ProductCollection collection) {
 
 	/** 카테고리와 검색어만 거는 조건. 필터 항목별 개수를 셀 때 쓴다. */
 	public static ProductSearchCondition of(Collection<ProductStatus> statuses, Collection<Long> categoryIds,
 			String keyword) {
 		return new ProductSearchCondition(statuses, categoryIds, keyword, List.of(), null, null, Set.of(), false,
-				false);
+				false, null);
 	}
 
 	public boolean hasPriceRange() {
