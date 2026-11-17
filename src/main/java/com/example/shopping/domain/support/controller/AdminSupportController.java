@@ -33,6 +33,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 공지사항·FAQ·1:1 문의 관리. 문의 조회는 감사 로그에 남는다. */
 @Tag(name = "고객센터 관리")
 @RestController
 @RequestMapping("/api/v1/admin")

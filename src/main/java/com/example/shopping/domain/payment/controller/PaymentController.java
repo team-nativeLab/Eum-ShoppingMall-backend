@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 결제 승인(토스페이먼츠)과 PG 웹훅 */
 @Tag(name = "결제")
 @RestController
 @RequestMapping("/api/v1/payments")

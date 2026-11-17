@@ -23,6 +23,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 홈 배너 관리(이미지, 연결 주소, 노출 순서·여부) */
 @Tag(name = "배너 관리")
 @RestController
 @RequestMapping("/api/v1/admin/banners")

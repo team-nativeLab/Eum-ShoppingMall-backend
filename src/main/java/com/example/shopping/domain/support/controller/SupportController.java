@@ -29,6 +29,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 공지사항·FAQ 조회(누구나), 1:1 문의 접수(비회원 가능)와 내 문의 내역 */
 @Tag(name = "고객센터")
 @RestController
 @RequestMapping("/api/v1")

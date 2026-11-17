@@ -17,6 +17,7 @@ import com.example.shopping.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
+/** 메인 화면, 사업자 정보, 고정 콘텐츠, 앱 구동 설정(누구나) */
 @Tag(name = "메인")
 @RestController
 @RequestMapping("/api/v1")
