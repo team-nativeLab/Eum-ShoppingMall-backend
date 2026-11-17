@@ -31,6 +31,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 회원가입·이메일 인증·비밀번호 재설정과 웹 로그인. 웹 로그인·재발급·로그아웃은 Refresh 토큰을 HttpOnly 쿠키로 주고받는다. */
 @Tag(name = "인증")
 @RestController
 @RequestMapping("/api/v1/auth")

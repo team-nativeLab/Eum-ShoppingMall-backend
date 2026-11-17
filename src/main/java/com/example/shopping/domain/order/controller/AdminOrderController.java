@@ -28,6 +28,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 관리자 주문 관리(조회, 배송 정보·상태 변경, 취소). 개인정보가 보이는 조회는 감사 로그에 남는다. */
 @Tag(name = "주문 관리")
 @RestController
 @RequestMapping("/api/v1/admin/orders")

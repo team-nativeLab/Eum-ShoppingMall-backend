@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 배송비 정책(기본 배송비, 무료배송 기준) 관리 */
 @Tag(name = "배송비 정책 관리")
 @RestController
 @RequestMapping("/api/v1/admin/shipping-policy")

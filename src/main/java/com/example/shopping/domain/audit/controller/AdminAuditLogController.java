@@ -26,6 +26,7 @@ import com.example.shopping.global.security.CurrentMember;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
+/** 관리자 감사 로그 조회. 관리자의 변경 요청과 개인정보 조회 기록을 최고 관리자만 본다. */
 @Tag(name = "감사 로그")
 @RestController
 @RequestMapping("/api/v1/admin/audit-logs")

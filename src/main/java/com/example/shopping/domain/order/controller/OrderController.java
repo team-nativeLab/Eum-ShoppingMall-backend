@@ -32,6 +32,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 주문 생성, 내 주문 조회, 주문 취소(회원) */
 @Tag(name = "주문")
 @RestController
 @RequestMapping("/api/v1")

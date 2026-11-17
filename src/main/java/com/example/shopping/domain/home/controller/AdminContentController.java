@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/** 고정 콘텐츠(회사소개, 이용약관, 개인정보 처리방침 본문) 관리. 본문은 평문만 받는다. */
 @Tag(name = "고정 콘텐츠 관리")
 @RestController
 @RequestMapping("/api/v1/admin/contents")
