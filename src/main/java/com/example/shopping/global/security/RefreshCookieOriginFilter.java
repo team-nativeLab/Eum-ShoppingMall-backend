@@ -23,12 +23,15 @@ import jakarta.servlet.http.HttpServletResponse;
  * 다른 사이트의 브라우저 요청이 Refresh 쿠키로 토큰을 재발급받거나 쿠키를 지우지 못하게 한다.
  * 관리자 쿠키는 관리자 화면 주소에서 온 요청만 받는다. 그래서 고객 사이트에 스크립트 삽입(XSS) 같은 문제가 생겨도
  * 같은 브라우저의 관리자 세션으로 관리자 토큰을 받을 수 없다(#163).
+ * 앱 인증 API(ApiPolicy.APP_AUTH)는 Refresh 토큰을 본문으로 주고받으므로 브라우저 요청(Origin 헤더가 있는 요청)을 모두 거절한다.
+ * 웹 페이지의 스크립트가 앱 API로 Refresh 토큰을 받아 HttpOnly 쿠키 보호를 피하지 못하게 한다(#203).
  * Origin 헤더가 없는 요청은 브라우저가 보낸 다른 사이트 요청이 아니므로 그대로 보낸다.
  */
 public class RefreshCookieOriginFilter extends OncePerRequestFilter {
 
 	private static final RequestMatcher MEMBER_COOKIE_ENDPOINTS = post("/api/v1/auth/refresh", "/api/v1/auth/logout");
 	private static final RequestMatcher ADMIN_COOKIE_ENDPOINTS = post(ApiPolicy.ADMIN_REFRESH, ApiPolicy.ADMIN_LOGOUT);
+	private static final RequestMatcher APP_TOKEN_ENDPOINTS = post(ApiPolicy.APP_AUTH.toArray(String[]::new));
 
 	private final List<String> memberOrigins;
 	private final List<String> adminOrigins;
@@ -50,7 +53,8 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
 			throws ServletException, IOException {
 		String origin = request.getHeader("Origin");
 		if (origin != null && (rejected(request, origin, MEMBER_COOKIE_ENDPOINTS, memberOrigins)
-				|| rejected(request, origin, ADMIN_COOKIE_ENDPOINTS, adminOrigins))) {
+				|| rejected(request, origin, ADMIN_COOKIE_ENDPOINTS, adminOrigins)
+				|| APP_TOKEN_ENDPOINTS.matches(request))) {
 			resolver.resolveException(request, response, null, new BusinessException(ErrorCode.FORBIDDEN));
 			return;
 		}

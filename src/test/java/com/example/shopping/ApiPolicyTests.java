@@ -38,10 +38,10 @@ class ApiPolicyTests {
 
 	/**
 	 * 로그인 없이 부르지만 요청 제한을 두지 않는 변경 요청.
-	 * 로그아웃은 쿠키의 Refresh 토큰을 폐기할 뿐이고, PG 웹훅은 PG 서버가 보내므로 IP별로 막으면 정상 알림까지 막힌다.
+	 * 로그아웃은 받은 Refresh 토큰(웹은 쿠키, 앱은 본문)을 폐기할 뿐이고, PG 웹훅은 PG 서버가 보내므로 IP별로 막으면 정상 알림까지 막힌다.
 	 */
 	private static final List<String> UNLIMITED_PUBLIC_WRITES = List.of("/api/v1/auth/logout",
-			ApiPolicy.ADMIN_LOGOUT, "/api/v1/payments/webhook");
+			ApiPolicy.APP_LOGOUT, ApiPolicy.ADMIN_LOGOUT, "/api/v1/payments/webhook");
 
 	@Autowired
 	@Qualifier("requestMappingHandlerMapping")
