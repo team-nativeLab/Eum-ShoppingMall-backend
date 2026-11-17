@@ -59,8 +59,10 @@ class OpenApiDocsTests {
 
 		// 웹은 쿠키로 Refresh 토큰을 주고받는 웹 로그인을, 앱은 앱 전용 API를 쓴다. 상품 등 나머지는 함께 쓴다.
 		assertThat(web).containsKeys("/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/signup",
-				"/api/v1/products").doesNotContainKeys("/api/v1/app/config", "/api/v1/admin/products");
-		assertThat(app).containsKeys("/api/v1/app/config", "/api/v1/auth/signup", "/api/v1/products")
+				"/api/v1/products")
+				.doesNotContainKeys("/api/v1/app/auth/login", "/api/v1/app/config", "/api/v1/admin/products");
+		assertThat(app).containsKeys("/api/v1/app/auth/login", "/api/v1/app/auth/refresh", "/api/v1/app/auth/logout",
+				"/api/v1/app/config", "/api/v1/auth/signup", "/api/v1/products")
 				.doesNotContainKeys("/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout",
 						"/api/v1/admin/products");
 		assertThat(admin).containsKeys("/api/v1/admin/products", "/api/v1/admin/auth/login", "/api/v1/uploads")
