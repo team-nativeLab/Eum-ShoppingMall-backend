@@ -120,6 +120,13 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 - **상품 코드(`productCode`):** 관리용 코드로, 영문·숫자로 시작하고 영문·숫자·`-`·`_` 50자 이내입니다. 다른 상품과 겹치면 409(`PRODUCT_CODE_DUPLICATED`)이고, 관리자 응답에만 실립니다.
 - 고객 상품 상세(`GET /api/v1/products/{productId}`)는 상품 코드를 뺀 위 정보를 줍니다. 배송 정책 본문은 약관·정책 문서의 `shipping`을 씁니다.
 
+## 발주처
+
+- **관리자:** `GET`·`POST /api/v1/admin/suppliers`, `PUT`·`DELETE /api/v1/admin/suppliers/{supplierId}`. 발주처는 상품을 받아 오는 거래처입니다. 회사명, 담당자 이름·연락처·이메일, 주문 수신 방식(`EMAIL`·`FAX`)과 그 주소·번호, 주소, 메모를 가집니다.
+- **수신 방식:** `EMAIL`이면 `orderEmail`, `FAX`면 `orderFax`가 필요합니다(없으면 400 `SUPPLIER_ORDER_CONTACT_REQUIRED`). 수신 방식에 맞지 않는 쪽 값은 저장하지 않습니다.
+- **상품 연결:** 관리자 상품 등록·수정에 `supplierId`를 보냅니다. 없는 발주처는 404(`SUPPLIER_NOT_FOUND`)이고, 관리자 상품 응답에만 `supplierId`가 있습니다. 상품(삭제 처리된 상품 포함)에 연결된 발주처는 지울 수 없습니다(409 `SUPPLIER_IN_USE`).
+- **개인정보:** 담당자 연락처가 보이는 목록 조회는 감사 로그에 남깁니다(`ApiPolicy.AUDITED_READS`).
+
 ## 상품 문의
 
 상품 상세의 상품 문의(Q&A)입니다. 누구나 목록을 보고, 회원만 문의를 남깁니다.
