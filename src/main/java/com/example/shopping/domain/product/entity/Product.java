@@ -113,6 +113,10 @@ public class Product extends BaseTimeEntity {
 	@Column(nullable = false)
 	private boolean todayDeal;
 
+	// 발주처(#208). 관리자만 본다. 상품에 연결된 발주처는 지울 수 없다(fk_product_supplier).
+	@Column(name = "supplier_id")
+	private Long supplierId;
+
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false, length = 20)
@@ -214,6 +218,13 @@ public class Product extends BaseTimeEntity {
 		}
 		if (recommendScore != null) {
 			this.recommendScore = recommendScore;
+		}
+	}
+
+	/** 발주처 지정(#208). null이면 바꾸지 않는다. */
+	public void changeSupplier(Long supplierId) {
+		if (supplierId != null) {
+			this.supplierId = supplierId;
 		}
 	}
 

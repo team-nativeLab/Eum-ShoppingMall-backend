@@ -10,7 +10,7 @@ import com.example.shopping.domain.product.entity.ProductStatus;
 public record AdminProductSummaryResponse(Long id, Long categoryId, String name, String brand, String imageUrl,
 		long basePrice, Long listPrice, boolean priceVisible, List<CertificationResponse> certifications,
 		int recommendScore, long salesCount, ProductStatus status, LocalDateTime createdAt, String productCode,
-		boolean featured, boolean todayDeal) {
+		boolean featured, boolean todayDeal, Long supplierId) {
 
 	public static AdminProductSummaryResponse from(Product product) {
 		Long categoryId = product.getCategory() == null ? null : product.getCategory().getId();
@@ -18,6 +18,6 @@ public record AdminProductSummaryResponse(Long id, Long categoryId, String name,
 				product.getImageUrl(), product.getBasePrice(), product.getListPrice(), product.isPriceVisible(),
 				CertificationResponse.listOf(product.getCertifications()), product.getRecommendScore(),
 				product.getSalesCount(), product.getStatus(), product.getCreatedAt(), product.getProductCode(),
-				product.isFeatured(), product.isTodayDeal());
+				product.isFeatured(), product.isTodayDeal(), product.getSupplierId());
 	}
 }

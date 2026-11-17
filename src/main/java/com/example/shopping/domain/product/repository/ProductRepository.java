@@ -31,6 +31,9 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
 	@Query("select distinct i.url from Product p join p.images i")
 	List<String> findAllGalleryImageUrls();
 
+	/** 발주처를 쓰는 상품(삭제 처리된 상품 포함)이 있는지 */
+	boolean existsBySupplierId(Long supplierId);
+
 	boolean existsByProductCode(String productCode);
 
 	boolean existsByProductCodeAndIdNot(String productCode, Long id);

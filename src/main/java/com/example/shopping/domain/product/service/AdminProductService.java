@@ -26,6 +26,7 @@ import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.CategoryRepository;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.product.repository.ProductSkuRepository;
+import com.example.shopping.domain.product.repository.SupplierRepository;
 import com.example.shopping.domain.upload.service.UploadService;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
@@ -45,6 +46,7 @@ public class AdminProductService {
 	private final CategoryRepository categoryRepository;
 	private final ProductReadCache readCache;
 	private final UploadService uploadService;
+	private final SupplierRepository supplierRepository;
 
 	/** 상태를 지정하지 않으면 삭제된 상품을 뺀 전체(판매중·품절·비공개)를 조회한다. */
 	public PageResponse<AdminProductSummaryResponse> search(ProductStatus status, Long categoryId, String keyword,
@@ -72,6 +74,7 @@ public class AdminProductService {
 		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
 		product.updateDetail(detail(request, Set.of()));
 		product.changeCollections(request.featured(), request.todayDeal());
+		product.changeSupplier(requireSupplier(request.supplierId()));
 		if (request.skus() != null) {
 			request.skus().forEach(sku -> product.addSku(sku.optionName().trim(), sku.price(), sku.stock()));
 		}
@@ -103,6 +106,7 @@ public class AdminProductService {
 		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
 		product.updateDetail(detail(request, keptImageUrls));
 		product.changeCollections(request.featured(), request.todayDeal());
+		product.changeSupplier(requireSupplier(request.supplierId()));
 		if (request.priceVisible() != null) {
 			product.changePriceVisibility(request.priceVisible());
 		}
@@ -172,6 +176,14 @@ public class AdminProductService {
 	}
 
 	/** 이미 삭제된 상품은 없는 상품으로 취급한다. */
+	/** 발주처를 골랐으면 있는지 확인한다. 없으면 404 */
+	private Long requireSupplier(Long supplierId) {
+		if (supplierId != null && !supplierRepository.existsById(supplierId)) {
+			throw new BusinessException(ErrorCode.SUPPLIER_NOT_FOUND);
+		}
+		return supplierId;
+	}
+
 	private Product find(Long productId) {
 		return productRepository.findById(productId)
 				.filter(product -> ProductStatus.MANAGEABLE.contains(product.getStatus()))
