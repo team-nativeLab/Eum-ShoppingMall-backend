@@ -157,6 +157,13 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 - **개수:** `limit`은 기본 10, 1~20이고 벗어나면 400입니다. 두 API 모두 상품 조회 캐시를 씁니다.
 - **추천 검색어:** 누구나 `GET /api/v1/search/recommended-keywords`로 읽습니다(정하지 않았으면 빈 배열). 관리자는 `GET`·`PUT /api/v1/admin/search/recommended-keywords`에 `{"keywords": [...]}`를 보내 통째로 바꿉니다. 10개까지, 한 개 30자까지이며, 앞뒤 공백을 지우고 겹치면 처음 것만 남깁니다.
 
+## 베스트·오늘의 상품
+
+- **지정:** 관리자 상품 등록·수정(`POST`·`PATCH /api/v1/admin/products`)에 `featured`(베스트)·`todayDeal`(오늘의 상품)을 보냅니다. 등록할 때 없으면 `false`, 수정할 때 생략하면 그대로입니다.
+- **목록:** 고객 상품 목록에 `?collection=featured`(베스트) 또는 `?collection=today`(오늘의 상품)를 붙이면 지정한 상품 가운데 고객에게 보이는 상품(판매중·품절)만 나옵니다. 카테고리·검색어·정렬·페이지와 함께 쓸 수 있고, 그 밖의 값은 400입니다.
+- **응답:** 고객·관리자 상품 응답(목록·상세)에 `featured`·`todayDeal`이 있습니다.
+- **홈과의 관계:** 홈의 베스트 영역(`featuredProducts`)은 지금처럼 홈 편성에서 고른 목록과 순서를 씁니다. 상품의 `featured`는 베스트 목록 화면용입니다.
+
 ## 이벤트·기획전
 
 - **고객(로그인 없이):** `GET /api/v1/events`는 보이는 이벤트를 정렬 순서(작을수록 앞), 같으면 최근 시작한 순으로 줍니다. 끝난 이벤트도 상태를 달아 포함합니다. `GET /api/v1/events/{eventId}`는 상세이고, 숨긴 이벤트는 404(`EVENT_NOT_FOUND`)입니다.

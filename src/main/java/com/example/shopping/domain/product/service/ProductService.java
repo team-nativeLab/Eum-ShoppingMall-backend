@@ -34,6 +34,7 @@ import com.example.shopping.domain.product.repository.CategoryRepository;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.product.repository.ProductSearchCondition;
 import com.example.shopping.domain.product.repository.ProductSearchRepository.CategoryBrandCount;
+import com.example.shopping.domain.product.repository.ProductCollection;
 import com.example.shopping.domain.product.repository.ProductSort;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
@@ -89,16 +90,17 @@ public class ProductService {
 				: Set.copyOf(request.certification());
 		String keyword = keyword(request.query());
 		ProductSort sort = ProductSort.parse(request.sort());
+		ProductCollection collection = ProductCollection.parse(request.collection());
 		int pageNumber = pageable.getPageNumber();
 		int pageSize = pageable.getPageSize();
 		SearchKey key = new SearchKey(request.categoryId(), keyword, brandNames.stream().sorted().toList(), minPrice,
 				maxPrice, Boolean.TRUE.equals(request.certified()), certifications.stream().sorted().toList(),
-				Boolean.TRUE.equals(request.excludeSoldOut()), sort, pageNumber, pageSize);
+				Boolean.TRUE.equals(request.excludeSoldOut()), sort, pageNumber, pageSize, collection);
 		return readCache.getOrLoad(key, SEARCH_PAGE, () -> {
 			ProductSearchCondition condition = new ProductSearchCondition(ProductStatus.CUSTOMER_VISIBLE,
 					categoryScope(request.categoryId()), keyword, brandNames, minPrice, maxPrice,
 					certifications, Boolean.TRUE.equals(request.certified()),
-					Boolean.TRUE.equals(request.excludeSoldOut()));
+					Boolean.TRUE.equals(request.excludeSoldOut()), collection);
 			Page<Product> page = productRepository.searchForCustomer(condition, sort,
 					PageRequest.of(pageNumber, pageSize));
 			return PageResponse.from(page.map(ProductSummaryResponse::from));
@@ -335,6 +337,6 @@ public class ProductService {
 
 	private record SearchKey(Long categoryId, String query, List<String> brands, Long minPrice, Long maxPrice,
 			boolean certified, List<Certification> certifications, boolean excludeSoldOut, ProductSort sort, int page,
-			int size) {
+			int size, ProductCollection collection) {
 	}
 }

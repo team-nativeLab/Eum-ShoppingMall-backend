@@ -21,6 +21,8 @@ import jakarta.validation.constraints.Size;
  *
  * @param certifications 보낸 목록으로 통째로 바꾼다. 빈 목록을 보내면 인증을 모두 지운다.
  * @param priceVisible   금액 공개 여부. false면 금액을 숨기고 견적 문의로만 받는다. 생략하면 그대로 둔다.
+ * @param featured        베스트 상품 목록(?collection=featured)에 넣을지(#207). 생략하면 그대로
+ * @param todayDeal       오늘의 상품 목록(?collection=today)에 넣을지(#207). 생략하면 그대로
  * @param images         상세 갤러리. 보내면 통째로 바꾸고 첫 이미지가 대표 이미지(imageUrl)가 된다(빈 목록은 둘 다 지움).
  *                       나머지 상세 정보는 ProductDetailFields 참고
  */
@@ -81,6 +83,10 @@ public record ProductUpdateRequest(
 		List<@NotNull(message = "이미지를 확인해 주세요.") @Valid ProductImageRequest> images,
 
 		@Size(max = 20, message = "사양은 20줄까지입니다.")
-		List<@NotNull(message = "사양을 확인해 주세요.") @Valid ProductSpecificationRequest> specifications)
+		List<@NotNull(message = "사양을 확인해 주세요.") @Valid ProductSpecificationRequest> specifications,
+
+		Boolean featured,
+
+		Boolean todayDeal)
 		implements ProductDetailFields {
 }

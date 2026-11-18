@@ -17,13 +17,15 @@ import com.example.shopping.domain.product.entity.ProductStatus;
  * @param descriptionFormat 설명 서식(PLAIN, RICH_V1). 화면은 어느 쪽이든 텍스트로만 그린다.
  * @param images            상세 갤러리(순서대로). 없으면 빈 배열
  * @param specifications    사양 표(순서대로). 없으면 빈 배열
+ * @param featured  베스트 상품으로 지정했는지(#207)
+ * @param todayDeal 오늘의 상품으로 지정했는지(#207)
  */
 public record ProductDetailResponse(Long id, Long categoryId, String name, String brand, String description,
 		String imageUrl, Long price, Long listPrice, boolean priceVisible,
 		List<CertificationResponse> certifications, ProductStatus status, boolean soldOut, List<SkuResponse> skus,
 		Double rating, int reviewCount, String modelName, String summary, String countryOfOrigin,
 		String shippingEstimate, ProductDescriptionFormat descriptionFormat, List<ProductDetailInfo.Image> images,
-		List<ProductDetailInfo.Specification> specifications) {
+		List<ProductDetailInfo.Specification> specifications, boolean featured, boolean todayDeal) {
 
 	public record SkuResponse(Long id, String optionName, Long price, boolean soldOut) {
 
@@ -44,6 +46,7 @@ public record ProductDetailResponse(Long id, Long categoryId, String name, Strin
 				CertificationResponse.listOf(product.getCertifications()), product.getStatus(), product.isSoldOut(),
 				skus, product.getRating(), product.getReviewCount(), product.getModelName(), product.getSummary(),
 				product.getCountryOfOrigin(), product.getShippingEstimate(), product.getDescriptionFormat(),
-				ProductDetailInfo.images(product), ProductDetailInfo.specifications(product));
+				ProductDetailInfo.images(product), ProductDetailInfo.specifications(product), product.isFeatured(),
+				product.isTodayDeal());
 	}
 }

@@ -71,6 +71,7 @@ public class AdminProductService {
 				status);
 		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
 		product.updateDetail(detail(request, Set.of()));
+		product.changeCollections(request.featured(), request.todayDeal());
 		if (request.skus() != null) {
 			request.skus().forEach(sku -> product.addSku(sku.optionName().trim(), sku.price(), sku.stock()));
 		}
@@ -101,6 +102,7 @@ public class AdminProductService {
 				request.basePrice(), request.listPrice(), status);
 		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
 		product.updateDetail(detail(request, keptImageUrls));
+		product.changeCollections(request.featured(), request.todayDeal());
 		if (request.priceVisible() != null) {
 			product.changePriceVisibility(request.priceVisible());
 		}

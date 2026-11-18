@@ -103,6 +103,16 @@ public class Product extends BaseTimeEntity {
 	@Column(nullable = false)
 	private int ratingSum;
 
+	// 베스트 상품 목록(?collection=featured)에 넣을지(#207). 홈의 베스트 영역은 홈 편성에서 고른 목록을 쓴다.
+	@ColumnDefault("false")
+	@Column(nullable = false)
+	private boolean featured;
+
+	// 오늘의 상품 목록(?collection=today)에 넣을지(#207)
+	@ColumnDefault("false")
+	@Column(nullable = false)
+	private boolean todayDeal;
+
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false, length = 20)
@@ -204,6 +214,16 @@ public class Product extends BaseTimeEntity {
 		}
 		if (recommendScore != null) {
 			this.recommendScore = recommendScore;
+		}
+	}
+
+	/** 베스트·오늘의 상품 지정(#207). null인 항목은 바꾸지 않는다. */
+	public void changeCollections(Boolean featured, Boolean todayDeal) {
+		if (featured != null) {
+			this.featured = featured;
+		}
+		if (todayDeal != null) {
+			this.todayDeal = todayDeal;
 		}
 	}
 

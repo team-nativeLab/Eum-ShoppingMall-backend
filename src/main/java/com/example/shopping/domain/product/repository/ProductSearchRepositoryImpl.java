@@ -154,6 +154,11 @@ public class ProductSearchRepositoryImpl implements ProductSearchRepository {
 			predicates.add(cb.or(cb.not(cb.exists(skuOf(cb, query, product, false))),
 					cb.exists(skuOf(cb, query, product, true))));
 		}
+		if (condition.collection() == ProductCollection.FEATURED) {
+			predicates.add(cb.isTrue(product.get("featured")));
+		} else if (condition.collection() == ProductCollection.TODAY) {
+			predicates.add(cb.isTrue(product.get("todayDeal")));
+		}
 		return predicates.toArray(Predicate[]::new);
 	}
 
