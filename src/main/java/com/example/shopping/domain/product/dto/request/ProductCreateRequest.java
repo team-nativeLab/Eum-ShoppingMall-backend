@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
@@ -26,6 +27,7 @@ import jakarta.validation.constraints.Size;
  * @param skus            옵션 목록. 고객에게 노출하는 상품은 하나 이상 필요하고, 비공개 상품은 생략 가능
  * @param featured        베스트 상품 목록(?collection=featured)에 넣을지(#207). 없으면 false
  * @param todayDeal       오늘의 상품 목록(?collection=today)에 넣을지(#207). 없으면 false
+ * @param supplierId      발주처 ID(#208). 없는 발주처는 404. 없으면 지정하지 않는다
  * @param images          상세 갤러리. 보내면 첫 이미지가 대표 이미지(imageUrl)가 된다. 나머지 상세 정보는 ProductDetailFields 참고
  */
 public record ProductCreateRequest(
@@ -92,6 +94,9 @@ public record ProductCreateRequest(
 
 		Boolean featured,
 
-		Boolean todayDeal)
+		Boolean todayDeal,
+
+		@Positive(message = "발주처를 확인해 주세요.")
+		Long supplierId)
 		implements ProductDetailFields {
 }
