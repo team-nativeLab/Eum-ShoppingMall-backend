@@ -16,7 +16,8 @@ import com.example.shopping.domain.product.entity.Certification;
  * @param certification  이 중 하나라도 받은 상품만 (?certification=KCS&certification=TYPE_APPROVAL)
  * @param excludeSoldOut true면 품절 상품을 뺀다
  * @param sort           recommended(기본), newest, price_asc, price_desc, popular
- * @param collection     featured(베스트) 또는 today(오늘의 상품)로 관리자가 지정한 상품만(#207). 그 밖의 값은 400
+ * @param collection     featured(베스트)·today(오늘의 상품): 관리자가 지정한 상품만(#207). discounted(할인 상품): 금액을 보여 주는 상품 중
+ *                       정가(listPrice)가 판매가보다 높은 상품만(#213). 그 밖의 값은 400
  */
 public record ProductSearchRequest(Long categoryId, String query, List<String> brand, Long minPrice, Long maxPrice,
 		Boolean certified, List<Certification> certification, Boolean excludeSoldOut, String sort,

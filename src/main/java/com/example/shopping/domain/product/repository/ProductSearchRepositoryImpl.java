@@ -158,6 +158,10 @@ public class ProductSearchRepositoryImpl implements ProductSearchRepository {
 			predicates.add(cb.isTrue(product.get("featured")));
 		} else if (condition.collection() == ProductCollection.TODAY) {
 			predicates.add(cb.isTrue(product.get("todayDeal")));
+		} else if (condition.collection() == ProductCollection.DISCOUNTED) {
+			// 금액 미표시 상품은 뺀다. 넣으면 할인 상품인지로 숨긴 가격이 정가보다 낮다는 것을 알 수 있다.
+			predicates.add(cb.isTrue(product.get("priceVisible")));
+			predicates.add(cb.greaterThan(product.<Long>get("listPrice"), product.<Long>get("basePrice")));
 		}
 		return predicates.toArray(Predicate[]::new);
 	}
