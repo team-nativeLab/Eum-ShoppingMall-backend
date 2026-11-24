@@ -1,6 +1,7 @@
 package com.example.shopping.domain.product.service;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -11,6 +12,7 @@ import org.springframework.util.StringUtils;
 import com.example.shopping.domain.product.dto.request.BrandRequest;
 import com.example.shopping.domain.product.dto.response.BrandResponse;
 import com.example.shopping.domain.product.entity.Brand;
+import com.example.shopping.domain.product.entity.BrandImageSettings;
 import com.example.shopping.domain.product.repository.BrandRepository;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.upload.service.UploadService;
@@ -95,7 +97,15 @@ public class AdminBrandService {
 				blankToNull(request.originCountry()), blankToNull(request.certification()),
 				blankToNull(request.storyTitle()), blankToNull(request.storyBody()),
 				request.visible() == null || request.visible(), Boolean.TRUE.equals(request.featured()),
-				request.sortOrder() == null ? 0 : request.sortOrder());
+				request.sortOrder() == null ? 0 : request.sortOrder(), accentColor(request.accentColor()),
+				request.logoSettings() == null ? BrandImageSettings.DEFAULT_LOGO : request.logoSettings().toSettings(),
+				request.coverSettings() == null ? BrandImageSettings.DEFAULT_COVER
+						: request.coverSettings().toSettings());
+	}
+
+	/** 보내지 않으면 기본 색. 대문자로 맞춰 저장한다. */
+	private static String accentColor(String value) {
+		return value == null ? Brand.DEFAULT_ACCENT_COLOR : value.toUpperCase(Locale.ROOT);
 	}
 
 	private static String blankToNull(String value) {
