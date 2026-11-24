@@ -1,5 +1,7 @@
 package com.example.shopping.domain.product.entity;
 
+import org.hibernate.annotations.ColumnDefault;
+
 import com.example.shopping.global.entity.BaseTimeEntity;
 
 import jakarta.persistence.Column;
@@ -21,6 +23,9 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Brand extends BaseTimeEntity {
+
+	/** 대표 색상을 정하지 않은 브랜드(이전에 등록한 브랜드 포함)의 색 */
+	public static final String DEFAULT_ACCENT_COLOR = "#2F6F62";
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -70,6 +75,37 @@ public class Brand extends BaseTimeEntity {
 	@Column(nullable = false)
 	private int sortOrder;
 
+	// 대표 색상(#RRGGBB). 웹 브랜드 선택 패널과 버튼에 쓴다(#214).
+	@ColumnDefault("'" + DEFAULT_ACCENT_COLOR + "'")
+	@Column(nullable = false, length = 7)
+	private String accentColor = DEFAULT_ACCENT_COLOR;
+
+	// 로고 표시 방식(BrandImageSettings)
+	@ColumnDefault("'contain'")
+	@Column(nullable = false, length = 10)
+	private String logoFit = BrandImageSettings.DEFAULT_LOGO.fit();
+
+	@ColumnDefault("240")
+	@Column(nullable = false)
+	private int logoWidth = BrandImageSettings.DEFAULT_LOGO.width();
+
+	@ColumnDefault("96")
+	@Column(nullable = false)
+	private int logoHeight = BrandImageSettings.DEFAULT_LOGO.height();
+
+	// 커버 표시 방식(BrandImageSettings)
+	@ColumnDefault("'cover'")
+	@Column(nullable = false, length = 10)
+	private String coverFit = BrandImageSettings.DEFAULT_COVER.fit();
+
+	@ColumnDefault("1200")
+	@Column(nullable = false)
+	private int coverWidth = BrandImageSettings.DEFAULT_COVER.width();
+
+	@ColumnDefault("704")
+	@Column(nullable = false)
+	private int coverHeight = BrandImageSettings.DEFAULT_COVER.height();
+
 	public static Brand create(Fields fields) {
 		Brand brand = new Brand();
 		brand.change(fields);
@@ -90,11 +126,27 @@ public class Brand extends BaseTimeEntity {
 		this.visible = fields.visible();
 		this.featured = fields.featured();
 		this.sortOrder = fields.sortOrder();
+		this.accentColor = fields.accentColor();
+		this.logoFit = fields.logoSettings().fit();
+		this.logoWidth = fields.logoSettings().width();
+		this.logoHeight = fields.logoSettings().height();
+		this.coverFit = fields.coverSettings().fit();
+		this.coverWidth = fields.coverSettings().width();
+		this.coverHeight = fields.coverSettings().height();
 	}
 
-	/** 저장할 값. 빈 문자열은 서비스에서 null로 바꿔 넘긴다. */
+	public BrandImageSettings getLogoSettings() {
+		return new BrandImageSettings(logoFit, logoWidth, logoHeight);
+	}
+
+	public BrandImageSettings getCoverSettings() {
+		return new BrandImageSettings(coverFit, coverWidth, coverHeight);
+	}
+
+	/** 저장할 값. 빈 문자열은 서비스에서 null로 바꿔 넘긴다. 대표 색상과 이미지 표시 방식은 보내지 않으면 기본값으로 채워 넘긴다. */
 	public record Fields(String name, String englishName, String logoUrl, String tagline, String coverImageUrl,
 			String mainField, String originCountry, String certification, String storyTitle, String storyBody,
-			boolean visible, boolean featured, int sortOrder) {
+			boolean visible, boolean featured, int sortOrder, String accentColor, BrandImageSettings logoSettings,
+			BrandImageSettings coverSettings) {
 	}
 }
