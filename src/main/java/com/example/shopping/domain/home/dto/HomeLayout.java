@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import com.example.shopping.global.validation.ValidationPatterns;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -18,13 +19,14 @@ import jakarta.validation.constraints.Size;
  * 홈 화면 편성. 관리자가 통째로 저장하고(PUT /api/v1/admin/home) 저장한 그대로 돌려받는다.
  * 이 모양 그대로 JSON으로 저장하며(site_setting), 고객 홈(GET /api/v1/home)은 베스트 상품 ID 대신 상품 요약을 준다.
  * 모든 목록은 보여 줄 순서대로다. 빈 목록은 그 영역을 그리지 않는다는 뜻이다.
+ * 하단 견적 문의 띠(ctaBand)는 견적 기능과 함께 화면에서 빠져 서버에서도 뺐다(#212). 이전에 저장한 편성이나 이전 화면이 보내는 ctaBand는 무시한다.
  *
  * @param heroSlides         히어로 슬라이드(최대 5개)
  * @param promoBanners       프로모션 배너(최대 6개)
  * @param serviceBenefits    배송·서비스 안내(최대 8개). 고객 홈에는 노출하는 안내만 나간다.
  * @param featuredProductIds 베스트 상품 ID(최대 20개). 겹치면 처음 것만 남긴다. 고객 홈에는 고객에게 보이는 상품만 나간다.
- * @param ctaBand            하단 견적 문의 띠. null이면 그리지 않는다.
  */
+@JsonIgnoreProperties("ctaBand")
 public record HomeLayout(
 		@NotNull(message = "히어로 슬라이드 목록을 보내 주세요(없으면 빈 배열).")
 		@Size(max = 5, message = "히어로 슬라이드는 5개까지입니다.")
@@ -40,20 +42,18 @@ public record HomeLayout(
 
 		@NotNull(message = "베스트 상품 목록을 보내 주세요(없으면 빈 배열).")
 		@Size(max = 20, message = "베스트 상품은 20개까지입니다.")
-		List<@NotNull @Positive Long> featuredProductIds,
-
-		@Valid CtaBand ctaBand) {
+		List<@NotNull @Positive Long> featuredProductIds) {
 
 	/** 목록 항목의 ID. 관리자 화면이 만들며(예: hero-1731500000000) 같은 목록 안에서 겹치면 안 된다. */
 	private static final String ITEM_ID = "^[A-Za-z0-9_-]{1,50}$";
 
 	/** 저장한 적이 없을 때의 편성 */
 	public static HomeLayout empty() {
-		return new HomeLayout(List.of(), List.of(), List.of(), List.of(), null);
+		return new HomeLayout(List.of(), List.of(), List.of(), List.of());
 	}
 
 	public HomeLayout withFeaturedProductIds(List<Long> productIds) {
-		return new HomeLayout(heroSlides, promoBanners, serviceBenefits, productIds, ctaBand);
+		return new HomeLayout(heroSlides, promoBanners, serviceBenefits, productIds);
 	}
 
 	/** 히어로·프로모션 이미지 주소. 저장 전 검사와 참조 없는 이미지 정리에 쓴다. */
@@ -182,23 +182,6 @@ public record HomeLayout(
 		public ServiceBenefit {
 			description = orEmpty(description);
 			visible = visible == null || visible;
-		}
-	}
-
-	/** 홈 하단 견적 문의 띠 */
-	public record CtaBand(
-			@Size(max = 50, message = "작은 문구는 50자 이하여야 합니다.")
-			String eyebrow,
-
-			@NotBlank(message = "견적 문의 띠 제목을 입력해 주세요.")
-			@Size(max = 100, message = "견적 문의 띠 제목은 100자 이하여야 합니다.")
-			String title,
-
-			@NotNull(message = "견적 문의 띠의 버튼을 입력해 주세요.")
-			@Valid Link cta) {
-
-		public CtaBand {
-			eyebrow = orEmpty(eyebrow);
 		}
 	}
 

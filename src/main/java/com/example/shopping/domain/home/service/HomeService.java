@@ -31,8 +31,8 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class HomeService {
 
-	/** 응답 모양이 바뀌어 키를 바꿨다. 배포 중에 이전 버전 서버가 남긴 캐시를 새 모양으로 읽지 않게 한다. */
-	private static final String HOME_CACHE_KEY = "home-v2";
+	/** 응답 모양이 바뀌면 키를 바꾼다(#212에서 ctaBand를 뺐다). 배포 중에 이전 버전 서버가 남긴 캐시를 새 모양으로 읽지 않게 한다. */
+	private static final String HOME_CACHE_KEY = "home-v3";
 
 	private final BannerRepository bannerRepository;
 	private final ProductRepository productRepository;
@@ -52,7 +52,7 @@ public class HomeService {
 							.map(ProductSummaryResponse::from)
 							.toList(),
 					layout.heroSlides(), layout.promoBanners(), visibleBenefits(layout.serviceBenefits()),
-					featuredProducts(layout.featuredProductIds()), layout.ctaBand());
+					featuredProducts(layout.featuredProductIds()));
 		});
 	}
 
