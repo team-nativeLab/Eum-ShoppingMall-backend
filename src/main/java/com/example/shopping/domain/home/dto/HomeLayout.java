@@ -72,7 +72,7 @@ public record HomeLayout(
 	}
 
 	/**
-	 * @param eyebrow      제목 위 작은 문구
+	 * @param eyebrow      제목 위 작은 문구(상단 문구)
 	 * @param title        제목 줄(1~3줄)
 	 * @param description  부제. 줄바꿈(\n)으로 줄을 나눈다.
 	 * @param tagline      데스크톱 오른쪽 위 세로 문구(줄 단위, 없으면 빈 배열)
@@ -86,7 +86,8 @@ public record HomeLayout(
 			@Pattern(regexp = ITEM_ID, message = "ID는 영문·숫자·-·_ 50자 이내입니다.")
 			String id,
 
-			@Size(max = 50, message = "작은 문구는 50자 이하여야 합니다.")
+			@NotBlank(message = "상단 문구를 입력해 주세요.")
+			@Size(max = 50, message = "상단 문구는 50자 이하여야 합니다.")
 			String eyebrow,
 
 			@NotEmpty(message = "제목을 입력해 주세요.")
@@ -115,6 +116,7 @@ public record HomeLayout(
 			@Valid Link secondaryCta) {
 
 		public HeroSlide {
+			// 이전에 저장한 편성에 값이 없어도 화면이 문자열로 받게 한다. 저장할 때는 @NotBlank가 빈 값을 거절한다.
 			eyebrow = orEmpty(eyebrow);
 			description = orEmpty(description);
 			tagline = tagline == null ? List.of() : tagline;
