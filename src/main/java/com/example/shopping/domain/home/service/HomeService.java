@@ -51,7 +51,7 @@ public class HomeService {
 					productRepository.findTop8ByStatusInOrderByIdDesc(ProductStatus.CUSTOMER_VISIBLE).stream()
 							.map(ProductSummaryResponse::from)
 							.toList(),
-					layout.heroSlides(), layout.promoBanners(), layout.serviceBenefits(),
+					layout.heroSlides(), layout.promoBanners(), visibleBenefits(layout.serviceBenefits()),
 					featuredProducts(layout.featuredProductIds()), layout.ctaBand());
 		});
 	}
@@ -63,6 +63,11 @@ public class HomeService {
 		return siteContentRepository.findByCode(code)
 				.map(ContentResponse::from)
 				.orElseThrow(() -> new BusinessException(ErrorCode.CONTENT_NOT_FOUND));
+	}
+
+	/** 관리자가 숨긴 배송·서비스 안내는 뺀다(#212). */
+	private static List<HomeLayout.ServiceBenefit> visibleBenefits(List<HomeLayout.ServiceBenefit> benefits) {
+		return benefits.stream().filter(HomeLayout.ServiceBenefit::visible).toList();
 	}
 
 	/** 관리자가 고른 순서대로, 고객에게 보이는 상품만. 숨기거나 삭제한 상품은 빠진다. */

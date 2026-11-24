@@ -21,7 +21,7 @@ import jakarta.validation.constraints.Size;
  *
  * @param heroSlides         히어로 슬라이드(최대 5개)
  * @param promoBanners       프로모션 배너(최대 6개)
- * @param serviceBenefits    배송·서비스 안내(최대 8개)
+ * @param serviceBenefits    배송·서비스 안내(최대 8개). 고객 홈에는 노출하는 안내만 나간다.
  * @param featuredProductIds 베스트 상품 ID(최대 20개). 겹치면 처음 것만 남긴다. 고객 홈에는 고객에게 보이는 상품만 나간다.
  * @param ctaBand            하단 견적 문의 띠. null이면 그리지 않는다.
  */
@@ -158,7 +158,11 @@ public record HomeLayout(
 		}
 	}
 
-	/** 배송·서비스 안내 한 칸(예: 5만 원 이상 무료배송) */
+	/**
+	 * 배송·서비스 안내 한 칸(예: 5만 원 이상 무료배송)
+	 *
+	 * @param visible 고객 홈에 보일지(#212). 보내지 않으면 true. 숨긴 안내는 관리자 편성에만 남는다.
+	 */
 	public record ServiceBenefit(
 			@NotBlank(message = "안내 ID를 입력해 주세요.")
 			@Pattern(regexp = ITEM_ID, message = "ID는 영문·숫자·-·_ 50자 이내입니다.")
@@ -169,10 +173,13 @@ public record HomeLayout(
 			String title,
 
 			@Size(max = 200, message = "안내 설명은 200자 이하여야 합니다.")
-			String description) {
+			String description,
+
+			Boolean visible) {
 
 		public ServiceBenefit {
 			description = orEmpty(description);
+			visible = visible == null || visible;
 		}
 	}
 

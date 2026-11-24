@@ -13,7 +13,7 @@ import com.example.shopping.domain.product.dto.response.ProductSummaryResponse;
  * @param newProducts      최근 등록된 상품 8개
  * @param heroSlides       히어로 슬라이드
  * @param promoBanners     프로모션 배너
- * @param serviceBenefits  배송·서비스 안내
+ * @param serviceBenefits  배송·서비스 안내. 관리자가 숨긴 안내는 빠진다.
  * @param featuredProducts 베스트 상품. 관리자가 고른 순서대로, 고객에게 보이는 상품만
  * @param ctaBand          하단 견적 문의 띠. 운영에서 끄면 null
  */
