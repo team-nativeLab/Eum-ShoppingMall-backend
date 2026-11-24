@@ -77,7 +77,7 @@ public record HomeLayout(
 	 * @param description  부제. 줄바꿈(\n)으로 줄을 나눈다.
 	 * @param tagline      데스크톱 오른쪽 위 세로 문구(줄 단위, 없으면 빈 배열)
 	 * @param imageUrl     업로드 API가 돌려준 주소나 웹의 정적 이미지(/assets/...)
-	 * @param destination  주 버튼이 이동할 사이트 안 경로(/로 시작)
+	 * @param destination  주 버튼이 이동할 사이트 안 경로(/로 시작)나 https 주소
 	 * @param ctaLabel     주 버튼 문구
 	 * @param secondaryCta 데스크톱에서만 보이는 보조 링크. 없으면 null
 	 */
@@ -105,7 +105,7 @@ public record HomeLayout(
 
 			@NotBlank(message = "이동 경로를 입력해 주세요.")
 			@Size(max = 300, message = "이동 경로는 300자 이하여야 합니다.")
-			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH, message = "이동 경로는 /로 시작하는 사이트 안 경로여야 합니다.")
+			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH_OR_HTTPS_URL, message = "이동 경로는 /로 시작하는 사이트 안 경로나 https 주소여야 합니다.")
 			String destination,
 
 			@NotBlank(message = "버튼 문구를 입력해 주세요.")
@@ -126,7 +126,7 @@ public record HomeLayout(
 	 * @param description 설명. 줄바꿈(\n)으로 줄을 나눈다.
 	 * @param imageUrl    업로드 API가 돌려준 주소나 웹의 정적 이미지(/assets/...)
 	 * @param tone        글자색 기준이 되는 배경 톤(dark, light)
-	 * @param destination 누르면 이동할 사이트 안 경로
+	 * @param destination 누르면 이동할 사이트 안 경로나 https 주소
 	 */
 	public record PromoBanner(
 			@NotBlank(message = "배너 ID를 입력해 주세요.")
@@ -150,7 +150,7 @@ public record HomeLayout(
 
 			@NotBlank(message = "이동 경로를 입력해 주세요.")
 			@Size(max = 300, message = "이동 경로는 300자 이하여야 합니다.")
-			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH, message = "이동 경로는 /로 시작하는 사이트 안 경로여야 합니다.")
+			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH_OR_HTTPS_URL, message = "이동 경로는 /로 시작하는 사이트 안 경로나 https 주소여야 합니다.")
 			String destination) {
 
 		public PromoBanner {
@@ -200,7 +200,7 @@ public record HomeLayout(
 		}
 	}
 
-	/** 문구와 이동 경로 */
+	/** 문구와 이동 경로(사이트 안 경로나 https 주소) */
 	public record Link(
 			@NotBlank(message = "링크 문구를 입력해 주세요.")
 			@Size(max = 30, message = "링크 문구는 30자 이하여야 합니다.")
@@ -208,7 +208,7 @@ public record HomeLayout(
 
 			@NotBlank(message = "이동 경로를 입력해 주세요.")
 			@Size(max = 300, message = "이동 경로는 300자 이하여야 합니다.")
-			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH, message = "이동 경로는 /로 시작하는 사이트 안 경로여야 합니다.")
+			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH_OR_HTTPS_URL, message = "이동 경로는 /로 시작하는 사이트 안 경로나 https 주소여야 합니다.")
 			String destination) {
 	}
 
