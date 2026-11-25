@@ -156,6 +156,7 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 - **관리자:** `GET`·`POST /api/v1/admin/brands`, `PUT`·`DELETE /api/v1/admin/brands/{brandId}`. 이름이 같은 브랜드는 `409 BRAND_NAME_DUPLICATED`입니다. 이름을 바꾸면 이전 이름을 쓰던 상품의 브랜드도 함께 바꿉니다. 브랜드를 지워도 상품의 브랜드 값은 그대로입니다.
 - **이미지:** 로고·대표 이미지는 업로드 API가 돌려준 주소만 받고, 참조 없는 이미지 정리가 지우지 않도록 알립니다(`ImageReferences`). 관리자가 입력한 글은 화면에서 텍스트로만 그립니다.
 - 대표 브랜드(`featured`)가 여럿이면 정렬 순서가 앞선 하나를 씁니다.
+- **대표 색상·이미지 표시 방식:** 관리자 등록·수정에 `accentColor`(`#RRGGBB`), `logoSettings`·`coverSettings`(`fit`: `contain`·`cover`, `width`, `height`)를 보냅니다. 로고는 너비 24~320px·높이 24~160px, 커버는 너비 24~1600px·높이 24~960px이고, 벗어나면 400입니다. 보내지 않으면 기본값(`#2F6F62`, 로고 `contain`·240·96, 커버 `cover`·1200·704)이고 이전에 등록한 브랜드도 기본값입니다. 고객 목록에는 `accentColor`·`logoSettings`, 상세에는 `coverSettings`까지 나갑니다.
 
 ## 연관·추천 상품과 추천 검색어
 
