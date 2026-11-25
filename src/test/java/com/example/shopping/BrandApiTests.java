@@ -90,7 +90,13 @@ class BrandApiTests {
 		mockMvc.perform(get("/api/v1/brands/{id}", id))
 				.andExpect(jsonPath("$.data.englishName").value("HighSafe"))
 				.andExpect(jsonPath("$.data.mainField").value("추락 방지"))
-				.andExpect(jsonPath("$.data.originCountry").value("대한민국"));
+				.andExpect(jsonPath("$.data.originCountry").value("대한민국"))
+				// #214 전에 등록한 브랜드는 대표 색상과 이미지 표시 방식이 기본값이다.
+				.andExpect(jsonPath("$.data.accentColor").value("#2F6F62"))
+				.andExpect(jsonPath("$.data.logoSettings.fit").value("contain"))
+				.andExpect(jsonPath("$.data.logoSettings.width").value(240))
+				.andExpect(jsonPath("$.data.coverSettings.fit").value("cover"))
+				.andExpect(jsonPath("$.data.coverSettings.height").value(704));
 		mockMvc.perform(post("/api/v1/admin/brands").contentType(MediaType.APPLICATION_JSON)
 						.content(brand("무단", true, false, 0)))
 				.andExpect(status().isUnauthorized());
@@ -137,6 +143,54 @@ class BrandApiTests {
 		entityManager.flush();
 		assertThat(brandRepository.findAllImageUrls())
 				.contains("/files/brand-logo.png", "/files/brand-cover.png");
+	}
+
+	@Test
+	void 대표_색상과_로고_커버_표시_방식을_저장하고_고객_목록과_상세에_내려준다() throws Exception {
+		long id = idOf(create("""
+				{"name":"세이프가드","accentColor":"#1a2b3c",
+				 "logoSettings":{"fit":"cover","width":320,"height":160},
+				 "coverSettings":{"fit":"contain","width":1600,"height":960}}
+				""")
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.accentColor").value("#1A2B3C"))
+				.andExpect(jsonPath("$.data.logoSettings.fit").value("cover"))
+				.andExpect(jsonPath("$.data.coverSettings.width").value(1600)));
+
+		mockMvc.perform(get("/api/v1/brands"))
+				.andExpect(jsonPath("$.data[0].accentColor").value("#1A2B3C"))
+				.andExpect(jsonPath("$.data[0].logoSettings.width").value(320))
+				.andExpect(jsonPath("$.data[0].logoSettings.height").value(160))
+				.andExpect(jsonPath("$.data[0].coverSettings").doesNotExist());
+		mockMvc.perform(get("/api/v1/brands/{id}", id))
+				.andExpect(jsonPath("$.data.coverSettings.fit").value("contain"))
+				.andExpect(jsonPath("$.data.coverSettings.height").value(960));
+
+		// 수정도 모든 값을 보내므로, 보내지 않으면 기본값으로 돌아간다.
+		mockMvc.perform(put("/api/v1/admin/brands/{id}", id).contentType(MediaType.APPLICATION_JSON)
+						.content(brand("세이프가드", true, false, 0)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.accentColor").value("#2F6F62"))
+				.andExpect(jsonPath("$.data.logoSettings.fit").value("contain"))
+				.andExpect(jsonPath("$.data.logoSettings.height").value(96))
+				.andExpect(jsonPath("$.data.coverSettings.width").value(1200));
+	}
+
+	@Test
+	void 대표_색상_형식이나_표시_방식이_범위를_벗어나면_거절한다() throws Exception {
+		for (String invalid : new String[] { "\"accentColor\":\"#12345\"", "\"accentColor\":\"red\"",
+				"\"accentColor\":\"\"", "\"logoSettings\":{\"fit\":\"cover\",\"width\":321,\"height\":96}",
+				"\"logoSettings\":{\"fit\":\"cover\",\"width\":240,\"height\":161}",
+				"\"logoSettings\":{\"fit\":\"cover\",\"width\":23,\"height\":96}",
+				"\"logoSettings\":{\"fit\":\"fill\",\"width\":240,\"height\":96}",
+				"\"logoSettings\":{\"width\":240,\"height\":96}",
+				"\"coverSettings\":{\"fit\":\"cover\",\"width\":1601,\"height\":704}",
+				"\"coverSettings\":{\"fit\":\"cover\",\"width\":1200,\"height\":961}" }) {
+			create("{\"name\":\"세이프가드\"," + invalid + "}")
+					.andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+		}
+		mockMvc.perform(get("/api/v1/admin/brands")).andExpect(jsonPath("$.data.length()").value(0));
 	}
 
 	private ResultActions create(String body) throws Exception {
