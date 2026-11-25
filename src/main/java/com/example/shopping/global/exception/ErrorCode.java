@@ -93,6 +93,7 @@ public enum ErrorCode {
 	ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
 	ORDER_EXPIRED(HttpStatus.GONE, "주문이 만료되었습니다."),
 	INVALID_ORDER_STATUS(HttpStatus.CONFLICT, "현재 주문 상태에서는 처리할 수 없습니다."),
+	INVOICE_REQUIRED(HttpStatus.BAD_REQUEST, "배송중으로 바꾸려면 택배사와 송장번호를 입력해 주세요."),
 	ORDER_AMOUNT_INVALID(HttpStatus.CONFLICT, "결제할 금액이 없는 주문은 만들 수 없습니다."),
 	ORDER_AMOUNT_TOO_LARGE(HttpStatus.BAD_REQUEST, "한 번에 결제할 수 있는 금액을 넘었습니다. 나눠서 주문해 주세요."),
 

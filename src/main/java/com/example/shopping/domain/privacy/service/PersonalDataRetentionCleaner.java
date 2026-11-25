@@ -87,7 +87,7 @@ public class PersonalDataRetentionCleaner {
 				""", now.minusDays(orderDays), """
 				update orders
 				set recipient = null, recipient_phone = null, zip_code = null, address = null, address_detail = null,
-				    delivery_request = null, personal_data_purged_at = :now
+				    delivery_request = null, admin_memo = '', personal_data_purged_at = :now
 				where id in (:ids) and personal_data_purged_at is null
 				""", now);
 		purgeBatches(stats, "inquiry", """

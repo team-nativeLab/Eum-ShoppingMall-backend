@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.util.StringUtils;
 
+import com.example.shopping.domain.history.entity.StatusHistoryTarget;
+import com.example.shopping.domain.history.service.StatusHistoryService;
 import com.example.shopping.domain.order.dto.response.AdminOrderDetailResponse;
 import com.example.shopping.domain.order.dto.response.AdminOrderSummaryResponse;
 import com.example.shopping.domain.order.dto.request.AdminOrderUpdateRequest;
@@ -41,6 +43,7 @@ public class AdminOrderService {
 	private final OrderRepository orderRepository;
 	private final PaymentRepository paymentRepository;
 	private final OrderCancelService orderCancelService;
+	private final StatusHistoryService statusHistoryService;
 
 	public PageResponse<AdminOrderSummaryResponse> search(OrderStatus status, Long memberId, String orderNo,
 			Pageable pageable) {
@@ -67,7 +70,12 @@ public class AdminOrderService {
 			if (!FULFILLMENT_STATUSES.contains(request.status())) {
 				throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
 			}
-			order.changeStatus(request.status());
+			// 이미 그 상태면 그대로 둔다. 상태 전이표에 없는 변경은 409, 송장 없이 배송중은 400(되돌려진다).
+			if (order.getStatus() != request.status()) {
+				order.changeStatus(request.status());
+				requireInvoiceForShipping(order, request);
+				statusHistoryService.record(StatusHistoryTarget.ORDER, orderId, request.status(), "관리자 상태 변경");
+			}
 		}
 
 		if (request.courier() != null || request.trackingNumber() != null) {
@@ -77,12 +85,28 @@ public class AdminOrderService {
 			}
 			order.registerInvoice(trim(request.courier()), trim(request.trackingNumber()));
 		}
+		if (request.adminMemo() != null) {
+			order.changeAdminMemo(request.adminMemo().trim());
+		}
 		return toDetail(order);
+	}
+
+	/** 배송중으로 바꾸려면 택배사·송장번호가 있어야 한다. 이 요청에 보낸 값도 센다. */
+	private static void requireInvoiceForShipping(Order order, AdminOrderUpdateRequest request) {
+		if (request.status() != OrderStatus.SHIPPED) {
+			return;
+		}
+		String courier = request.courier() != null ? request.courier() : order.getCourier();
+		String trackingNumber = request.trackingNumber() != null ? request.trackingNumber() : order.getTrackingNumber();
+		if (!StringUtils.hasText(courier) || !StringUtils.hasText(trackingNumber)) {
+			throw new BusinessException(ErrorCode.INVOICE_REQUIRED);
+		}
 	}
 
 	private AdminOrderDetailResponse toDetail(Order order) {
 		return AdminOrderDetailResponse.of(order,
-				paymentRepository.findFirstByOrderIdOrderByIdDesc(order.getId()).orElse(null));
+				paymentRepository.findFirstByOrderIdOrderByIdDesc(order.getId()).orElse(null),
+				statusHistoryService.list(StatusHistoryTarget.ORDER, order.getId()));
 	}
 
 	private Order find(Long orderId) {
