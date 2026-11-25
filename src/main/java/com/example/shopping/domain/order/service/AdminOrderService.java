@@ -70,10 +70,13 @@ public class AdminOrderService {
 			if (!FULFILLMENT_STATUSES.contains(request.status())) {
 				throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
 			}
-			// 이미 그 상태면 그대로 둔다. 상태 전이표에 없는 변경은 409, 송장 없이 배송중은 400(되돌려진다).
+			// 이미 그 상태면 그대로 둔다. 상태 전이표에 없는 변경은 409, 송장 없이 배송중은 400. 확인한 뒤에 바꾼다.
 			if (order.getStatus() != request.status()) {
-				order.changeStatus(request.status());
+				if (!order.getStatus().canTransitTo(request.status())) {
+					throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
+				}
 				requireInvoiceForShipping(order, request);
+				order.changeStatus(request.status());
 				statusHistoryService.record(StatusHistoryTarget.ORDER, orderId, request.status(), "관리자 상태 변경");
 			}
 		}
