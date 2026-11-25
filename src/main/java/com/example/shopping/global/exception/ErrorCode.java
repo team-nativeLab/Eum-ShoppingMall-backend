@@ -36,6 +36,7 @@ public enum ErrorCode {
 	CONTENT_NOT_FOUND(HttpStatus.NOT_FOUND, "콘텐츠를 찾을 수 없습니다."),
 	INVALID_HOME_IMAGE_URL(HttpStatus.BAD_REQUEST, "홈 이미지는 파일 업로드 API가 돌려준 주소나 웹의 정적 이미지(/assets/...)만 쓸 수 있습니다."),
 	HOME_ITEM_ID_DUPLICATED(HttpStatus.BAD_REQUEST, "같은 목록 안에 ID가 겹치는 항목이 있습니다."),
+	HOME_FEATURED_PRODUCTS_FULL(HttpStatus.CONFLICT, "홈 베스트 상품은 100개까지입니다. 홈 편성에서 다른 베스트 상품을 빼 주세요."),
 
 	// 회원
 	EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),

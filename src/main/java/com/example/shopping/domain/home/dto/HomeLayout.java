@@ -24,7 +24,8 @@ import jakarta.validation.constraints.Size;
  * @param heroSlides         히어로 슬라이드(최대 5개)
  * @param promoBanners       프로모션 배너(최대 6개)
  * @param serviceBenefits    배송·서비스 안내(최대 8개). 고객 홈에는 노출하는 안내만 나간다.
- * @param featuredProductIds 베스트 상품 ID(최대 20개). 겹치면 처음 것만 남긴다. 고객 홈에는 고객에게 보이는 상품만 나간다.
+ * @param featuredProductIds 베스트 상품 ID(최대 100개). 겹치면 처음 것만 남긴다. 고객 홈에는 고객에게 보이는 상품만 나간다.
+ *                           상품의 베스트 지정(featured)과 같은 목록이다(#219).
  */
 @JsonIgnoreProperties("ctaBand")
 public record HomeLayout(
@@ -41,8 +42,11 @@ public record HomeLayout(
 		List<@NotNull @Valid ServiceBenefit> serviceBenefits,
 
 		@NotNull(message = "베스트 상품 목록을 보내 주세요(없으면 빈 배열).")
-		@Size(max = 20, message = "베스트 상품은 20개까지입니다.")
+		@Size(max = MAX_FEATURED_PRODUCTS, message = "베스트 상품은 100개까지입니다.")
 		List<@NotNull @Positive Long> featuredProductIds) {
+
+	/** 홈 베스트 상품 한도. 관리자 화면은 개수를 제한하지 않고 웹은 페이지로 넘겨 보여 주므로 넉넉하게 둔다(#219). */
+	public static final int MAX_FEATURED_PRODUCTS = 100;
 
 	/** 목록 항목의 ID. 관리자 화면이 만들며(예: hero-1731500000000) 같은 목록 안에서 겹치면 안 된다. */
 	private static final String ITEM_ID = "^[A-Za-z0-9_-]{1,50}$";
