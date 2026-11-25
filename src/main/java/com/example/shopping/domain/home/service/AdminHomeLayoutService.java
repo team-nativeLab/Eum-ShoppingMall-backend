@@ -47,6 +47,7 @@ public class AdminHomeLayoutService {
 	/**
 	 * 이미지 주소·항목 ID·베스트 상품을 확인하고 통째로 바꾼다. 베스트 상품은 겹치면 처음 것만 남긴다.
 	 * 숨긴 상품도 저장은 되며, 고객 홈에는 고객에게 보이는 상품만 나간다.
+	 * 목록에 있는 상품은 베스트로 지정하고 없는 상품은 지정을 풀어, 베스트 목록 화면(?collection=featured)과 같게 한다(#219).
 	 */
 	@Transactional
 	public HomeLayout save(HomeLayout layout) {
@@ -56,8 +57,18 @@ public class AdminHomeLayoutService {
 		requireProducts(productIds);
 		HomeLayout saved = layout.withFeaturedProductIds(productIds);
 		siteSettingStore.save(SiteSetting.HOME_LAYOUT, saved);
+		syncFeaturedProducts(productIds);
 		readCache.invalidateAfterCommit();
 		return saved;
+	}
+
+	private void syncFeaturedProducts(List<Long> productIds) {
+		if (productIds.isEmpty()) {
+			productRepository.unmarkAllFeatured();
+			return;
+		}
+		productRepository.unmarkFeaturedExcept(productIds);
+		productRepository.markFeatured(productIds);
 	}
 
 	private void requireHomeImage(String url) {
