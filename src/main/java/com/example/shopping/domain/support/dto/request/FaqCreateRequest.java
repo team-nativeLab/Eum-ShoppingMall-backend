@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 
 /**
  * @param sortOrder 생략하면 0
+ * @param visible   고객 FAQ 목록에 보일지. 생략하면 노출(true)
  */
 public record FaqCreateRequest(
 		@NotBlank(message = "분류를 입력해 주세요.")
@@ -19,5 +20,7 @@ public record FaqCreateRequest(
 		@Size(max = 5000, message = "답변은 5000자 이하여야 합니다.")
 		String answer,
 
-		Integer sortOrder) {
+		Integer sortOrder,
+
+		Boolean visible) {
 }
