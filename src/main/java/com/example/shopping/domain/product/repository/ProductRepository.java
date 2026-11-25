@@ -95,4 +95,19 @@ public interface ProductRepository extends JpaRepository<Product, Long>, Product
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("update Product p set p.brand = :newName where p.brand = :oldName")
 	int renameBrand(@Param("oldName") String oldName, @Param("newName") String newName);
+
+	/** 홈 편성의 베스트 목록에 있는 상품을 베스트로 지정한다(#219). */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("update Product p set p.featured = true where p.featured = false and p.id in :ids")
+	int markFeatured(@Param("ids") Collection<Long> ids);
+
+	/** 홈 편성의 베스트 목록에 없는 상품의 베스트 지정을 푼다(#219). */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("update Product p set p.featured = false where p.featured = true and p.id not in :ids")
+	int unmarkFeaturedExcept(@Param("ids") Collection<Long> ids);
+
+	/** 홈 편성의 베스트 목록이 비었을 때 모든 상품의 베스트 지정을 푼다(#219). */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("update Product p set p.featured = false where p.featured = true")
+	int unmarkAllFeatured();
 }
