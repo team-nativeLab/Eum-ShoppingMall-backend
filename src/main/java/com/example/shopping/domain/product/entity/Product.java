@@ -290,9 +290,10 @@ public class Product extends BaseTimeEntity {
 		this.priceVisible = priceVisible;
 	}
 
-	/** 소프트 삭제. 주문 내역이 참조하므로 행은 지우지 않는다. */
+	/** 소프트 삭제. 주문 내역이 참조하므로 행은 지우지 않는다. 베스트 지정도 푼다(홈 베스트 목록에서도 빠진다, #219). */
 	public void delete() {
 		this.status = ProductStatus.DELETED;
+		this.featured = false;
 	}
 
 	/** 금액 미표시 상품은 가격을 응답에 싣지 않도록 null을 돌려준다. */

@@ -47,6 +47,7 @@ public class AdminProductService {
 	private final ProductReadCache readCache;
 	private final UploadService uploadService;
 	private final SupplierRepository supplierRepository;
+	private final FeaturedProductListener featuredProductListener;
 
 	/** 상태를 지정하지 않으면 삭제된 상품을 뺀 전체(판매중·품절·비공개)를 조회한다. */
 	public PageResponse<AdminProductSummaryResponse> search(ProductStatus status, Long categoryId, String keyword,
@@ -79,7 +80,11 @@ public class AdminProductService {
 			request.skus().forEach(sku -> product.addSku(sku.optionName().trim(), sku.price(), sku.stock()));
 		}
 		validateVisibleProductHasSku(product);
-		AdminProductDetailResponse response = AdminProductDetailResponse.from(productRepository.save(product));
+		Product saved = productRepository.save(product);
+		if (saved.isFeatured()) {
+			featuredProductListener.featuredChanged(saved.getId(), true);
+		}
+		AdminProductDetailResponse response = AdminProductDetailResponse.from(saved);
 		readCache.invalidateAfterCommit();
 		return response;
 	}
@@ -106,6 +111,10 @@ public class AdminProductService {
 		product.updateSearchAttributes(request.brand(), request.certifications(), request.recommendScore());
 		product.updateDetail(detail(request, keptImageUrls));
 		product.changeCollections(request.featured(), request.todayDeal());
+		// 베스트 지정을 보냈으면 홈 베스트 목록을 맞춘다. 이미 맞으면 그대로다(#219 전에 따로 저장한 값도 여기서 맞춰진다).
+		if (request.featured() != null) {
+			featuredProductListener.featuredChanged(productId, product.isFeatured());
+		}
 		product.changeSupplier(requireSupplier(request.supplierId()));
 		if (request.priceVisible() != null) {
 			product.changePriceVisibility(request.priceVisible());
@@ -169,9 +178,11 @@ public class AdminProductService {
 		return AdminProductDetailResponse.from(find(productId));
 	}
 
+	/** 홈 베스트 목록에서도 뺀다(#219). */
 	@Transactional
 	public void delete(Long productId) {
 		find(productId).delete();
+		featuredProductListener.productDeleted(productId);
 		readCache.invalidateAfterCommit();
 	}
 
