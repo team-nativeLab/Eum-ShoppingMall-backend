@@ -97,7 +97,7 @@ public class PersonalDataRetentionCleaner {
 				""", now.minusDays(inquiryDays), """
 				update inquiry
 				set contact_phone = null, contact_email = null, title = :purged, content = :purged, answer = null,
-				    personal_data_purged_at = :now
+				    admin_memo = '', personal_data_purged_at = :now
 				where id in (:ids) and personal_data_purged_at is null
 				""", now);
 		purgeBatches(stats, "quote_inquiry", """

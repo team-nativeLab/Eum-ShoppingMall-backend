@@ -2,6 +2,7 @@ package com.example.shopping.domain.support.entity;
 
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -49,6 +50,11 @@ public class Inquiry extends BaseTimeEntity {
 	@Column(columnDefinition = "TEXT")
 	private String answer;
 
+	// 관리자 내부 메모(#223). 고객에게 보이지 않고, 보관 기간이 지나면 문의 내용과 함께 지운다.
+	@ColumnDefault("''")
+	@Column(nullable = false, length = 2000)
+	private String adminMemo = "";
+
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false, length = 20)
@@ -85,5 +91,15 @@ public class Inquiry extends BaseTimeEntity {
 	public void answer(String answer) {
 		this.answer = answer;
 		this.status = InquiryStatus.ANSWERED;
+	}
+
+	/** 답변을 지우고 접수 상태로 되돌린다(#223). */
+	public void clearAnswer() {
+		this.answer = null;
+		this.status = InquiryStatus.RECEIVED;
+	}
+
+	public void changeAdminMemo(String adminMemo) {
+		this.adminMemo = adminMemo;
 	}
 }

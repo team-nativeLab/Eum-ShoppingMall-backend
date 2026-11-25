@@ -6,8 +6,13 @@ import java.util.Set;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import com.example.shopping.domain.history.entity.StatusHistoryTarget;
+import com.example.shopping.domain.history.service.StatusHistoryService;
+import com.example.shopping.domain.notification.entity.NotificationMessage;
 import com.example.shopping.domain.notification.service.NotificationService;
+import com.example.shopping.domain.support.dto.request.AdminInquiryUpdateRequest;
 import com.example.shopping.domain.support.dto.response.AdminInquiryDetailResponse;
 import com.example.shopping.domain.support.dto.response.AdminInquirySummaryResponse;
 import com.example.shopping.domain.support.dto.response.AdminNoticeResponse;
@@ -40,6 +45,7 @@ public class AdminSupportService {
 	private final InquiryRepository inquiryRepository;
 	private final InquiryAnswerNotifier inquiryAnswerNotifier;
 	private final NotificationService notificationService;
+	private final StatusHistoryService statusHistoryService;
 
 	// 공지
 
@@ -123,15 +129,41 @@ public class AdminSupportService {
 	public AdminInquiryDetailResponse getInquiry(Long inquiryId) {
 		Inquiry inquiry = findInquiry(inquiryId);
 		return AdminInquiryDetailResponse.from(inquiry,
-				notificationService.findLatest(InquiryAnswerNotifier.REFERENCE_TYPE, inquiryId).orElse(null));
+				notificationService.findLatest(InquiryAnswerNotifier.REFERENCE_TYPE, inquiryId).orElse(null),
+				statusHistoryService.list(StatusHistoryTarget.INQUIRY, inquiryId));
 	}
 
-	/** 답변을 등록하고 고객에게 알림톡을 보낸다. 알림은 답변이 저장된 뒤 따로 보내므로, 알림이 실패해도 답변 등록은 성공한다. */
+	/**
+	 * 보낸 항목만 바꾼다(#223). 답변을 보내면 답변완료로 바꾸고 고객에게 알림톡을 보낸다. 알림은 답변이 저장된 뒤 따로 보내므로,
+	 * 알림이 실패해도 답변 등록은 성공한다. 답변을 빈 문자열로 보내면 답변을 지우고 접수 상태로 되돌린다.
+	 * 상태가 바뀌면 이력을 남긴다.
+	 */
 	@Transactional
-	public AdminInquiryDetailResponse answerInquiry(Long inquiryId, String answer) {
+	public AdminInquiryDetailResponse updateInquiry(Long inquiryId, AdminInquiryUpdateRequest request) {
 		Inquiry inquiry = findInquiry(inquiryId);
-		inquiry.answer(answer);
-		return AdminInquiryDetailResponse.from(inquiry, inquiryAnswerNotifier.notifyAnswered(inquiry).orElse(null));
+		InquiryStatus before = inquiry.getStatus();
+		NotificationMessage notification = null;
+		if (request.answer() != null) {
+			if (StringUtils.hasText(request.answer())) {
+				inquiry.answer(request.answer());
+				notification = inquiryAnswerNotifier.notifyAnswered(inquiry).orElse(null);
+			} else {
+				inquiry.clearAnswer();
+			}
+		}
+		if (request.adminMemo() != null) {
+			inquiry.changeAdminMemo(request.adminMemo().trim());
+		}
+		if (inquiry.getStatus() != before) {
+			statusHistoryService.record(StatusHistoryTarget.INQUIRY, inquiryId, inquiry.getStatus(),
+					inquiry.getStatus() == InquiryStatus.ANSWERED ? "답변 등록" : "답변 취소");
+		}
+		if (notification == null) {
+			notification = notificationService.findLatest(InquiryAnswerNotifier.REFERENCE_TYPE, inquiryId)
+					.orElse(null);
+		}
+		return AdminInquiryDetailResponse.from(inquiry, notification,
+				statusHistoryService.list(StatusHistoryTarget.INQUIRY, inquiryId));
 	}
 
 	private Inquiry findInquiry(Long inquiryId) {

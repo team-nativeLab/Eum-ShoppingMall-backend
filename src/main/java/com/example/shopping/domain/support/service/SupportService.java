@@ -11,6 +11,8 @@ import org.springframework.util.StringUtils;
 
 import com.example.shopping.domain.consent.service.ConsentService;
 import com.example.shopping.domain.consent.service.ConsentService.PrivacyConsent;
+import com.example.shopping.domain.history.entity.StatusHistoryTarget;
+import com.example.shopping.domain.history.service.StatusHistoryService;
 import com.example.shopping.domain.support.dto.response.FaqResponse;
 import com.example.shopping.domain.support.dto.request.InquiryCreateRequest;
 import com.example.shopping.domain.support.dto.response.InquiryResponse;
@@ -36,6 +38,7 @@ public class SupportService {
 	private final FaqRepository faqRepository;
 	private final InquiryRepository inquiryRepository;
 	private final ConsentService consentService;
+	private final StatusHistoryService statusHistoryService;
 
 	public PageResponse<NoticeResponse> getNotices(Pageable pageable) {
 		// 공지는 항상 고정 공지 먼저, 최신순으로 내려주므로 다른 정렬 기준은 받지 않는다.
@@ -71,7 +74,9 @@ public class SupportService {
 		if (consent != null) {
 			inquiry.recordPrivacyConsent(consent.agreedAt(), consent.policyVersion());
 		}
-		return InquiryResponse.from(inquiryRepository.save(inquiry));
+		Inquiry saved = inquiryRepository.save(inquiry);
+		statusHistoryService.record(StatusHistoryTarget.INQUIRY, saved.getId(), saved.getStatus(), "문의 접수");
+		return InquiryResponse.from(saved);
 	}
 
 	/** 본인이 로그인 상태로 접수한 문의만 조회된다. */

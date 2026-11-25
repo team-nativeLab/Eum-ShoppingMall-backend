@@ -23,7 +23,7 @@ import com.example.shopping.domain.support.dto.response.AdminNoticeResponse;
 import com.example.shopping.domain.support.dto.request.FaqCreateRequest;
 import com.example.shopping.domain.support.dto.response.AdminFaqResponse;
 import com.example.shopping.domain.support.dto.request.FaqUpdateRequest;
-import com.example.shopping.domain.support.dto.request.InquiryAnswerRequest;
+import com.example.shopping.domain.support.dto.request.AdminInquiryUpdateRequest;
 import com.example.shopping.domain.support.dto.request.NoticeCreateRequest;
 import com.example.shopping.domain.support.dto.request.NoticeUpdateRequest;
 import com.example.shopping.domain.support.entity.InquiryStatus;
@@ -112,10 +112,10 @@ public class AdminSupportController {
 		return ApiResponse.ok(adminSupportService.getInquiry(inquiryId));
 	}
 
-	/** 1:1 문의 답변 등록. 상태를 ANSWERED로 바꾼다. */
+	/** 1:1 문의 답변·내부 메모. 보낸 항목만 바꾼다. 답변을 보내면 ANSWERED, 빈 문자열이면 답변을 지우고 RECEIVED */
 	@PatchMapping("/inquiries/{inquiryId}")
-	public ApiResponse<AdminInquiryDetailResponse> answerInquiry(@PathVariable Long inquiryId,
-			@Valid @RequestBody InquiryAnswerRequest request) {
-		return ApiResponse.ok(adminSupportService.answerInquiry(inquiryId, request.answer()));
+	public ApiResponse<AdminInquiryDetailResponse> updateInquiry(@PathVariable Long inquiryId,
+			@Valid @RequestBody AdminInquiryUpdateRequest request) {
+		return ApiResponse.ok(adminSupportService.updateInquiry(inquiryId, request));
 	}
 }
