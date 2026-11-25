@@ -19,5 +19,7 @@ public record FaqUpdateRequest(
 		@Size(max = 5000, message = "답변은 5000자 이하여야 합니다.")
 		String answer,
 
-		Integer sortOrder) {
+		Integer sortOrder,
+
+		Boolean visible) {
 }

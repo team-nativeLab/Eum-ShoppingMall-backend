@@ -1,5 +1,7 @@
 package com.example.shopping.domain.support.entity;
 
+import org.hibernate.annotations.ColumnDefault;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -30,17 +32,23 @@ public class Faq {
 	@Column(nullable = false)
 	private int sortOrder;
 
-	public static Faq create(String category, String question, String answer, int sortOrder) {
+	// false면 고객 FAQ 목록에 나오지 않는다(#220).
+	@ColumnDefault("true")
+	@Column(nullable = false)
+	private boolean visible = true;
+
+	public static Faq create(String category, String question, String answer, int sortOrder, boolean visible) {
 		Faq faq = new Faq();
 		faq.category = category;
 		faq.question = question;
 		faq.answer = answer;
 		faq.sortOrder = sortOrder;
+		faq.visible = visible;
 		return faq;
 	}
 
 	/** null인 항목은 바꾸지 않는다. */
-	public void update(String category, String question, String answer, Integer sortOrder) {
+	public void update(String category, String question, String answer, Integer sortOrder, Boolean visible) {
 		if (category != null) {
 			this.category = category;
 		}
@@ -52,6 +60,9 @@ public class Faq {
 		}
 		if (sortOrder != null) {
 			this.sortOrder = sortOrder;
+		}
+		if (visible != null) {
+			this.visible = visible;
 		}
 	}
 }

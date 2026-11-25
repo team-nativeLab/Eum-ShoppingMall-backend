@@ -174,6 +174,11 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 - **응답:** 고객·관리자 상품 응답(목록·상세)에 `featured`·`todayDeal`이 있습니다.
 - **홈과의 관계(#219):** 상품의 베스트 지정(`featured`)과 홈 편성의 베스트 목록(`featuredProductIds`)은 같은 목록입니다. 홈 편성을 저장하면 목록에 있는 상품만 베스트로 지정되고, 상품 등록·수정에서 `featured`를 켜면 홈 베스트 목록 끝에 들어가며 끄면 빠집니다. 상품을 지우면 홈 베스트 목록에서도 빠집니다. 홈 베스트 목록은 100개까지이고, 꽉 찬 상태에서 상품의 베스트를 켜면 409(`HOME_FEATURED_PRODUCTS_FULL`)입니다. 홈의 베스트 영역은 홈 편성의 순서를 쓰고, 베스트 목록 화면(`?collection=featured`)은 요청한 정렬을 씁니다.
 
+## 공지·FAQ
+
+- **공지:** 고객은 `GET /api/v1/notices`(공개 공지), 관리자는 `GET`·`POST /api/v1/admin/notices`, `PATCH`·`DELETE /api/v1/admin/notices/{noticeId}`를 씁니다. 고정 공지(`pinned`)가 먼저, 그다음 정렬 순서(`sortOrder`, 작을수록 앞, 0~9999, 없으면 0), 같으면 최신순입니다(#220).
+- **FAQ:** 고객 `GET /api/v1/faqs`는 노출하는 FAQ(`visible`)만 정렬 순서대로 줍니다. 관리자는 `GET /api/v1/admin/faqs`로 숨긴 FAQ까지 보고, `POST`·`PATCH`·`DELETE`로 관리합니다. `visible`은 등록할 때 없으면 노출이고, 수정할 때 생략하면 그대로입니다(#220).
+
 ## 이벤트·기획전
 
 - **고객(로그인 없이):** `GET /api/v1/events`는 보이는 이벤트를 정렬 순서(작을수록 앞), 같으면 최근 시작한 순으로 줍니다. 끝난 이벤트도 상태를 달아 포함합니다. `GET /api/v1/events/{eventId}`는 상세이고, 숨긴 이벤트는 404(`EVENT_NOT_FOUND`)입니다.

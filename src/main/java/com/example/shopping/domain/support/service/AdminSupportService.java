@@ -1,5 +1,6 @@
 package com.example.shopping.domain.support.service;
 
+import java.util.List;
 import java.util.Set;
 
 import org.springframework.data.domain.Pageable;
@@ -11,7 +12,7 @@ import com.example.shopping.domain.support.dto.response.AdminInquiryDetailRespon
 import com.example.shopping.domain.support.dto.response.AdminInquirySummaryResponse;
 import com.example.shopping.domain.support.dto.response.AdminNoticeResponse;
 import com.example.shopping.domain.support.dto.request.FaqCreateRequest;
-import com.example.shopping.domain.support.dto.response.FaqResponse;
+import com.example.shopping.domain.support.dto.response.AdminFaqResponse;
 import com.example.shopping.domain.support.dto.request.FaqUpdateRequest;
 import com.example.shopping.domain.support.dto.request.NoticeCreateRequest;
 import com.example.shopping.domain.support.dto.request.NoticeUpdateRequest;
@@ -43,17 +44,18 @@ public class AdminSupportService {
 	// 공지
 
 	public PageResponse<AdminNoticeResponse> getNotices(Pageable pageable) {
-		// 공지는 항상 고정 공지 먼저, 최신순으로 내려주므로 다른 정렬 기준은 받지 않는다.
+		// 공지는 항상 고정 공지 먼저, 정렬 순서, 최신순으로 내려주므로 다른 정렬 기준은 받지 않는다.
 		SortValidator.requireAllowed(pageable, Set.of());
 		return PageResponse.from(
-				noticeRepository.findAllByOrderByPinnedDescCreatedAtDesc(pageable).map(AdminNoticeResponse::from));
+				noticeRepository.findAllByOrderByPinnedDescSortOrderAscCreatedAtDesc(pageable).map(AdminNoticeResponse::from));
 	}
 
 	@Transactional
 	public AdminNoticeResponse createNotice(NoticeCreateRequest request) {
 		boolean pinned = request.pinned() != null && request.pinned();
 		boolean visible = request.visible() == null || request.visible();
-		Notice notice = Notice.create(request.title().trim(), request.content(), pinned, visible);
+		int sortOrder = request.sortOrder() == null ? 0 : request.sortOrder();
+		Notice notice = Notice.create(request.title().trim(), request.content(), pinned, visible, sortOrder);
 		return AdminNoticeResponse.from(noticeRepository.save(notice));
 	}
 
@@ -61,7 +63,8 @@ public class AdminSupportService {
 	public AdminNoticeResponse updateNotice(Long noticeId, NoticeUpdateRequest request) {
 		Notice notice = noticeRepository.findById(noticeId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.NOTICE_NOT_FOUND));
-		notice.update(trim(request.title()), request.content(), request.pinned(), request.visible());
+		notice.update(trim(request.title()), request.content(), request.pinned(), request.visible(),
+				request.sortOrder());
 		// 갱신된 수정 시각을 응답에 싣기 위해 먼저 DB에 반영한다.
 		return AdminNoticeResponse.from(noticeRepository.saveAndFlush(notice));
 	}
@@ -76,19 +79,27 @@ public class AdminSupportService {
 
 	// FAQ
 
-	@Transactional
-	public FaqResponse createFaq(FaqCreateRequest request) {
-		int sortOrder = request.sortOrder() == null ? 0 : request.sortOrder();
-		Faq faq = Faq.create(request.category().trim(), request.question().trim(), request.answer(), sortOrder);
-		return FaqResponse.from(faqRepository.save(faq));
+	/** 숨긴 FAQ까지 정렬 순서대로(#220) */
+	public List<AdminFaqResponse> getFaqs() {
+		return faqRepository.findAllByOrderBySortOrderAscIdAsc().stream().map(AdminFaqResponse::from).toList();
 	}
 
 	@Transactional
-	public FaqResponse updateFaq(Long faqId, FaqUpdateRequest request) {
+	public AdminFaqResponse createFaq(FaqCreateRequest request) {
+		int sortOrder = request.sortOrder() == null ? 0 : request.sortOrder();
+		boolean visible = request.visible() == null || request.visible();
+		Faq faq = Faq.create(request.category().trim(), request.question().trim(), request.answer(), sortOrder,
+				visible);
+		return AdminFaqResponse.from(faqRepository.save(faq));
+	}
+
+	@Transactional
+	public AdminFaqResponse updateFaq(Long faqId, FaqUpdateRequest request) {
 		Faq faq = faqRepository.findById(faqId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.FAQ_NOT_FOUND));
-		faq.update(trim(request.category()), trim(request.question()), request.answer(), request.sortOrder());
-		return FaqResponse.from(faq);
+		faq.update(trim(request.category()), trim(request.question()), request.answer(), request.sortOrder(),
+				request.visible());
+		return AdminFaqResponse.from(faq);
 	}
 
 	@Transactional

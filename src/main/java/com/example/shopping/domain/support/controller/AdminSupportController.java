@@ -1,5 +1,7 @@
 package com.example.shopping.domain.support.controller;
 
+import java.util.List;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -19,7 +21,7 @@ import com.example.shopping.domain.support.dto.response.AdminInquiryDetailRespon
 import com.example.shopping.domain.support.dto.response.AdminInquirySummaryResponse;
 import com.example.shopping.domain.support.dto.response.AdminNoticeResponse;
 import com.example.shopping.domain.support.dto.request.FaqCreateRequest;
-import com.example.shopping.domain.support.dto.response.FaqResponse;
+import com.example.shopping.domain.support.dto.response.AdminFaqResponse;
 import com.example.shopping.domain.support.dto.request.FaqUpdateRequest;
 import com.example.shopping.domain.support.dto.request.InquiryAnswerRequest;
 import com.example.shopping.domain.support.dto.request.NoticeCreateRequest;
@@ -69,16 +71,22 @@ public class AdminSupportController {
 		return ApiResponse.ok(null);
 	}
 
-	/** FAQ 등록 (분류·질문·답변·표시 순서). 목록은 고객용 GET /api/v1/faqs를 함께 쓴다. */
+	/** FAQ 목록(숨긴 FAQ 포함, 정렬 순서대로). 고객용 GET /api/v1/faqs는 노출하는 FAQ만 준다. */
+	@GetMapping("/faqs")
+	public ApiResponse<List<AdminFaqResponse>> faqs() {
+		return ApiResponse.ok(adminSupportService.getFaqs());
+	}
+
+	/** FAQ 등록 (분류·질문·답변·표시 순서·노출 여부) */
 	@PostMapping("/faqs")
 	@ResponseStatus(HttpStatus.CREATED)
-	public ApiResponse<FaqResponse> createFaq(@Valid @RequestBody FaqCreateRequest request) {
+	public ApiResponse<AdminFaqResponse> createFaq(@Valid @RequestBody FaqCreateRequest request) {
 		return ApiResponse.ok(adminSupportService.createFaq(request));
 	}
 
 	/** FAQ 수정. 보낸 항목만 바꾼다. */
 	@PatchMapping("/faqs/{faqId}")
-	public ApiResponse<FaqResponse> updateFaq(@PathVariable Long faqId,
+	public ApiResponse<AdminFaqResponse> updateFaq(@PathVariable Long faqId,
 			@Valid @RequestBody FaqUpdateRequest request) {
 		return ApiResponse.ok(adminSupportService.updateFaq(faqId, request));
 	}

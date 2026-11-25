@@ -8,5 +8,9 @@ import com.example.shopping.domain.support.entity.Faq;
 
 public interface FaqRepository extends JpaRepository<Faq, Long> {
 
-	List<Faq> findAllByOrderBySortOrderAsc();
+	/** 고객 FAQ 목록: 노출하는 FAQ만 정렬 순서대로 */
+	List<Faq> findByVisibleTrueOrderBySortOrderAscIdAsc();
+
+	/** 관리자 FAQ 목록: 숨긴 FAQ까지 정렬 순서대로 */
+	List<Faq> findAllByOrderBySortOrderAscIdAsc();
 }

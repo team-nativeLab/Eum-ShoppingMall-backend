@@ -1,5 +1,7 @@
 package com.example.shopping.domain.support.entity;
 
+import org.hibernate.annotations.ColumnDefault;
+
 import com.example.shopping.global.entity.BaseTimeEntity;
 
 import jakarta.persistence.Column;
@@ -34,17 +36,23 @@ public class Notice extends BaseTimeEntity {
 	@Column(nullable = false)
 	private boolean visible = true;
 
-	public static Notice create(String title, String content, boolean pinned, boolean visible) {
+	// 고정 공지 안팎에서 작을수록 앞이다(#220). 같으면 최신순
+	@ColumnDefault("0")
+	@Column(nullable = false)
+	private int sortOrder;
+
+	public static Notice create(String title, String content, boolean pinned, boolean visible, int sortOrder) {
 		Notice notice = new Notice();
 		notice.title = title;
 		notice.content = content;
 		notice.pinned = pinned;
 		notice.visible = visible;
+		notice.sortOrder = sortOrder;
 		return notice;
 	}
 
 	/** null인 항목은 바꾸지 않는다. */
-	public void update(String title, String content, Boolean pinned, Boolean visible) {
+	public void update(String title, String content, Boolean pinned, Boolean visible, Integer sortOrder) {
 		if (title != null) {
 			this.title = title;
 		}
@@ -56,6 +64,9 @@ public class Notice extends BaseTimeEntity {
 		}
 		if (visible != null) {
 			this.visible = visible;
+		}
+		if (sortOrder != null) {
+			this.sortOrder = sortOrder;
 		}
 	}
 }

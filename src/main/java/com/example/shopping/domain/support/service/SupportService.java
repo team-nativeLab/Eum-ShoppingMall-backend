@@ -41,7 +41,7 @@ public class SupportService {
 		// 공지는 항상 고정 공지 먼저, 최신순으로 내려주므로 다른 정렬 기준은 받지 않는다.
 		SortValidator.requireAllowed(pageable, Set.of());
 		return PageResponse.from(
-				noticeRepository.findByVisibleTrueOrderByPinnedDescCreatedAtDesc(pageable).map(NoticeResponse::summary));
+				noticeRepository.findByVisibleTrueOrderByPinnedDescSortOrderAscCreatedAtDesc(pageable).map(NoticeResponse::summary));
 	}
 
 	public NoticeResponse getNotice(Long noticeId) {
@@ -51,7 +51,7 @@ public class SupportService {
 	}
 
 	public List<FaqResponse> getFaqs() {
-		return faqRepository.findAllByOrderBySortOrderAsc().stream()
+		return faqRepository.findByVisibleTrueOrderBySortOrderAscIdAsc().stream()
 				.map(FaqResponse::from)
 				.toList();
 	}
