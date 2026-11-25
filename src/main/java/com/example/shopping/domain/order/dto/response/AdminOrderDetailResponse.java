@@ -3,6 +3,7 @@ package com.example.shopping.domain.order.dto.response;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.example.shopping.domain.history.dto.StatusHistoryResponse;
 import com.example.shopping.domain.order.entity.Order;
 import com.example.shopping.domain.order.entity.OrderItem;
 import com.example.shopping.domain.order.entity.OrderItemStatus;
@@ -11,12 +12,17 @@ import com.example.shopping.domain.order.entity.ShippingAddress;
 import com.example.shopping.domain.payment.entity.Payment;
 import com.example.shopping.domain.payment.entity.PaymentStatus;
 
-/** shippingAddress는 배송지 입력 전이면 null, payment는 결제 시도 전이면 null */
+/**
+ * shippingAddress는 배송지 입력 전이면 null, payment는 결제 시도 전이면 null
+ *
+ * @param adminMemo     고객에게 보이지 않는 내부 메모(#223)
+ * @param statusHistory 상태가 바뀐 기록. 오래된 것부터(#223)
+ */
 public record AdminOrderDetailResponse(Long id, String orderNo, Long memberId, OrderStatus status, String orderName,
 		long itemAmount, long discountAmount, long shippingFee, long totalAmount, AddressResponse shippingAddress,
 		String courier, String trackingNumber, List<ItemResponse> items, PaymentResponse payment,
 		LocalDateTime createdAt, LocalDateTime paidAt, String cancelReason, Long cancelledByMemberId,
-		LocalDateTime cancelledAt) {
+		LocalDateTime cancelledAt, String adminMemo, List<StatusHistoryResponse> statusHistory) {
 
 	public record AddressResponse(String recipient, String recipientPhone, String zipCode, String address,
 			String addressDetail, String deliveryRequest) {
@@ -62,12 +68,12 @@ public record AdminOrderDetailResponse(Long id, String orderNo, Long memberId, O
 		}
 	}
 
-	public static AdminOrderDetailResponse of(Order order, Payment payment) {
+	public static AdminOrderDetailResponse of(Order order, Payment payment, List<StatusHistoryResponse> statusHistory) {
 		return new AdminOrderDetailResponse(order.getId(), order.getOrderNo(), order.getMemberId(), order.getStatus(),
 				order.getOrderName(), order.getItemAmount(), order.getDiscountAmount(), order.getShippingFee(),
 				order.getTotalAmount(), AddressResponse.from(order.getShippingAddress()), order.getCourier(),
 				order.getTrackingNumber(), order.getItems().stream().map(ItemResponse::from).toList(),
 				PaymentResponse.from(payment), order.getCreatedAt(), order.getPaidAt(), order.getCancelReason(),
-				order.getCancelledByMemberId(), order.getCancelledAt());
+				order.getCancelledByMemberId(), order.getCancelledAt(), order.getAdminMemo(), statusHistory);
 	}
 }

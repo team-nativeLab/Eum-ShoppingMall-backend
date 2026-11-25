@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.shopping.domain.cart.entity.CartItemStatus;
+import com.example.shopping.domain.history.entity.StatusHistoryTarget;
+import com.example.shopping.domain.history.service.StatusHistoryService;
 import com.example.shopping.domain.member.entity.MemberStatus;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.domain.order.dto.request.OrderCreateRequest;
@@ -51,6 +53,7 @@ public class OrderService {
 	private final MemberRepository memberRepository;
 	private final OrderTxService orderTxService;
 	private final ShippingPolicyService shippingPolicyService;
+	private final StatusHistoryService statusHistoryService;
 	private final SecureRandom secureRandom = new SecureRandom();
 
 	/**
@@ -97,7 +100,9 @@ public class OrderService {
 				throw new BusinessException(ErrorCode.OUT_OF_STOCK);
 			}
 		}
-		return OrderCreateResponse.from(orderRepository.save(order));
+		Order saved = orderRepository.save(order);
+		statusHistoryService.record(StatusHistoryTarget.ORDER, saved.getId(), saved.getStatus(), "주문 접수");
+		return OrderCreateResponse.from(saved);
 	}
 
 	@Transactional(readOnly = true)

@@ -11,6 +11,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.shopping.domain.history.entity.StatusHistoryTarget;
+import com.example.shopping.domain.history.service.StatusHistoryService;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.repository.MemberRepository;
 import com.example.shopping.domain.product.dto.request.AdminProductQuestionUpdateRequest;
@@ -35,6 +37,7 @@ public class AdminProductQuestionService {
 
 	private final ProductQuestionRepository questionRepository;
 	private final MemberRepository memberRepository;
+	private final StatusHistoryService statusHistoryService;
 
 	/** 상태(WAITING·ANSWERED)·상품으로 거른 목록 */
 	public PageResponse<AdminProductQuestionResponse> search(ProductQuestionStatus status, Long productId,
@@ -48,8 +51,7 @@ public class AdminProductQuestionService {
 	}
 
 	public AdminProductQuestionResponse get(Long questionId) {
-		ProductQuestion question = find(questionId);
-		return AdminProductQuestionResponse.of(question, memberRepository.findById(question.getMemberId()).orElse(null));
+		return detail(find(questionId));
 	}
 
 	/** 보낸 항목만 바꾼다. 답변을 남기면 답변 완료가 되고, 빈 답변이면 답변 대기로 되돌린다. */
@@ -57,13 +59,24 @@ public class AdminProductQuestionService {
 	public AdminProductQuestionResponse update(Long adminId, Long questionId,
 			AdminProductQuestionUpdateRequest request) {
 		ProductQuestion question = find(questionId);
+		ProductQuestionStatus before = question.getStatus();
 		if (request.answer() != null) {
 			question.answer(request.answer().trim(), adminId, LocalDateTime.now());
 		}
 		if (request.adminMemo() != null) {
 			question.changeAdminMemo(request.adminMemo().trim());
 		}
-		return AdminProductQuestionResponse.of(question, memberRepository.findById(question.getMemberId()).orElse(null));
+		if (question.getStatus() != before) {
+			statusHistoryService.record(StatusHistoryTarget.PRODUCT_QUESTION, questionId, question.getStatus(),
+					question.getStatus() == ProductQuestionStatus.ANSWERED ? "답변 등록" : "답변 취소");
+		}
+		return detail(question);
+	}
+
+	/** 상세에는 상태 변경 이력까지 싣는다(#223). */
+	private AdminProductQuestionResponse detail(ProductQuestion question) {
+		return AdminProductQuestionResponse.of(question, memberRepository.findById(question.getMemberId()).orElse(null),
+				statusHistoryService.list(StatusHistoryTarget.PRODUCT_QUESTION, question.getId()));
 	}
 
 	private ProductQuestion find(Long questionId) {

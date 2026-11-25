@@ -1027,9 +1027,10 @@ class AdminApiTests {
 				.andExpect(jsonPath("$.data.contactEmail").value("guest@example.com"))
 				.andExpect(jsonPath("$.data.content").value("언제 오나요?"));
 
+		// 빈 답변은 답변을 지운다는 뜻이다(#223). 답변 전이면 그대로 접수 상태다.
 		patchJson("/api/v1/admin/inquiries/" + inquiryId, """
 				{"answer":""}
-				""").andExpect(status().isBadRequest());
+				""").andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("RECEIVED"));
 		patchJson("/api/v1/admin/inquiries/" + inquiryId, """
 				{"answer":"내일 도착 예정입니다."}
 				""")

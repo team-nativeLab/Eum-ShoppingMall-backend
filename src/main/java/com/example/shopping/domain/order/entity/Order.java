@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -120,6 +121,11 @@ public class Order extends BaseTimeEntity {
 	@Column(length = 50)
 	private String trackingNumber;
 
+	// 관리자 내부 메모(#223). 고객에게 보이지 않고, 보관 기간이 지나면 배송지와 함께 지운다.
+	@ColumnDefault("''")
+	@Column(nullable = false, length = 2000)
+	private String adminMemo = "";
+
 	// 주문 버튼을 여러 번 눌러도 주문이 하나만 생기도록 프론트가 보내는 키. 회원별로 유일하다.
 	@Column(name = "idempotency_key", length = 100)
 	private String idempotencyKey;
@@ -183,6 +189,10 @@ public class Order extends BaseTimeEntity {
 			throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
 		}
 		this.status = next;
+	}
+
+	public void changeAdminMemo(String adminMemo) {
+		this.adminMemo = adminMemo;
 	}
 
 	/** null인 항목은 바꾸지 않는다. */

@@ -8,6 +8,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.shopping.domain.history.entity.StatusHistoryTarget;
+import com.example.shopping.domain.history.service.StatusHistoryService;
 import com.example.shopping.domain.member.entity.Member;
 import com.example.shopping.domain.member.entity.MemberStatus;
 import com.example.shopping.domain.member.repository.MemberRepository;
@@ -35,6 +37,7 @@ public class ProductQuestionService {
 	private final ProductQuestionRepository questionRepository;
 	private final ProductRepository productRepository;
 	private final MemberRepository memberRepository;
+	private final StatusHistoryService statusHistoryService;
 
 	/**
 	 * 최근 순 목록. 작성자 이름은 가리고, 비밀 문의는 작성자 본인이 아니면 내용과 답변을 비운다.
@@ -59,6 +62,8 @@ public class ProductQuestionService {
 				.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 		ProductQuestion question = questionRepository.save(ProductQuestion.create(product, memberId,
 				request.title().trim(), request.content().trim(), Boolean.TRUE.equals(request.isPrivate())));
+		statusHistoryService.record(StatusHistoryTarget.PRODUCT_QUESTION, question.getId(), question.getStatus(),
+				"문의 등록");
 		return ProductQuestionResponse.of(question, AuthorNames.masked(author), memberId);
 	}
 
