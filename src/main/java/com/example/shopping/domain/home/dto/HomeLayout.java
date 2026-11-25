@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import com.example.shopping.global.validation.ValidationPatterns;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -18,13 +19,14 @@ import jakarta.validation.constraints.Size;
  * 홈 화면 편성. 관리자가 통째로 저장하고(PUT /api/v1/admin/home) 저장한 그대로 돌려받는다.
  * 이 모양 그대로 JSON으로 저장하며(site_setting), 고객 홈(GET /api/v1/home)은 베스트 상품 ID 대신 상품 요약을 준다.
  * 모든 목록은 보여 줄 순서대로다. 빈 목록은 그 영역을 그리지 않는다는 뜻이다.
+ * 하단 견적 문의 띠(ctaBand)는 견적 기능과 함께 화면에서 빠져 서버에서도 뺐다(#212). 이전에 저장한 편성이나 이전 화면이 보내는 ctaBand는 무시한다.
  *
  * @param heroSlides         히어로 슬라이드(최대 5개)
  * @param promoBanners       프로모션 배너(최대 6개)
- * @param serviceBenefits    배송·서비스 안내(최대 8개)
+ * @param serviceBenefits    배송·서비스 안내(최대 8개). 고객 홈에는 노출하는 안내만 나간다.
  * @param featuredProductIds 베스트 상품 ID(최대 20개). 겹치면 처음 것만 남긴다. 고객 홈에는 고객에게 보이는 상품만 나간다.
- * @param ctaBand            하단 견적 문의 띠. null이면 그리지 않는다.
  */
+@JsonIgnoreProperties("ctaBand")
 public record HomeLayout(
 		@NotNull(message = "히어로 슬라이드 목록을 보내 주세요(없으면 빈 배열).")
 		@Size(max = 5, message = "히어로 슬라이드는 5개까지입니다.")
@@ -40,20 +42,18 @@ public record HomeLayout(
 
 		@NotNull(message = "베스트 상품 목록을 보내 주세요(없으면 빈 배열).")
 		@Size(max = 20, message = "베스트 상품은 20개까지입니다.")
-		List<@NotNull @Positive Long> featuredProductIds,
-
-		@Valid CtaBand ctaBand) {
+		List<@NotNull @Positive Long> featuredProductIds) {
 
 	/** 목록 항목의 ID. 관리자 화면이 만들며(예: hero-1731500000000) 같은 목록 안에서 겹치면 안 된다. */
 	private static final String ITEM_ID = "^[A-Za-z0-9_-]{1,50}$";
 
 	/** 저장한 적이 없을 때의 편성 */
 	public static HomeLayout empty() {
-		return new HomeLayout(List.of(), List.of(), List.of(), List.of(), null);
+		return new HomeLayout(List.of(), List.of(), List.of(), List.of());
 	}
 
 	public HomeLayout withFeaturedProductIds(List<Long> productIds) {
-		return new HomeLayout(heroSlides, promoBanners, serviceBenefits, productIds, ctaBand);
+		return new HomeLayout(heroSlides, promoBanners, serviceBenefits, productIds);
 	}
 
 	/** 히어로·프로모션 이미지 주소. 저장 전 검사와 참조 없는 이미지 정리에 쓴다. */
@@ -72,12 +72,12 @@ public record HomeLayout(
 	}
 
 	/**
-	 * @param eyebrow      제목 위 작은 문구
+	 * @param eyebrow      제목 위 작은 문구(상단 문구)
 	 * @param title        제목 줄(1~3줄)
 	 * @param description  부제. 줄바꿈(\n)으로 줄을 나눈다.
 	 * @param tagline      데스크톱 오른쪽 위 세로 문구(줄 단위, 없으면 빈 배열)
 	 * @param imageUrl     업로드 API가 돌려준 주소나 웹의 정적 이미지(/assets/...)
-	 * @param destination  주 버튼이 이동할 사이트 안 경로(/로 시작)
+	 * @param destination  주 버튼이 이동할 사이트 안 경로(/로 시작)나 https 주소
 	 * @param ctaLabel     주 버튼 문구
 	 * @param secondaryCta 데스크톱에서만 보이는 보조 링크. 없으면 null
 	 */
@@ -86,7 +86,8 @@ public record HomeLayout(
 			@Pattern(regexp = ITEM_ID, message = "ID는 영문·숫자·-·_ 50자 이내입니다.")
 			String id,
 
-			@Size(max = 50, message = "작은 문구는 50자 이하여야 합니다.")
+			@NotBlank(message = "상단 문구를 입력해 주세요.")
+			@Size(max = 50, message = "상단 문구는 50자 이하여야 합니다.")
 			String eyebrow,
 
 			@NotEmpty(message = "제목을 입력해 주세요.")
@@ -105,7 +106,7 @@ public record HomeLayout(
 
 			@NotBlank(message = "이동 경로를 입력해 주세요.")
 			@Size(max = 300, message = "이동 경로는 300자 이하여야 합니다.")
-			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH, message = "이동 경로는 /로 시작하는 사이트 안 경로여야 합니다.")
+			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH_OR_HTTPS_URL, message = "이동 경로는 /로 시작하는 사이트 안 경로나 https 주소여야 합니다.")
 			String destination,
 
 			@NotBlank(message = "버튼 문구를 입력해 주세요.")
@@ -115,6 +116,7 @@ public record HomeLayout(
 			@Valid Link secondaryCta) {
 
 		public HeroSlide {
+			// 이전에 저장한 편성에 값이 없어도 화면이 문자열로 받게 한다. 저장할 때는 @NotBlank가 빈 값을 거절한다.
 			eyebrow = orEmpty(eyebrow);
 			description = orEmpty(description);
 			tagline = tagline == null ? List.of() : tagline;
@@ -126,7 +128,7 @@ public record HomeLayout(
 	 * @param description 설명. 줄바꿈(\n)으로 줄을 나눈다.
 	 * @param imageUrl    업로드 API가 돌려준 주소나 웹의 정적 이미지(/assets/...)
 	 * @param tone        글자색 기준이 되는 배경 톤(dark, light)
-	 * @param destination 누르면 이동할 사이트 안 경로
+	 * @param destination 누르면 이동할 사이트 안 경로나 https 주소
 	 */
 	public record PromoBanner(
 			@NotBlank(message = "배너 ID를 입력해 주세요.")
@@ -150,7 +152,7 @@ public record HomeLayout(
 
 			@NotBlank(message = "이동 경로를 입력해 주세요.")
 			@Size(max = 300, message = "이동 경로는 300자 이하여야 합니다.")
-			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH, message = "이동 경로는 /로 시작하는 사이트 안 경로여야 합니다.")
+			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH_OR_HTTPS_URL, message = "이동 경로는 /로 시작하는 사이트 안 경로나 https 주소여야 합니다.")
 			String destination) {
 
 		public PromoBanner {
@@ -158,7 +160,11 @@ public record HomeLayout(
 		}
 	}
 
-	/** 배송·서비스 안내 한 칸(예: 5만 원 이상 무료배송) */
+	/**
+	 * 배송·서비스 안내 한 칸(예: 5만 원 이상 무료배송)
+	 *
+	 * @param visible 고객 홈에 보일지(#212). 보내지 않으면 true. 숨긴 안내는 관리자 편성에만 남는다.
+	 */
 	public record ServiceBenefit(
 			@NotBlank(message = "안내 ID를 입력해 주세요.")
 			@Pattern(regexp = ITEM_ID, message = "ID는 영문·숫자·-·_ 50자 이내입니다.")
@@ -169,31 +175,17 @@ public record HomeLayout(
 			String title,
 
 			@Size(max = 200, message = "안내 설명은 200자 이하여야 합니다.")
-			String description) {
+			String description,
+
+			Boolean visible) {
 
 		public ServiceBenefit {
 			description = orEmpty(description);
+			visible = visible == null || visible;
 		}
 	}
 
-	/** 홈 하단 견적 문의 띠 */
-	public record CtaBand(
-			@Size(max = 50, message = "작은 문구는 50자 이하여야 합니다.")
-			String eyebrow,
-
-			@NotBlank(message = "견적 문의 띠 제목을 입력해 주세요.")
-			@Size(max = 100, message = "견적 문의 띠 제목은 100자 이하여야 합니다.")
-			String title,
-
-			@NotNull(message = "견적 문의 띠의 버튼을 입력해 주세요.")
-			@Valid Link cta) {
-
-		public CtaBand {
-			eyebrow = orEmpty(eyebrow);
-		}
-	}
-
-	/** 문구와 이동 경로 */
+	/** 문구와 이동 경로(사이트 안 경로나 https 주소) */
 	public record Link(
 			@NotBlank(message = "링크 문구를 입력해 주세요.")
 			@Size(max = 30, message = "링크 문구는 30자 이하여야 합니다.")
@@ -201,7 +193,7 @@ public record HomeLayout(
 
 			@NotBlank(message = "이동 경로를 입력해 주세요.")
 			@Size(max = 300, message = "이동 경로는 300자 이하여야 합니다.")
-			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH, message = "이동 경로는 /로 시작하는 사이트 안 경로여야 합니다.")
+			@Pattern(regexp = ValidationPatterns.INTERNAL_PATH_OR_HTTPS_URL, message = "이동 경로는 /로 시작하는 사이트 안 경로나 https 주소여야 합니다.")
 			String destination) {
 	}
 

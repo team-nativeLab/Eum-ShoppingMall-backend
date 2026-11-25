@@ -44,10 +44,11 @@ MySQL 스키마는 Flyway로 관리합니다. 빈 데이터베이스는 Hibernat
 
 ## 홈 편성과 사업자 정보
 
-- **홈 편성:** 관리자는 `GET /api/v1/admin/home`으로 읽고 `PUT /api/v1/admin/home`으로 통째로 저장합니다. 히어로 슬라이드(5개까지), 프로모션 배너(6개까지), 배송·서비스 안내(8개까지), 베스트 상품 ID(20개까지), 하단 견적 문의 띠(`ctaBand`, 끄려면 `null`)를 함께 보내야 하고, 빠진 목록은 지운다는 뜻으로 보지 않고 400으로 거절합니다. 목록 항목의 `id`는 관리자 화면이 만들며 같은 목록 안에서 겹치면 400(`HOME_ITEM_ID_DUPLICATED`)입니다.
-- **고객 홈:** `GET /api/v1/home`이 기존 `banners`·`newProducts`와 함께 `heroSlides`, `promoBanners`, `serviceBenefits`, `featuredProducts`, `ctaBand`를 줍니다. 저장한 적이 없으면 빈 목록과 `null`입니다. 베스트 상품은 관리자가 고른 순서대로 고객에게 보이는 상품(판매중·품절)만 주며, 숨기거나 삭제한 상품은 저장돼 있어도 빠집니다. 저장 즉시 상품 조회 캐시를 비웁니다.
-- **입력 제한:** 이미지는 업로드 API가 돌려준 주소나 웹이 함께 배포하는 정적 이미지(`/assets/...`)만 받고, 외부 주소는 400(`INVALID_HOME_IMAGE_URL`)입니다. 이동 경로(`destination`)는 `/`로 시작하는 사이트 안 경로만 받습니다. `javascript:`, `https://…`, `//…`처럼 사이트 밖으로 나가는 값은 400입니다. 홈 편성의 업로드 이미지는 참조 없는 이미지 정리가 지우지 않습니다.
+- **홈 편성:** 관리자는 `GET /api/v1/admin/home`으로 읽고 `PUT /api/v1/admin/home`으로 통째로 저장합니다. 히어로 슬라이드(5개까지), 프로모션 배너(6개까지), 배송·서비스 안내(8개까지), 베스트 상품 ID(20개까지)를 함께 보내야 하고, 빠진 목록은 지운다는 뜻으로 보지 않고 400으로 거절합니다. 배송·서비스 안내는 항목마다 `visible`(보내지 않으면 `true`)로 고객 홈에 보일지 정합니다. 하단 견적 문의 띠(`ctaBand`)는 견적 기능과 함께 빠졌고, 이전에 저장한 편성이나 이전 화면이 보내는 값은 무시합니다. 목록 항목의 `id`는 관리자 화면이 만들며 같은 목록 안에서 겹치면 400(`HOME_ITEM_ID_DUPLICATED`)입니다.
+- **고객 홈:** `GET /api/v1/home`이 기존 `banners`·`newProducts`와 함께 `heroSlides`, `promoBanners`, `serviceBenefits`, `featuredProducts`를 줍니다. 저장한 적이 없으면 빈 목록입니다. 숨긴 배송·서비스 안내는 빠집니다. 베스트 상품은 관리자가 고른 순서대로 고객에게 보이는 상품(판매중·품절)만 주며, 숨기거나 삭제한 상품은 저장돼 있어도 빠집니다. 저장 즉시 상품 조회 캐시를 비웁니다.
+- **입력 제한:** 이미지는 업로드 API가 돌려준 주소나 웹이 함께 배포하는 정적 이미지(`/assets/...`)만 받고, 외부 주소는 400(`INVALID_HOME_IMAGE_URL`)입니다. 이동 경로(`destination`, `secondaryCta.destination`)는 `/`로 시작하는 사이트 안 경로나 `https://` 주소만 받습니다. `javascript:`, `http://…`, `//…`, 호스트 앞에 계정 정보를 붙인 주소(`https://shop.example@evil.example`)는 400입니다. 히어로의 상단 문구(`eyebrow`)는 필수입니다. 홈 편성의 업로드 이미지는 참조 없는 이미지 정리가 지우지 않습니다.
 - **사업자 정보:** 푸터의 사업자·고객센터 정보는 누구나 `GET /api/v1/company`로 읽고, 저장하기 전에는 404(`CONTENT_NOT_FOUND`)입니다. 관리자는 `GET`·`PUT /api/v1/admin/company`로 읽고 통째로 저장합니다(저장 전 `GET`은 `data: null`). 상호, 대표자, 사업자등록번호(`000-00-00000`), 주소, 이메일, 고객센터 번호·운영 시간은 필수입니다. 통신판매업 신고번호와 개인정보 보호책임자는 비워 둘 수 있지만 전자상거래법상 사이트에 표시해야 하는 항목이므로 운영 전에 채웁니다.
+- **팝업:** 웹 홈은 로그인 없이 `GET /api/v1/popups`로 노출 중인 팝업(`id`, `title`, `imageUrl`, `body`)을 정렬 순서대로 받습니다. 정렬 순서가 같으면 최근 등록한 팝업이 앞이고, 사진이 없으면 `imageUrl`은 null입니다. 관리자는 `GET`·`POST /api/v1/admin/popups`, `PUT`·`DELETE /api/v1/admin/popups/{popupId}`로 숨긴 팝업까지 관리합니다(`visible`, `sortOrder`). 제목(100자)과 내용(2,000자)은 필수입니다. 사진은 홈 편성 이미지처럼 업로드 API가 돌려준 주소나 `/assets/...`만 받고, 외부 주소와 `data:` URL은 400(`INVALID_HOME_IMAGE_URL`)입니다. 사진 파일은 업로드 API로 먼저 올리고 받은 주소를 보냅니다. 바꾸면 조회 캐시를 비우고, 팝업 사진은 참조 없는 이미지 정리가 지우지 않습니다.
 - **저장 방식:** 둘 다 `site_setting` 표에 화면 단위 JSON 문서로 저장합니다(`home-layout`, `company-info`).
 
 ## 이미지 저장소

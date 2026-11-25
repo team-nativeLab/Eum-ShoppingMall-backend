@@ -18,6 +18,13 @@ public final class ValidationPatterns {
 	 */
 	public static final String INTERNAL_PATH = "^/(?![/\\\\])[^\\s\\\\\\p{Cntrl}]*$";
 
+	/**
+	 * 사이트 안 경로(INTERNAL_PATH) 또는 https 주소. 홈 편성의 이동 경로에 쓴다(#212).
+	 * http·javascript: 같은 다른 스킴은 막고, 호스트 앞에 계정 정보를 붙여(https://shop.example@evil.example) 다른 사이트를 감추는 값도 막는다.
+	 */
+	public static final String INTERNAL_PATH_OR_HTTPS_URL = "^(?:/(?![/\\\\])[^\\s\\\\\\p{Cntrl}]*"
+			+ "|(?i:https)://[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*(?::\\d{1,5})?(?:[/?#][^\\s\\\\\\p{Cntrl}]*)?)$";
+
 	/** 연락처. 숫자 사이 하이픈은 있어도 되고 없어도 된다 (예: 010-1234-5678, 0212345678). 저장할 때는 ContactFormats.phone으로 뺀다. */
 	public static final String PHONE = "^\\d{2,3}-?\\d{3,4}-?\\d{4}$";
 

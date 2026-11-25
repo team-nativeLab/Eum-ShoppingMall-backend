@@ -71,6 +71,7 @@ public final class ApiPolicy {
 	public static final List<String> PUBLIC_GET = List.of(
 			"/files/**",
 			"/api/v1/home",
+			"/api/v1/popups",
 			"/api/v1/company",
 			"/api/v1/search/recommended-keywords",
 			"/api/v1/app/config",

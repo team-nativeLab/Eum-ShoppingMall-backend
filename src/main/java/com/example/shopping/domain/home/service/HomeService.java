@@ -31,8 +31,8 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class HomeService {
 
-	/** 응답 모양이 바뀌어 키를 바꿨다. 배포 중에 이전 버전 서버가 남긴 캐시를 새 모양으로 읽지 않게 한다. */
-	private static final String HOME_CACHE_KEY = "home-v2";
+	/** 응답 모양이 바뀌면 키를 바꾼다(#212에서 ctaBand를 뺐다). 배포 중에 이전 버전 서버가 남긴 캐시를 새 모양으로 읽지 않게 한다. */
+	private static final String HOME_CACHE_KEY = "home-v3";
 
 	private final BannerRepository bannerRepository;
 	private final ProductRepository productRepository;
@@ -51,8 +51,8 @@ public class HomeService {
 					productRepository.findTop8ByStatusInOrderByIdDesc(ProductStatus.CUSTOMER_VISIBLE).stream()
 							.map(ProductSummaryResponse::from)
 							.toList(),
-					layout.heroSlides(), layout.promoBanners(), layout.serviceBenefits(),
-					featuredProducts(layout.featuredProductIds()), layout.ctaBand());
+					layout.heroSlides(), layout.promoBanners(), visibleBenefits(layout.serviceBenefits()),
+					featuredProducts(layout.featuredProductIds()));
 		});
 	}
 
@@ -63,6 +63,11 @@ public class HomeService {
 		return siteContentRepository.findByCode(code)
 				.map(ContentResponse::from)
 				.orElseThrow(() -> new BusinessException(ErrorCode.CONTENT_NOT_FOUND));
+	}
+
+	/** 관리자가 숨긴 배송·서비스 안내는 뺀다(#212). */
+	private static List<HomeLayout.ServiceBenefit> visibleBenefits(List<HomeLayout.ServiceBenefit> benefits) {
+		return benefits.stream().filter(HomeLayout.ServiceBenefit::visible).toList();
 	}
 
 	/** 관리자가 고른 순서대로, 고객에게 보이는 상품만. 숨기거나 삭제한 상품은 빠진다. */

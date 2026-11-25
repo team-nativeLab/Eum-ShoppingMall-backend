@@ -67,16 +67,21 @@ class HomeLayoutApiTests {
 				.andExpect(jsonPath("$.data.heroSlides[0].secondaryCta.destination").value("/about"))
 				.andExpect(jsonPath("$.data.promoBanners[0].tone").value("dark"))
 				.andExpect(jsonPath("$.data.promoBanners[0].destination").value("/search?keyword=안전모"))
+				// 숨긴 혜택(benefit-3)은 빠지고, visible을 보내지 않은 혜택은 노출한다.
 				.andExpect(jsonPath("$.data.serviceBenefits.length()").value(2))
+				.andExpect(jsonPath("$.data.serviceBenefits[0].visible").value(true))
+				.andExpect(jsonPath("$.data.serviceBenefits[1].id").value("benefit-2"))
 				.andExpect(jsonPath("$.data.serviceBenefits[1].description").value(""))
 				.andExpect(jsonPath("$.data.featuredProducts.length()").value(2))
 				.andExpect(jsonPath("$.data.featuredProducts[0].name").value("코팅 장갑"))
 				.andExpect(jsonPath("$.data.featuredProducts[1].name").value("ABS 안전모"))
-				.andExpect(jsonPath("$.data.ctaBand.cta.destination").value("/quotes/new"));
-		// 관리자 화면에는 숨긴 상품도 저장한 그대로 보인다.
+				.andExpect(jsonPath("$.data.ctaBand").doesNotExist());
+		// 관리자 화면에는 숨긴 상품과 숨긴 혜택도 저장한 그대로 보인다.
 		mockMvc.perform(get("/api/v1/admin/home"))
 				.andExpect(jsonPath("$.data.featuredProductIds[1]").value(hidden))
-				.andExpect(jsonPath("$.data.heroSlides[0].imageUrl").value("/files/hero.png"));
+				.andExpect(jsonPath("$.data.heroSlides[0].imageUrl").value("/files/hero.png"))
+				.andExpect(jsonPath("$.data.serviceBenefits.length()").value(3))
+				.andExpect(jsonPath("$.data.serviceBenefits[2].visible").value(false));
 	}
 
 	@Test
@@ -84,25 +89,26 @@ class HomeLayoutApiTests {
 		mockMvc.perform(get("/api/v1/admin/home"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.heroSlides.length()").value(0))
-				.andExpect(jsonPath("$.data.featuredProductIds.length()").value(0))
-				.andExpect(jsonPath("$.data.ctaBand").doesNotExist());
+				.andExpect(jsonPath("$.data.featuredProductIds.length()").value(0));
 		mockMvc.perform(get("/api/v1/home").with(anonymous()))
 				.andExpect(jsonPath("$.data.promoBanners.length()").value(0))
-				.andExpect(jsonPath("$.data.featuredProducts.length()").value(0))
-				.andExpect(jsonPath("$.data.ctaBand").doesNotExist());
+				.andExpect(jsonPath("$.data.serviceBenefits.length()").value(0))
+				.andExpect(jsonPath("$.data.featuredProducts.length()").value(0));
 	}
 
 	@Test
-	void 외부_이미지와_사이트_밖_이동_경로와_없는_상품과_겹치는_ID는_거절한다() throws Exception {
+	void 외부_이미지와_허용하지_않는_이동_경로와_없는_상품과_겹치는_ID는_거절한다() throws Exception {
 		String valid = layout(List.of());
 		for (String imageUrl : List.of("https://evil.example/hero.png", "/assets/../files/x.png", "/files/a/b.png")) {
 			save(valid.replace("/files/hero.png", imageUrl))
 					.andExpect(status().isBadRequest())
 					.andExpect(jsonPath("$.code").value("INVALID_HOME_IMAGE_URL"));
 		}
+		// 사이트 안 경로와 https 주소만 받는다. 호스트 앞에 계정 정보를 붙여 다른 사이트를 감춘 주소도 거절한다.
 		// JSON 안의 값이라 역슬래시는 두 번 적었다(/\evil.example).
 		for (String destination : List.of("javascript:alert(1)", "//evil.example", "/\\\\evil.example",
-				"https://evil.example", "/a b")) {
+				"http://partner.example", "https://shop.example@evil.example", "https://", "ftp://partner.example",
+				"/a b")) {
 			save(valid.replace("\"/category/ppe\"", "\"" + destination + "\""))
 					.andExpect(status().isBadRequest())
 					.andExpect(jsonPath("$.code").value("INVALID_INPUT"));
@@ -118,11 +124,56 @@ class HomeLayoutApiTests {
 				.andExpect(jsonPath("$.code").value("HOME_ITEM_ID_DUPLICATED"));
 		// 통째로 바꾸므로 빠진 목록은 지운다는 뜻으로 보지 않고 거절한다.
 		save("""
-				{"heroSlides":[],"serviceBenefits":[],"featuredProductIds":[],"ctaBand":null}
+				{"heroSlides":[],"serviceBenefits":[],"featuredProductIds":[]}
 				""")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.errors[0].field").value("promoBanners"));
 		save(valid.replace("\"dark\"", "\"red\"")).andExpect(status().isBadRequest());
+		// 히어로 상단 문구는 필수다(#212).
+		save(valid.replace("\"SAFE TOMORROW\"", "\" \""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors[0].field").value("heroSlides[0].eyebrow"));
+	}
+
+	@Test
+	void 이동_경로로_사이트_안_경로와_https_주소를_받는다() throws Exception {
+		save(layout(List.of())
+				.replace("\"/category/ppe\"", "\"https://partner.example:8443/event?id=1#top\"")
+				.replace("\"/about\"", "\"HTTPS://partner.example\""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.heroSlides[0].destination")
+						.value("https://partner.example:8443/event?id=1#top"))
+				.andExpect(jsonPath("$.data.promoBanners[0].destination").value("/search?keyword=안전모"));
+	}
+
+	@Test
+	void 이전에_저장한_견적_문의_띠와_이전_화면이_보내는_견적_문의_띠는_무시한다() throws Exception {
+		// #212 전에 저장한 편성: ctaBand가 있고 혜택에 visible이 없다.
+		jdbcTemplate.update("""
+				insert into site_setting (setting_key, value_json, created_at, updated_at)
+				values ('home-layout', ?, now(), now())
+				""", """
+				{"heroSlides":[],"promoBanners":[],
+				 "serviceBenefits":[{"id":"benefit-1","title":"5만 원 이상 무료배송","description":""}],
+				 "featuredProductIds":[],
+				 "ctaBand":{"eyebrow":"QUOTE","title":"대량 구매는 견적으로",
+				            "cta":{"label":"견적 문의","destination":"/quotes/new"}}}
+				""");
+		mockMvc.perform(get("/api/v1/home").with(anonymous()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.serviceBenefits[0].visible").value(true))
+				.andExpect(jsonPath("$.data.ctaBand").doesNotExist());
+		mockMvc.perform(get("/api/v1/admin/home"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.serviceBenefits[0].visible").value(true))
+				.andExpect(jsonPath("$.data.ctaBand").doesNotExist());
+
+		save(layout(List.of()).replace("\"featuredProductIds\"", """
+				"ctaBand": {"eyebrow": "QUOTE", "title": "대량 구매는 견적으로 상담하세요",
+				            "cta": {"label": "견적 문의하기", "destination": "/quotes/new"}},
+				"featuredProductIds\""""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.ctaBand").doesNotExist());
 	}
 
 	@Test
@@ -167,11 +218,10 @@ class HomeLayoutApiTests {
 				  }],
 				  "serviceBenefits": [
 				    {"id": "benefit-1", "title": "5만 원 이상 무료배송", "description": "제주·도서산간 제외"},
-				    {"id": "benefit-2", "title": "평일 오후 2시 이전 결제 시 당일 출고"}
+				    {"id": "benefit-2", "title": "평일 오후 2시 이전 결제 시 당일 출고", "visible": true},
+				    {"id": "benefit-3", "title": "세금계산서 발행", "description": "준비 중", "visible": false}
 				  ],
-				  "featuredProductIds": [%s],
-				  "ctaBand": {"eyebrow": "QUOTE", "title": "대량 구매는 견적으로 상담하세요",
-				              "cta": {"label": "견적 문의하기", "destination": "/quotes/new"}}
+				  "featuredProductIds": [%s]
 				}
 				""".formatted(ids);
 	}
