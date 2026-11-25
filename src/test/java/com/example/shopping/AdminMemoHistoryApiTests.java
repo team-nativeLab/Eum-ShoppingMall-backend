@@ -88,6 +88,9 @@ class AdminMemoHistoryApiTests {
 	void 결제_기한이_지나_만료된_주문도_이력에_남는다() throws Exception {
 		long adminId = insertMember("admin@example.com", "관리자");
 		long orderId = insertOrder("ORD-0002", insertMember("buyer@example.com", "구매자"), "PENDING", null);
+		// 결제 기한이 확실히 지난 주문으로 만든다(DB 시각과 서버 시각 차이에 흔들리지 않게).
+		jdbcTemplate.update("update orders set expires_at = ? where id = ?", LocalDateTime.now().minusHours(1),
+				orderId);
 
 		orderTxService.expire(orderId);
 
