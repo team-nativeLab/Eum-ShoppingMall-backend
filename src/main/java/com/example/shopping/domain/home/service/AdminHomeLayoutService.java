@@ -4,7 +4,6 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,7 +14,6 @@ import com.example.shopping.domain.product.entity.Product;
 import com.example.shopping.domain.product.entity.ProductStatus;
 import com.example.shopping.domain.product.repository.ProductRepository;
 import com.example.shopping.domain.product.service.ProductReadCache;
-import com.example.shopping.domain.upload.service.UploadService;
 import com.example.shopping.global.exception.BusinessException;
 import com.example.shopping.global.exception.ErrorCode;
 
@@ -27,16 +25,9 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class AdminHomeLayoutService {
 
-	/**
-	 * 웹(Next.js)이 함께 배포하는 정적 이미지(예: /assets/web/hero-v3.webp). 사이트 안 경로라 다른 사이트의 이미지를 끌어오지 않는다.
-	 * 경로를 거슬러 올라가지 못하게 영문·숫자·-·_ 이름과 이미지 확장자만 받는다.
-	 */
-	private static final Pattern STATIC_ASSET_IMAGE = Pattern
-			.compile("^/assets/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*\\.(webp|png|jpe?g|gif|svg|avif)$");
-
 	private final SiteSettingStore siteSettingStore;
 	private final ProductRepository productRepository;
-	private final UploadService uploadService;
+	private final HomeImagePolicy homeImagePolicy;
 	private final ProductReadCache readCache;
 
 	/** 저장한 적이 없으면 빈 편성 */
@@ -51,19 +42,13 @@ public class AdminHomeLayoutService {
 	@Transactional
 	public HomeLayout save(HomeLayout layout) {
 		layout.itemIdGroups().forEach(AdminHomeLayoutService::requireUniqueIds);
-		layout.imageUrls().forEach(this::requireHomeImage);
+		layout.imageUrls().forEach(homeImagePolicy::require);
 		List<Long> productIds = List.copyOf(new LinkedHashSet<>(layout.featuredProductIds()));
 		requireProducts(productIds);
 		HomeLayout saved = layout.withFeaturedProductIds(productIds);
 		siteSettingStore.save(SiteSetting.HOME_LAYOUT, saved);
 		readCache.invalidateAfterCommit();
 		return saved;
-	}
-
-	private void requireHomeImage(String url) {
-		if (!STATIC_ASSET_IMAGE.matcher(url).matches() && !uploadService.isUploadedImageUrl(url)) {
-			throw new BusinessException(ErrorCode.INVALID_HOME_IMAGE_URL);
-		}
 	}
 
 	private static void requireUniqueIds(List<String> ids) {
