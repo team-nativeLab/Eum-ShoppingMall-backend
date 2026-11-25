@@ -62,6 +62,25 @@ class ProductCollectionApiTests {
 	}
 
 	@Test
+	void 할인_상품은_금액을_보여_주는_상품_가운데_정가가_판매가보다_높은_것만_나온다() throws Exception {
+		insertPricedProduct("할인 안전모", 10_000, 12_000L, true, "ON_SALE");
+		insertPricedProduct("할인 장갑", 5_000, 8_000L, true, "SOLD_OUT");
+		insertPricedProduct("정가와 같은 안전화", 30_000, 30_000L, true, "ON_SALE");
+		insertPricedProduct("정가 없는 귀마개", 3_000, null, true, "ON_SALE");
+		insertPricedProduct("금액 미표시 안전대", 10_000, 20_000L, false, "ON_SALE");
+		insertPricedProduct("숨긴 할인 상품", 10_000, 20_000L, true, "HIDDEN");
+
+		mockMvc.perform(get("/api/v1/products").param("collection", "discounted").with(anonymous()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.totalElements").value(2))
+				.andExpect(jsonPath("$.data.content[*].name").value(containsInAnyOrder("할인 안전모", "할인 장갑")));
+		// 다른 조건과 함께 쓸 수 있다.
+		mockMvc.perform(get("/api/v1/products").param("collection", "discounted").param("query", "안전모")
+						.with(anonymous()))
+				.andExpect(jsonPath("$.data.content[*].name").value(contains("할인 안전모")));
+	}
+
+	@Test
 	void 없는_컬렉션_값은_400이다() throws Exception {
 		mockMvc.perform(get("/api/v1/products").param("collection", "sale").with(anonymous()))
 				.andExpect(status().isBadRequest())
@@ -110,5 +129,13 @@ class ProductCollectionApiTests {
 				                     created_at, updated_at)
 				values (?, ?, '세이프가드', 10000, true, ?, ?, ?, now(), now())
 				""", name, categoryId, featured, todayDeal, status);
+	}
+
+	private void insertPricedProduct(String name, long basePrice, Long listPrice, boolean priceVisible,
+			String status) {
+		jdbcTemplate.update("""
+				insert into product (name, brand, base_price, list_price, price_visible, status, created_at, updated_at)
+				values (?, '세이프가드', ?, ?, ?, ?, now(), now())
+				""", name, basePrice, listPrice, priceVisible, status);
 	}
 }

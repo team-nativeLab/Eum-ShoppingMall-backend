@@ -18,7 +18,7 @@ import com.example.shopping.domain.product.entity.ProductStatus;
  * @param certifications 이 중 하나라도 인증을 받은 상품만
  * @param certifiedOnly  true면 어떤 인증이든 하나 이상 받은 상품만
  * @param excludeSoldOut true면 품절 상품을 뺀다
- * @param collection     베스트·오늘의 상품으로 지정한 상품만(#207). null이면 전체
+ * @param collection     베스트·오늘의 상품으로 지정한 상품(#207)이나 할인 상품(#213)만. null이면 전체
  */
 public record ProductSearchCondition(Collection<ProductStatus> statuses, Collection<Long> categoryIds,
 		String keyword, List<String> brands, Long minPrice, Long maxPrice, Set<Certification> certifications,
