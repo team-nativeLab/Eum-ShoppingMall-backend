@@ -64,6 +64,20 @@ public enum ErrorCode {
 	CAPTCHA_INVALID(HttpStatus.BAD_REQUEST, "로봇이 아님을 확인하지 못했습니다. 다시 확인해 주세요."),
 	CAPTCHA_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "로봇 확인을 할 수 없습니다. 잠시 후 다시 시도해 주세요."),
 	EMAIL_SEND_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요."),
+	PASSWORD_NOT_SET(HttpStatus.BAD_REQUEST, "카카오·구글로 가입해 비밀번호가 없습니다. 비밀번호 찾기로 비밀번호를 정해 주세요."),
+
+	// 소셜 로그인(#225)
+	SOCIAL_PROVIDER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "지원하지 않는 간편 로그인입니다."),
+	SOCIAL_LOGIN_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "이 간편 로그인은 아직 쓸 수 없습니다."),
+	SOCIAL_LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "간편 로그인을 확인하지 못했습니다. 처음부터 다시 시도해 주세요."),
+	SOCIAL_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "간편 로그인 서비스에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+	SOCIAL_REDIRECT_URI_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "등록하지 않은 로그인 돌아올 주소입니다."),
+	SOCIAL_EMAIL_REQUIRED(HttpStatus.BAD_REQUEST, "이메일 제공에 동의해야 가입할 수 있습니다. 동의 화면에서 이메일을 선택해 주세요."),
+	SOCIAL_EMAIL_NOT_VERIFIED(HttpStatus.CONFLICT, "이미 가입된 이메일입니다. 이메일과 비밀번호로 로그인해 주세요."),
+	SOCIAL_SIGNUP_TOKEN_INVALID(HttpStatus.BAD_REQUEST, "가입 시간이 지났습니다. 간편 로그인을 처음부터 다시 해 주세요."),
+	SOCIAL_UNLINK_NOT_ALLOWED(HttpStatus.CONFLICT, "로그인할 방법이 하나도 남지 않아 연결을 끊을 수 없습니다. 비밀번호를 먼저 정해 주세요."),
+	SOCIAL_ACCOUNT_NOT_LINKED(HttpStatus.NOT_FOUND, "연결하지 않은 간편 로그인입니다."),
+	SOCIAL_ACCOUNT_CONFLICT(HttpStatus.CONFLICT, "이 이메일로 가입한 회원에 다른 계정이 이미 연결되어 있습니다. 이메일과 비밀번호로 로그인해 주세요."),
 
 	// 상품
 	PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),

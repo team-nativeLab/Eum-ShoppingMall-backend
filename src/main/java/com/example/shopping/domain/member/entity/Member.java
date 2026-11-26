@@ -62,6 +62,9 @@ public class Member extends BaseTimeEntity {
 	@Column(name = "access_token_version", nullable = false)
 	private long accessTokenVersion;
 
+	/** 비밀번호 없이 가입한 계정의 비밀번호 칸. BCrypt 형식이 아니라 어떤 비밀번호와도 맞지 않는다(#225). */
+	private static final String NO_PASSWORD = "!no-password!";
+
 	/** 가입할 때 이메일 인증을 마친 시각. 인증 없이 가입한 계정(기능 도입 전 가입 등)은 비어 있다. */
 	private LocalDateTime emailVerifiedAt;
 
@@ -73,6 +76,19 @@ public class Member extends BaseTimeEntity {
 		member.name = name;
 		member.phone = phone;
 		return member;
+	}
+
+	/**
+	 * 카카오·구글로 가입한 일반 회원(#225). 비밀번호가 없어 이메일 로그인은 할 수 없고, 비밀번호 찾기로 비밀번호를 정하면 쓸 수 있다.
+	 * 비밀번호 칸에는 어떤 비밀번호와도 맞지 않는 표시 값을 넣는다(BCrypt 형식이 아니다).
+	 */
+	public static Member createSocial(String email, String name, String phone) {
+		return create(email, NO_PASSWORD, name, phone);
+	}
+
+	/** 비밀번호가 있는 계정인지. 카카오·구글로만 가입해 아직 비밀번호를 정하지 않았으면 false */
+	public boolean hasPassword() {
+		return !NO_PASSWORD.equals(passwordHash);
 	}
 
 	public static Member createAdmin(String email, String passwordHash, String name) {

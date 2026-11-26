@@ -103,7 +103,7 @@ Actuator는 `health`와 `metrics`를 켜 둡니다. 헬스 프로브만 공개�
 
 ## 회원 탈퇴와 정지
 
-`DELETE /api/v1/me`에는 `{"password":"..."}`가 필요합니다. 결제 대기, 결제 처리 중, 입금 대기, 결제 완료, 상품 준비 중, 배송 중, 취소 요청(환불 미확정) 상태의 주문이 있으면 탈퇴할 수 없습니다(`OrderStatus.IN_PROGRESS`). 탈퇴에 성공하면 계정은 `WITHDRAWN`이 되고, 로그인 정보와 프로필 식별 정보는 익명화되며, Refresh 토큰과 장바구니 상품, 저장한 배송지가 지워집니다. 지난 주문은 남습니다.
+`DELETE /api/v1/me`에는 `{"password":"..."}`가 필요합니다(카카오·구글로만 가입해 비밀번호가 없는 계정은 보내지 않습니다). 결제 대기, 결제 처리 중, 입금 대기, 결제 완료, 상품 준비 중, 배송 중, 취소 요청(환불 미확정) 상태의 주문이 있으면 탈퇴할 수 없습니다(`OrderStatus.IN_PROGRESS`). 탈퇴에 성공하면 계정은 `WITHDRAWN`이 되고, 로그인 정보와 프로필 식별 정보는 익명화되며, Refresh 토큰과 장바구니 상품, 저장한 배송지가 지워집니다. 지난 주문은 남습니다.
 
 관리자는 `PATCH /api/v1/admin/users/{userId}/status`로 다른 계정을 정지하거나 다시 활성화할 수 있습니다. 정지하려면 사유가 필요하고, 정지하면 Refresh 토큰이 폐기됩니다.
 
@@ -269,6 +269,24 @@ Access 토큰은 웹·앱 모두 응답 본문으로 받아 `Authorization: Bear
 - **앱 토큰 보관:** 앱은 Refresh 토큰을 기기 보안 저장소(iOS Keychain, Android Keystore)에 두고 로그에 남기지 않습니다. 재발급할 때마다 새 Refresh 토큰으로 바꿔 저장합니다. 한 번 쓴 토큰을 다시 보내면 401이고, 잠시 뒤 다시 쓰면 탈취된 것으로 보고 그 회원의 Refresh 토큰을 모두 폐기합니다(웹과 같음).
 - **앱 API를 브라우저에서 막는 이유:** 앱 API는 Refresh 토큰을 본문으로 주므로, 웹 페이지의 스크립트가 부를 수 있으면 HttpOnly 쿠키 보호가 소용없어집니다. 네이티브 앱의 HTTP 요청에는 Origin 헤더가 없습니다.
 - **같은 규칙:** 로그인 실패 제한·로봇 확인, 관리자 계정 거절, IP별 요청 제한(로그인끼리·재발급끼리 한 묶음)은 웹과 같습니다. 회원가입·이메일 인증·비밀번호 재설정은 앱도 `/api/v1/auth`의 같은 API를 씁니다.
+
+## 카카오·구글 로그인
+
+회원(웹·앱)이 카카오·구글 계정으로 가입하고 로그인합니다(#225). 관리자 계정은 쓸 수 없습니다(관리자 로그인과 OTP만).
+
+| | 웹 (`/api/v1/auth/social`) | 앱 (`/api/v1/app/auth/social`) |
+|---|---|---|
+| 로그인 | `POST /{provider}/login`에 `{"code", "redirectUri", "codeVerifier"}` | `POST /{provider}/login`에 `{"token"}`(카카오 SDK 액세스 토큰, 구글 ID 토큰) |
+| 처음 온 사람 | `signupRequired: true`와 `signupToken`(10분, 1회), `email`, `name` | 같음 |
+| 가입 | `POST /signup`에 `{"signupToken", "name", "phone", "termsAgreed", "privacyAgreed", "marketingAgreed"}` | 같음 |
+| 토큰 | 이메일 로그인과 같음(Access는 본문, Refresh는 쿠키) | 앱 로그인과 같음(모두 본문) |
+
+- **흐름:** 웹은 프론트가 카카오·구글 로그인 화면으로 보내고(인가 요청의 `state`·PKCE는 프론트가 관리), 돌아올 주소로 받은 `code`를 서버로 보냅니다. 서버가 코드를 교환해 사용자를 확인합니다. `redirectUri`는 `SOCIAL_REDIRECT_URIS`에 등록한 주소만 받습니다(400 `SOCIAL_REDIRECT_URI_NOT_ALLOWED`). 앱은 SDK가 받은 토큰을 보내고, 서버가 구글 ID 토큰의 서명·발급자·대상(`GOOGLE_CLIENT_ID`·`GOOGLE_APP_CLIENT_IDS`)과 카카오 토큰의 앱(`KAKAO_APP_ID`)을 확인합니다.
+- **같은 이메일의 회원:** 연결이 없고 같은 이메일로 가입한 회원이 있으면, 카카오·구글이 인증한 이메일일 때만 그 회원에 자동으로 연결하고 로그인합니다. 인증되지 않은 이메일이면 409(`SOCIAL_EMAIL_NOT_VERIFIED`)로 이메일 로그인을 안내합니다. 이메일 제공에 동의하지 않은 카카오 계정은 가입할 수 없습니다(400 `SOCIAL_EMAIL_REQUIRED`, 카카오 콘솔에서 이메일을 필수 동의로 둡니다).
+- **비밀번호 없는 회원:** 카카오·구글로 가입한 회원은 비밀번호가 없어(`GET /api/v1/me`의 `hasPassword: false`) 이메일 로그인을 할 수 없고, 비밀번호 찾기로 비밀번호를 정하면 쓸 수 있습니다. 비밀번호 변경은 400(`PASSWORD_NOT_SET`), 탈퇴는 비밀번호 없이 합니다.
+- **연결 관리:** `GET /api/v1/me/social-accounts`(연결 목록), `DELETE /api/v1/me/social-accounts/{provider}`(연결 끊기). 비밀번호가 없는 계정의 마지막 연결은 끊을 수 없습니다(409 `SOCIAL_UNLINK_NOT_ALLOWED`). 탈퇴하면 연결을 지우고, `KAKAO_ADMIN_KEY`가 있으면 카카오 연결 끊기도 부릅니다(카카오 정책).
+- **설정:** `SOCIAL_REDIRECT_URIS`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_APP_CLIENT_IDS`, `KAKAO_REST_API_KEY`, `KAKAO_CLIENT_SECRET`, `KAKAO_APP_ID`, `KAKAO_ADMIN_KEY`. 비밀 값은 서버 환경변수·시크릿으로만 넣습니다. 키가 없는 제공자는 503(`SOCIAL_LOGIN_NOT_CONFIGURED`)입니다.
+- **같은 규칙:** IP별 요청 제한(로그인은 이메일 로그인과, 가입은 이메일 가입과 한 묶음), 앱 API의 브라우저 요청 거절(403)은 이메일 로그인과 같습니다. 가입 대기에는 토큰 해시만 저장하고, 지난 가입 대기는 매시간 지웁니다.
 
 ## 로그인 시도 제한
 
