@@ -6,6 +6,8 @@ import java.util.List;
 import com.example.shopping.domain.product.entity.Certification;
 
 /**
+ * 안전 인증
+ *
  * @param code  요청에 쓰는 값 (예: KCS)
  * @param label 화면에 보여 줄 이름 (예: KCs 안전인증)
  */

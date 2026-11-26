@@ -57,14 +57,22 @@ public class AdminSupportController {
 		return ApiResponse.ok(adminSupportService.createNotice(request));
 	}
 
-	/** 공지 수정. 잠시 내릴 때는 삭제 대신 비공개로 전환한다. */
+	/**
+	 * 공지 수정. 잠시 내릴 때는 삭제 대신 비공개로 전환한다.
+	 *
+	 * @param noticeId 공지 ID
+	 */
 	@PatchMapping("/notices/{noticeId}")
 	public ApiResponse<AdminNoticeResponse> updateNotice(@PathVariable Long noticeId,
 			@Valid @RequestBody NoticeUpdateRequest request) {
 		return ApiResponse.ok(adminSupportService.updateNotice(noticeId, request));
 	}
 
-	/** 공지사항 삭제 */
+	/**
+	 * 공지사항 삭제
+	 *
+	 * @param noticeId 공지 ID
+	 */
 	@DeleteMapping("/notices/{noticeId}")
 	public ApiResponse<Void> deleteNotice(@PathVariable Long noticeId) {
 		adminSupportService.deleteNotice(noticeId);
@@ -84,21 +92,33 @@ public class AdminSupportController {
 		return ApiResponse.ok(adminSupportService.createFaq(request));
 	}
 
-	/** FAQ 수정. 보낸 항목만 바꾼다. */
+	/**
+	 * FAQ 수정. 보낸 항목만 바꾼다.
+	 *
+	 * @param faqId FAQ ID
+	 */
 	@PatchMapping("/faqs/{faqId}")
 	public ApiResponse<AdminFaqResponse> updateFaq(@PathVariable Long faqId,
 			@Valid @RequestBody FaqUpdateRequest request) {
 		return ApiResponse.ok(adminSupportService.updateFaq(faqId, request));
 	}
 
-	/** FAQ 삭제 */
+	/**
+	 * FAQ 삭제
+	 *
+	 * @param faqId FAQ ID
+	 */
 	@DeleteMapping("/faqs/{faqId}")
 	public ApiResponse<Void> deleteFaq(@PathVariable Long faqId) {
 		adminSupportService.deleteFaq(faqId);
 		return ApiResponse.ok(null);
 	}
 
-	/** 1:1 문의 목록 (?status=RECEIVED|ANSWERED) */
+	/**
+	 * 1:1 문의 목록 (?status=RECEIVED|ANSWERED)
+	 *
+	 * @param status 이 처리 상태의 문의만. RECEIVED(접수), ANSWERED(답변 완료). 없으면 모두
+	 */
 	@GetMapping("/inquiries")
 	public ApiResponse<PageResponse<AdminInquirySummaryResponse>> inquiries(
 			@RequestParam(required = false) InquiryStatus status,
@@ -106,13 +126,21 @@ public class AdminSupportController {
 		return ApiResponse.ok(adminSupportService.getInquiries(status, pageable));
 	}
 
-	/** 1:1 문의 상세 (내용·연락 정보·기존 답변) */
+	/**
+	 * 1:1 문의 상세 (내용·연락 정보·기존 답변)
+	 *
+	 * @param inquiryId 1:1 문의 ID
+	 */
 	@GetMapping("/inquiries/{inquiryId}")
 	public ApiResponse<AdminInquiryDetailResponse> inquiry(@PathVariable Long inquiryId) {
 		return ApiResponse.ok(adminSupportService.getInquiry(inquiryId));
 	}
 
-	/** 1:1 문의 답변·내부 메모. 보낸 항목만 바꾼다. 답변을 보내면 ANSWERED, 빈 문자열이면 답변을 지우고 RECEIVED */
+	/**
+	 * 1:1 문의 답변·내부 메모. 보낸 항목만 바꾼다. 답변을 보내면 ANSWERED, 빈 문자열이면 답변을 지우고 RECEIVED
+	 *
+	 * @param inquiryId 1:1 문의 ID
+	 */
 	@PatchMapping("/inquiries/{inquiryId}")
 	public ApiResponse<AdminInquiryDetailResponse> updateInquiry(@PathVariable Long inquiryId,
 			@Valid @RequestBody AdminInquiryUpdateRequest request) {

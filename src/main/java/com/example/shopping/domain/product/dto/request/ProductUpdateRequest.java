@@ -20,13 +20,29 @@ import jakarta.validation.constraints.Size;
  * 보낸 항목만 수정한다. 설명·이미지·브랜드는 빈 문자열을, 정가는 0을 보내면 지운다.
  * 가격 공개 여부는 금액 미표시 전환 API로 바꾼다.
  *
- * @param certifications 보낸 목록으로 통째로 바꾼다. 빈 목록을 보내면 인증을 모두 지운다.
- * @param priceVisible   금액 공개 여부. false면 금액을 숨기고 견적 문의로만 받는다. 생략하면 그대로 둔다.
- * @param featured        베스트 상품 목록(?collection=featured)에 넣을지(#207). 생략하면 그대로
- * @param todayDeal       오늘의 상품 목록(?collection=today)에 넣을지(#207). 생략하면 그대로
- * @param supplierId      발주처 ID(#208). 없는 발주처는 404. 생략하면 그대로
- * @param images         상세 갤러리. 보내면 통째로 바꾸고 첫 이미지가 대표 이미지(imageUrl)가 된다(빈 목록은 둘 다 지움).
- *                       나머지 상세 정보는 ProductDetailFields 참고
+ * @param categoryId        카테고리 ID
+ * @param name              상품명(200자 이하)
+ * @param description       상품 설명(20,000자 이하). 빈 문자열이면 지운다.
+ * @param imageUrl          대표 이미지 주소. 빈 문자열이면 지운다.
+ * @param basePrice         판매가(원)
+ * @param listPrice         정가(원). 0이면 지운다.
+ * @param brand             브랜드 이름(100자 이하). 빈 문자열이면 지운다.
+ * @param certifications    보낸 목록으로 통째로 바꾼다. 빈 목록을 보내면 인증을 모두 지운다.
+ * @param recommendScore    추천순 정렬 점수(0~100만). 클수록 앞
+ * @param status            판매 상태. ON_SALE(판매중), SOLD_OUT(품절), HIDDEN(비공개), DELETED(삭제)
+ * @param priceVisible      금액 공개 여부. false면 금액을 숨기고 견적 문의로만 받는다. 생략하면 그대로 둔다.
+ * @param productCode       상품 코드. 빈 문자열이면 지운다. 다른 상품과 겹치면 409(PRODUCT_CODE_DUPLICATED)
+ * @param modelName         모델명(100자 이하). 빈 문자열이면 지운다.
+ * @param summary           한 줄 요약(300자 이하). 빈 문자열이면 지운다.
+ * @param countryOfOrigin   원산지(50자 이하). 빈 문자열이면 지운다.
+ * @param shippingEstimate  배송 예정 안내(100자 이하). 빈 문자열이면 지운다.
+ * @param descriptionFormat 상품 설명 서식. PLAIN(평문), RICH_V1(제한된 서식)
+ * @param images            상세 갤러리. 보내면 통째로 바꾸고 첫 이미지가 대표 이미지(imageUrl)가 된다(빈 목록은 둘 다 지움). 나머지 상세 정보는
+ *                          ProductDetailFields 참고
+ * @param specifications    사양 표(20줄까지). 보내면 통째로 바꾸고, 빈 목록이면 모두 지운다.
+ * @param featured          베스트 상품 목록(?collection=featured)에 넣을지(#207). 생략하면 그대로
+ * @param todayDeal         오늘의 상품 목록(?collection=today)에 넣을지(#207). 생략하면 그대로
+ * @param supplierId        발주처 ID(#208). 없는 발주처는 404. 생략하면 그대로
  */
 public record ProductUpdateRequest(
 		Long categoryId,

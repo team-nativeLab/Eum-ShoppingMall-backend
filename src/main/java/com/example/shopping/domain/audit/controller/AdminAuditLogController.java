@@ -39,6 +39,12 @@ public class AdminAuditLogController {
 	 * fromDate·toDate는 날짜(2026-10-01)나 날짜·시간(2026-10-01T09:00:00)으로 받는다.
 	 * 날짜만 주면 fromDate는 그날 0시부터, toDate는 그날이 끝날 때까지로 본다.
 	 * kind로 개인정보 조회(READ)·변경(CHANGE)·관리자 로그인(LOGIN)만 따로 볼 수 있다.
+	 *
+	 * @param actorMemberId 이 관리자(회원 ID)가 남긴 기록만
+	 * @param targetType    이 대상 종류의 기록만(예: products, orders, auth)
+	 * @param kind          READ(개인정보 조회), CHANGE(변경), LOGIN(관리자 로그인) 중 하나만. 없으면 모두
+	 * @param fromDate      이 날짜·시간부터(예: 2026-10-01, 2026-10-01T09:00:00)
+	 * @param toDate        이 날짜·시간까지(예: 2026-10-31). 날짜만 주면 그날이 끝날 때까지
 	 */
 	@GetMapping
 	public ApiResponse<PageResponse<AdminAuditLogResponse>> search(@AuthenticationPrincipal Jwt jwt,

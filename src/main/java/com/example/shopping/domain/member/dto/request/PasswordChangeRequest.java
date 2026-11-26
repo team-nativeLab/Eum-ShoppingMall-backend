@@ -4,6 +4,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+/**
+ * 비밀번호 변경. 비밀번호가 없는 계정(카카오·구글로만 가입)은 비밀번호 찾기로 정한다.
+ *
+ * @param currentPassword 현재 비밀번호
+ * @param newPassword     새 비밀번호. 공백 없이 영문·숫자·특수문자 8~64자
+ */
 public record PasswordChangeRequest(
 		@NotBlank(message = "현재 비밀번호를 입력해 주세요.")
 		@Size(max = 64, message = "비밀번호는 64자 이하여야 합니다.")

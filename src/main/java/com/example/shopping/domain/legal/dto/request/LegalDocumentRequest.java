@@ -12,8 +12,9 @@ import jakarta.validation.constraints.Size;
  * 시행 중이거나 지난 공개 버전은 고칠 수 없다(409 LEGAL_DOCUMENT_LOCKED).
  *
  * @param version     버전 이름(예: 2.0). 영문·숫자로 시작하고 영문·숫자·.·-·_ 30자 이내
- * @param effectiveAt 시행일(예: 2026-11-01). 이날 0시부터 시행한다.
+ * @param title       문서명(200자 이하)
  * @param body        평문 본문. HTML 태그는 받지 않는다.
+ * @param effectiveAt 시행일(예: 2026-11-01). 이날 0시부터 시행한다.
  * @param published   공개 여부. 공개하고 시행일이 되면 고객 화면의 현재 문서가 된다.
  */
 public record LegalDocumentRequest(

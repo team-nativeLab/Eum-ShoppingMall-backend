@@ -12,6 +12,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * 주문할 품목과 배송지를 한 번에 보낸다. 서버는 요청에 담긴 내용만으로 주문을 만들고, 금액은 DB의 현재 가격으로 계산한다.
  *
@@ -27,6 +29,13 @@ public record OrderCreateRequest(
 		@Valid
 		DeliveryRequest delivery) {
 
+	/**
+	 * 주문할 품목
+	 *
+	 * @param skuId    옵션(SKU) ID
+	 * @param quantity 수량(1 이상)
+	 */
+	@Schema(name = "OrderItemRequest")
 	public record Item(
 			@NotNull(message = "옵션을 선택해 주세요.")
 			Long skuId,

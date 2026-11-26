@@ -44,14 +44,22 @@ public class AdminBrandController {
 		return ApiResponse.ok(adminBrandService.create(request));
 	}
 
-	/** 전체 수정. 이름을 바꾸면 이전 이름을 쓰던 상품의 브랜드도 함께 바꾼다. */
+	/**
+	 * 전체 수정. 이름을 바꾸면 이전 이름을 쓰던 상품의 브랜드도 함께 바꾼다.
+	 *
+	 * @param brandId 브랜드 ID
+	 */
 	@PutMapping("/{brandId}")
 	public ApiResponse<BrandResponse.Admin> update(@PathVariable Long brandId,
 			@Valid @RequestBody BrandRequest request) {
 		return ApiResponse.ok(adminBrandService.update(brandId, request));
 	}
 
-	/** 브랜드 소개를 지운다. 상품의 브랜드 값은 그대로다. */
+	/**
+	 * 브랜드 소개를 지운다. 상품의 브랜드 값은 그대로다.
+	 *
+	 * @param brandId 브랜드 ID
+	 */
 	@DeleteMapping("/{brandId}")
 	public ApiResponse<Void> delete(@PathVariable Long brandId) {
 		adminBrandService.delete(brandId);

@@ -9,9 +9,11 @@ import jakarta.validation.constraints.Size;
 /**
  * 보낸 항목만 처리한다.
  *
- * @param status    바꿀 주문 상태. PREPARING(상품 준비중), SHIPPED(배송중), DELIVERED(배송완료)만 지정할 수 있다.
- *                  SHIPPED는 택배사와 송장번호가 있어야 한다(이미 등록했거나 같은 요청에 보낸다).
- * @param adminMemo 고객에게 보이지 않는 내부 메모(#223). 빈 문자열이면 지운다.
+ * @param status         바꿀 주문 상태. PREPARING(상품 준비중), SHIPPED(배송중), DELIVERED(배송완료)만 지정할 수 있다. SHIPPED는 택배사와 송장번호가 있어야
+ *                       한다(이미 등록했거나 같은 요청에 보낸다).
+ * @param courier        택배사(50자 이하)
+ * @param trackingNumber 송장번호(50자 이하)
+ * @param adminMemo      고객에게 보이지 않는 내부 메모(#223). 빈 문자열이면 지운다.
  */
 public record AdminOrderUpdateRequest(
 		OrderStatus status,

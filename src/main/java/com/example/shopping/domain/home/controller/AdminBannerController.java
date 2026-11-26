@@ -45,14 +45,22 @@ public class AdminBannerController {
 		return ApiResponse.ok(adminBannerService.create(request));
 	}
 
-	/** 배너 수정. 보낸 항목만 바꾸고, 연결 주소는 빈 문자열을 보내면 지운다. */
+	/**
+	 * 배너 수정. 보낸 항목만 바꾸고, 연결 주소는 빈 문자열을 보내면 지운다.
+	 *
+	 * @param bannerId 배너 ID
+	 */
 	@PatchMapping("/{bannerId}")
 	public ApiResponse<BannerResponse> updateBanner(@PathVariable Long bannerId,
 			@Valid @RequestBody BannerUpdateRequest request) {
 		return ApiResponse.ok(adminBannerService.update(bannerId, request));
 	}
 
-	/** 배너 삭제 */
+	/**
+	 * 배너 삭제
+	 *
+	 * @param bannerId 배너 ID
+	 */
 	@DeleteMapping("/{bannerId}")
 	public ApiResponse<Void> deleteBanner(@PathVariable Long bannerId) {
 		adminBannerService.delete(bannerId);

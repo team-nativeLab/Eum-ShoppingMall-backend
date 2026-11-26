@@ -9,6 +9,19 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+/**
+ * 이메일 회원가입
+ *
+ * @param email                  로그인에 쓸 이메일
+ * @param password               비밀번호. 공백 없이 영문·숫자·특수문자 8~64자
+ * @param name                   이름(50자 이하)
+ * @param phone                  연락처(예: 010-1234-5678, 하이픈은 생략 가능)(선택)
+ * @param emailVerificationToken 이메일 인증번호 확인(POST /api/v1/auth/email-verifications/confirm)이 준 토큰. 이메일 인증을 요구하는
+ *                               설정(SIGNUP_EMAIL_VERIFICATION_REQUIRED=true)이면 필수
+ * @param termsAgreed            이용약관 동의. 필수라 true만 받는다.
+ * @param privacyAgreed          개인정보 수집·이용 동의. 필수라 true만 받는다.
+ * @param marketingAgreed        마케팅 수신 동의(선택)
+ */
 public record SignupRequest(
 		@NotBlank(message = "이메일을 입력해 주세요.")
 		@Email(message = "이메일 형식이 올바르지 않습니다.")

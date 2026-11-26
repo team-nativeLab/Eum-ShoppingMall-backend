@@ -34,7 +34,12 @@ public class AdminProductQuestionController {
 
 	private final AdminProductQuestionService adminProductQuestionService;
 
-	/** 상품 문의 목록(?status=WAITING|ANSWERED&productId=) */
+	/**
+	 * 상품 문의 목록(?status=WAITING|ANSWERED&productId=)
+	 *
+	 * @param status    이 답변 상태의 문의만. WAITING(답변 대기), ANSWERED(답변 완료). 없으면 모두
+	 * @param productId 이 상품의 문의만
+	 */
 	@GetMapping
 	public ApiResponse<PageResponse<AdminProductQuestionResponse>> questions(
 			@RequestParam(required = false) ProductQuestionStatus status,
@@ -43,13 +48,21 @@ public class AdminProductQuestionController {
 		return ApiResponse.ok(adminProductQuestionService.search(status, productId, pageable));
 	}
 
-	/** 상품 문의 상세. 작성자 정보가 보이므로 조회도 감사 로그에 남는다. */
+	/**
+	 * 상품 문의 상세. 작성자 정보가 보이므로 조회도 감사 로그에 남는다.
+	 *
+	 * @param questionId 상품 문의 ID
+	 */
 	@GetMapping("/{questionId}")
 	public ApiResponse<AdminProductQuestionResponse> question(@PathVariable Long questionId) {
 		return ApiResponse.ok(adminProductQuestionService.get(questionId));
 	}
 
-	/** 답변·관리자 메모. 답변을 남기면 답변 완료, 빈 답변이면 답변 대기로 되돌린다. */
+	/**
+	 * 답변·관리자 메모. 답변을 남기면 답변 완료, 빈 답변이면 답변 대기로 되돌린다.
+	 *
+	 * @param questionId 상품 문의 ID
+	 */
 	@PatchMapping("/{questionId}")
 	public ApiResponse<AdminProductQuestionResponse> update(@AuthenticationPrincipal Jwt jwt,
 			@PathVariable Long questionId, @Valid @RequestBody AdminProductQuestionUpdateRequest request) {

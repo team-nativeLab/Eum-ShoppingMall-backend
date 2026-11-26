@@ -8,6 +8,7 @@ import com.example.shopping.domain.member.entity.SocialProvider;
 /**
  * 내 계정에 연결한 카카오·구글 계정(#225)
  *
+ * @param provider 연결한 계정의 카카오·구글 중 어느 쪽인지(KAKAO, GOOGLE)
  * @param email    연결할 때 카카오·구글이 알려 준 이메일
  * @param linkedAt 연결한 시각
  */

@@ -36,9 +36,22 @@ public record CheckoutOptionsResponse(long shippingFee, Long freeShippingThresho
 			new Option("virtualAccount", "가상계좌"),
 			new Option("mobile", "휴대폰 결제"));
 
+	/**
+	 * 주문서 선택지 하나
+	 *
+	 * @param id    선택지 ID(예: call, creditCard)
+	 * @param label 화면에 보여 줄 이름
+	 */
 	public record Option(String id, String label) {
 	}
 
+	/**
+	 * 배송 방법
+	 *
+	 * @param id          배송 방법 ID(예: standard)
+	 * @param label       이름(예: 일반 배송)
+	 * @param description 안내(예: 결제 후 영업일 기준 2~3일)
+	 */
 	public record ShippingMethod(String id, String label, String description) {
 	}
 

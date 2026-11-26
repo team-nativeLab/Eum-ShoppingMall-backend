@@ -8,6 +8,10 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
+ * 이메일 로그인
+ *
+ * @param email        가입한 이메일
+ * @param password     비밀번호
  * @param captchaToken 로봇 확인 위젯(action=login)이 준 토큰. 여러 번 틀려 CAPTCHA_REQUIRED를 받은 뒤부터 보낸다.
  */
 public record LoginRequest(

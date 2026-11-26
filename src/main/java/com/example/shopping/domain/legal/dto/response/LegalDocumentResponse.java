@@ -5,11 +5,16 @@ import java.time.LocalDateTime;
 
 import com.example.shopping.domain.legal.entity.LegalDocument;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * 고객 화면의 약관·정책 문서.
  *
  * @param type        문서 종류(terms, privacy, guide, shipping)
+ * @param version     버전 이름(예: 2.0)
+ * @param title       문서명
  * @param effectiveAt 시행일
+ * @param body        평문 본문
  */
 public record LegalDocumentResponse(String type, String version, String title, LocalDate effectiveAt, String body) {
 
@@ -21,7 +26,10 @@ public record LegalDocumentResponse(String type, String version, String title, L
 	/**
 	 * 공개 버전 목록의 한 줄(본문 제외).
 	 *
-	 * @param current 지금 시행 중인 버전인지. 시행일이 오늘보다 뒤면 시행 예정이다.
+	 * @param version     버전 이름(예: 2.0)
+	 * @param title       문서명
+	 * @param effectiveAt 시행일
+	 * @param current     지금 시행 중인 버전인지. 시행일이 오늘보다 뒤면 시행 예정이다.
 	 */
 	public record Version(String version, String title, LocalDate effectiveAt, boolean current) {
 
@@ -34,8 +42,17 @@ public record LegalDocumentResponse(String type, String version, String title, L
 	/**
 	 * 관리자 화면의 버전.
 	 *
-	 * @param locked 시행 중이거나 지난 공개 버전이라 고칠 수 없는지. 바꾸려면 새 버전으로 등록한다.
+	 * @param id          버전 ID
+	 * @param type        문서 종류(terms, privacy, guide, shipping)
+	 * @param version     버전 이름(예: 2.0)
+	 * @param title       문서명
+	 * @param effectiveAt 시행일. 이날 0시부터 시행한다.
+	 * @param body        평문 본문
+	 * @param published   공개 여부
+	 * @param locked      시행 중이거나 지난 공개 버전이라 고칠 수 없는지. 바꾸려면 새 버전으로 등록한다.
+	 * @param updatedAt   마지막 수정 시각
 	 */
+	@Schema(name = "LegalDocumentAdminResponse")
 	public record Admin(Long id, String type, String version, String title, LocalDate effectiveAt, String body,
 			boolean published, boolean locked, LocalDateTime updatedAt) {
 

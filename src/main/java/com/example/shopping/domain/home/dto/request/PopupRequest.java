@@ -8,7 +8,9 @@ import jakarta.validation.constraints.Size;
 /**
  * 팝업 등록·수정(#211). 수정도 모든 값을 보낸다.
  *
+ * @param title     팝업 제목(100자 이하)
  * @param imageUrl  업로드 API가 돌려준 주소나 웹의 정적 이미지(/assets/...). 사진이 없으면 null이나 빈 문자열
+ * @param body      팝업 본문(2,000자 이하). 화면은 텍스트로만 그린다.
  * @param visible   웹에 띄울지. 없으면 true
  * @param sortOrder 작을수록 앞. 같으면 최근 등록한 팝업이 앞이다. 없으면 0
  */

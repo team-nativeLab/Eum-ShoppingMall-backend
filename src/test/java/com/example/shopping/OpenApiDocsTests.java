@@ -8,20 +8,27 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.AnnotatedBeanDefinition;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.jayway.jsonpath.JsonPath;
 
-/** API 문서(springdoc). 문서를 켠 설정으로 띄워 웹·앱·관리자 그룹, 인증 표시, 실패 응답, 태그·요약을 확인한다. */
+import io.swagger.v3.oas.annotations.media.Schema;
+
+/** API 문서(springdoc). 문서를 켠 설정으로 띄워 웹·앱·관리자 그룹, 인증 표시, 실패 응답, 태그·요약, 필드·파라미터 설명을 확인한다. */
 @SpringBootTest(properties = { "springdoc.api-docs.enabled=true", "springdoc.swagger-ui.enabled=true" })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -143,6 +150,88 @@ class OpenApiDocsTests {
 						.value(containsString("로그인 없이 부를 수 있다")))
 				.andExpect(jsonPath("$.tags[?(@.name == '배송지')].description")
 						.value(org.hamcrest.Matchers.hasItem(containsString("주소록"))));
+	}
+
+	/**
+	 * 새 필드를 추가하면 record Javadoc에 @param을, 경로·쿼리·헤더·쿠키 파라미터를 추가하면 컨트롤러 메서드 Javadoc에 @param을 적는다.
+	 * 새 DTO에는 record Javadoc 첫 줄(스키마 설명)도 적는다.
+	 */
+	@Test
+	@SuppressWarnings("unchecked")
+	void 모든_스키마와_필드와_파라미터에_설명이_있다() throws Exception {
+		List<String> missing = new ArrayList<>();
+		for (String group : GROUPS) {
+			String json = mockMvc.perform(get("/v3/api-docs/{group}", group)).andReturn().getResponse()
+					.getContentAsString(StandardCharsets.UTF_8);
+			Map<String, Map<String, Object>> schemas = JsonPath.read(json, "$.components.schemas");
+			schemas.forEach((name, schema) -> {
+				if (isBlank(schema.get("description"))) {
+					missing.add(group + " 스키마 " + name);
+				}
+				Map<String, Map<String, Object>> properties = (Map<String, Map<String, Object>>) schema.get("properties");
+				if (properties != null) {
+					properties.forEach((property, spec) -> {
+						if (isBlank(spec.get("description"))) {
+							missing.add(group + " 필드 " + name + "." + property);
+						}
+					});
+				}
+			});
+			Map<String, Map<String, Map<String, Object>>> paths = JsonPath.read(json, "$.paths");
+			paths.forEach((path, item) -> item.forEach((method, operation) -> {
+				List<Map<String, Object>> parameters = METHODS.contains(method)
+						? (List<Map<String, Object>>) operation.get("parameters")
+						: null;
+				if (parameters != null) {
+					parameters.stream()
+							.filter(parameter -> isBlank(parameter.get("description")))
+							.forEach(parameter -> missing.add(group + " 파라미터 " + method.toUpperCase() + " " + path + " "
+									+ parameter.get("name")));
+				}
+			}));
+		}
+		assertThat(missing).isEmpty();
+	}
+
+	/**
+	 * 문서의 스키마 이름은 클래스 이름(중첩 record는 안쪽 이름)이라, 이름이 같으면 한 스키마로 합쳐져 한쪽 필드가 다른 쪽 API에 보인다.
+	 * 이름이 겹치는 중첩 record에는 @Schema(name = "...")로 고유한 이름을 붙인다.
+	 */
+	@Test
+	void DTO_스키마_이름이_겹치지_않는다() throws Exception {
+		ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false) {
+			@Override
+			protected boolean isCandidateComponent(AnnotatedBeanDefinition beanDefinition) {
+				return beanDefinition.getMetadata().isIndependent();
+			}
+		};
+		scanner.addIncludeFilter((reader, factory) -> {
+			String className = reader.getClassMetadata().getClassName();
+			return className.contains(".dto.") || className.contains(".global.response.");
+		});
+		Map<String, List<String>> classesBySchemaName = new TreeMap<>();
+		for (BeanDefinition candidate : scanner.findCandidateComponents("com.example.shopping")) {
+			Class<?> type = Class.forName(candidate.getBeanClassName());
+			Schema schema = type.getAnnotation(Schema.class);
+			String name = schema != null && !schema.name().isBlank() ? schema.name() : type.getSimpleName();
+			classesBySchemaName.computeIfAbsent(name, key -> new ArrayList<>()).add(type.getName());
+		}
+		List<String> duplicated = classesBySchemaName.entrySet().stream()
+				.filter(entry -> entry.getValue().size() > 1)
+				.map(entry -> entry.getKey() + " " + entry.getValue())
+				.toList();
+		assertThat(classesBySchemaName).containsKeys("ApiResponse", "CartItemResponse", "OrderItemRequest");
+		assertThat(duplicated).isEmpty();
+
+		// 관리자 브랜드·팝업 응답이 각자의 필드로 보인다(예전에는 둘 다 Admin 스키마 하나로 합쳐졌다).
+		mockMvc.perform(get("/v3/api-docs/admin"))
+				.andExpect(jsonPath("$.components.schemas.BrandAdminResponse.properties.storyTitle").exists())
+				.andExpect(jsonPath("$.components.schemas.PopupAdminResponse.properties.imageUrl").exists())
+				.andExpect(jsonPath("$.components.schemas.Admin").doesNotExist());
+	}
+
+	private static boolean isBlank(Object value) {
+		return value == null || value.toString().isBlank();
 	}
 
 	@SuppressWarnings("unchecked")

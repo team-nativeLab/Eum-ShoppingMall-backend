@@ -5,7 +5,15 @@ import com.example.shopping.global.validation.ValidationPatterns;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/** 보낸 항목만 수정한다. */
+/**
+ * 보낸 항목만 수정한다.
+ *
+ * @param category  분류(50자 이하)
+ * @param question  질문(300자 이하)
+ * @param answer    답변(5,000자 이하)
+ * @param sortOrder 정렬 순서. 작을수록 앞
+ * @param visible   고객 FAQ 목록에 보일지
+ */
 public record FaqUpdateRequest(
 		@Pattern(regexp = ValidationPatterns.HAS_TEXT, message = "분류를 입력해 주세요.")
 		@Size(max = 50, message = "분류는 50자 이하여야 합니다.")

@@ -47,6 +47,8 @@ public class OrderController {
 	/**
 	 * WEB-015, 016 주문 생성. 주문할 옵션·수량과 배송지를 함께 보낸다 (금액은 서버가 계산한다).
 	 * 주문 버튼을 여러 번 눌러도 주문이 하나만 생기도록 Idempotency-Key 헤더에 주문 시도마다 새 UUID를 넣어 보낸다.
+	 *
+	 * @param idempotencyKey 주문 시도마다 새로 만든 UUID. 같은 키로 다시 보내도 주문은 하나만 생긴다.
 	 */
 	@PostMapping("/orders")
 	@ResponseStatus(HttpStatus.CREATED)
@@ -67,13 +69,21 @@ public class OrderController {
 		return ApiResponse.ok(orderService.getMyOrders(CurrentMember.id(jwt), pageable));
 	}
 
-	/** WEB-017 주문 완료·상세. 본인 주문만 조회된다. */
+	/**
+	 * WEB-017 주문 완료·상세. 본인 주문만 조회된다.
+	 *
+	 * @param orderNo 주문번호
+	 */
 	@GetMapping("/orders/{orderNo}")
 	public ApiResponse<OrderDetailResponse> order(@AuthenticationPrincipal Jwt jwt, @PathVariable String orderNo) {
 		return ApiResponse.ok(orderService.getMyOrder(CurrentMember.id(jwt), orderNo));
 	}
 
-	/** 주문 취소. 배송 전(결제완료·상품준비중)인 본인 주문을 전액 환불한다. */
+	/**
+	 * 주문 취소. 배송 전(결제완료·상품준비중)인 본인 주문을 전액 환불한다.
+	 *
+	 * @param orderNo 주문번호
+	 */
 	@PostMapping("/orders/{orderNo}/cancel")
 	public ApiResponse<OrderDetailResponse> cancelOrder(@AuthenticationPrincipal Jwt jwt,
 			@PathVariable String orderNo) {

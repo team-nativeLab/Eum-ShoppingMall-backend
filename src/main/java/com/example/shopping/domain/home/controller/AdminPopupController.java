@@ -44,14 +44,22 @@ public class AdminPopupController {
 		return ApiResponse.ok(adminPopupService.create(request));
 	}
 
-	/** 팝업 전체 수정. 사진을 지우려면 imageUrl을 null이나 빈 문자열로 보낸다. */
+	/**
+	 * 팝업 전체 수정. 사진을 지우려면 imageUrl을 null이나 빈 문자열로 보낸다.
+	 *
+	 * @param popupId 팝업 ID
+	 */
 	@PutMapping("/{popupId}")
 	public ApiResponse<PopupResponse.Admin> update(@PathVariable Long popupId,
 			@Valid @RequestBody PopupRequest request) {
 		return ApiResponse.ok(adminPopupService.update(popupId, request));
 	}
 
-	/** 팝업 삭제 */
+	/**
+	 * 팝업 삭제
+	 *
+	 * @param popupId 팝업 ID
+	 */
 	@DeleteMapping("/{popupId}")
 	public ApiResponse<Void> delete(@PathVariable Long popupId) {
 		adminPopupService.delete(popupId);

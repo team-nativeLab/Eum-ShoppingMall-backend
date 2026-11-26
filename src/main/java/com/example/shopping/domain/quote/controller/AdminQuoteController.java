@@ -31,7 +31,11 @@ public class AdminQuoteController {
 
 	private final AdminQuoteService adminQuoteService;
 
-	/** 견적 문의 목록 (?status=RECEIVED|IN_PROGRESS|COMPLETED) */
+	/**
+	 * 견적 문의 목록 (?status=RECEIVED|IN_PROGRESS|COMPLETED)
+	 *
+	 * @param status 이 처리 상태의 견적 문의만. RECEIVED(접수), IN_PROGRESS(처리 중), COMPLETED(완료). 없으면 모두
+	 */
 	@GetMapping
 	public ApiResponse<PageResponse<AdminQuoteResponse>> quotes(
 			@RequestParam(required = false) QuoteStatus status,
@@ -39,7 +43,11 @@ public class AdminQuoteController {
 		return ApiResponse.ok(adminQuoteService.getQuotes(status, pageable));
 	}
 
-	/** 처리 상태 변경 */
+	/**
+	 * 처리 상태 변경
+	 *
+	 * @param quoteId 견적 문의 ID
+	 */
 	@PatchMapping("/{quoteId}")
 	public ApiResponse<AdminQuoteResponse> updateQuote(@PathVariable Long quoteId,
 			@Valid @RequestBody QuoteStatusUpdateRequest request) {

@@ -21,7 +21,11 @@ public class AdminDashboardController {
 
 	private final AdminDashboardService adminDashboardService;
 
-	/** ADM-002 운영 현황 집계 (?period=today|week|month, 생략하면 week) */
+	/**
+	 * ADM-002 운영 현황 집계 (?period=today|week|month, 생략하면 week)
+	 *
+	 * @param period 집계 기간. TODAY(오늘), WEEK(최근 7일), MONTH(최근 30일). 대소문자 무관, 없으면 WEEK
+	 */
 	@GetMapping
 	public ApiResponse<DashboardResponse> dashboard(@RequestParam(required = false) String period) {
 		return ApiResponse.ok(adminDashboardService.getDashboard(period));

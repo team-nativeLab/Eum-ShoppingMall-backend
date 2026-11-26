@@ -33,13 +33,21 @@ public class AdminContentController {
 		return ApiResponse.ok(adminContentService.list());
 	}
 
-	/** 고정 콘텐츠 하나. 저장하지 않았으면 404(CONTENT_NOT_FOUND) */
+	/**
+	 * 고정 콘텐츠 하나. 저장하지 않았으면 404(CONTENT_NOT_FOUND)
+	 *
+	 * @param code 콘텐츠 코드(company, terms, privacy-policy)
+	 */
 	@GetMapping("/{code}")
 	public ApiResponse<ContentResponse> get(@PathVariable String code) {
 		return ApiResponse.ok(adminContentService.get(code));
 	}
 
-	/** 고정 콘텐츠를 만들거나 고친다. 본문은 평문이며 HTML 태그는 400 */
+	/**
+	 * 고정 콘텐츠를 만들거나 고친다. 본문은 평문이며 HTML 태그는 400
+	 *
+	 * @param code 콘텐츠 코드(company, terms, privacy-policy)
+	 */
 	@PutMapping("/{code}")
 	public ApiResponse<ContentResponse> upsert(@PathVariable String code,
 			@Valid @RequestBody SiteContentUpsertRequest request) {

@@ -14,10 +14,18 @@ import jakarta.validation.constraints.Size;
  * 브랜드 등록·수정. 빈 문자열은 값 없음(null)으로 저장한다.
  *
  * @param name          상품의 brand 값과 같은 이름. 바꾸면 이 이름을 쓰던 상품의 브랜드도 함께 바꾼다.
+ * @param englishName   영문 이름(100자 이하)
  * @param logoUrl       업로드 API가 돌려준 주소만 받는다.
+ * @param tagline       한 줄 소개(200자 이하)
  * @param coverImageUrl 업로드 API가 돌려준 주소만 받는다.
+ * @param mainField     주력 분야(100자 이하)
+ * @param originCountry 원산지(50자 이하)
+ * @param certification 인증 문구(200자 이하)
+ * @param storyTitle    브랜드 스토리 제목(100자 이하)
+ * @param storyBody     브랜드 스토리 본문(5,000자 이하)
  * @param visible       고객 화면에 보일지. 없으면 true
  * @param featured      브랜드 목록 위의 대표 브랜드로 쓸지. 여러 개면 정렬 순서가 앞선 하나를 쓴다. 없으면 false
+ * @param sortOrder     정렬 순서(0~9999). 작을수록 앞
  * @param accentColor   대표 색상(#RRGGBB). 웹 브랜드 선택 패널과 버튼에 쓴다. 없으면 #2F6F62
  * @param logoSettings  로고 표시 방식. 없으면 contain·240·96
  * @param coverSettings 커버 표시 방식. 없으면 cover·1200·704
@@ -72,7 +80,9 @@ public record BrandRequest(
 	/**
 	 * 로고 표시 방식(#214). 너비 24~320px, 높이 24~160px
 	 *
-	 * @param fit contain(전체 표시) 또는 cover(영역 채우기)
+	 * @param fit    contain(전체 표시) 또는 cover(영역 채우기)
+	 * @param width  표시 너비(px, 24~320)
+	 * @param height 표시 높이(px, 24~160)
 	 */
 	public record LogoSettings(
 			@NotNull(message = "로고 맞춤 방식을 골라 주세요.")
@@ -97,7 +107,9 @@ public record BrandRequest(
 	/**
 	 * 커버 표시 방식(#214). 너비 24~1600px, 높이 24~960px
 	 *
-	 * @param fit contain(전체 표시) 또는 cover(영역 채우기)
+	 * @param fit    contain(전체 표시) 또는 cover(영역 채우기)
+	 * @param width  표시 너비(px, 24~1600)
+	 * @param height 표시 높이(px, 24~960)
 	 */
 	public record CoverSettings(
 			@NotNull(message = "커버 맞춤 방식을 골라 주세요.")

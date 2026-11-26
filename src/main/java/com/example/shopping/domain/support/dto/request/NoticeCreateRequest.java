@@ -6,7 +6,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
- * @param pinned  상단 고정. 생략하면 false
+ * 공지 등록
+ *
+ * @param title     제목(200자 이하)
+ * @param content   내용(20,000자 이하)
+ * @param pinned    상단 고정. 생략하면 false
  * @param visible   공개 여부. 생략하면 공개(true)
  * @param sortOrder 작을수록 앞(고정 공지 안팎에서 각각). 생략하면 0
  */

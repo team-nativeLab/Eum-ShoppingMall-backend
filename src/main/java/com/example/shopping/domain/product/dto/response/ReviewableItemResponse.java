@@ -8,6 +8,10 @@ import com.example.shopping.domain.product.entity.Product;
 /**
  * 리뷰를 쓸 수 있는 주문 상품. 리뷰를 쓸 때 orderItemId를 보낸다.
  *
+ * @param orderItemId 주문 품목 ID. 리뷰를 쓸 때 보낸다.
+ * @param orderNo     주문번호
+ * @param orderedAt   주문 시각
+ * @param productId   상품 ID
  * @param productName 주문할 때의 상품 이름
  * @param optionLabel 주문할 때 고른 옵션 이름
  * @param imageUrl    지금의 상품 대표 이미지

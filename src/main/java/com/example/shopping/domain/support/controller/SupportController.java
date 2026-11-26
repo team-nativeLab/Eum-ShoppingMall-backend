@@ -44,7 +44,11 @@ public class SupportController {
 		return ApiResponse.ok(supportService.getNotices(pageable));
 	}
 
-	/** WEB-022 공지 상세 */
+	/**
+	 * WEB-022 공지 상세
+	 *
+	 * @param noticeId 공지 ID
+	 */
 	@GetMapping("/notices/{noticeId}")
 	public ApiResponse<NoticeResponse> notice(@PathVariable Long noticeId) {
 		return ApiResponse.ok(supportService.getNotice(noticeId));

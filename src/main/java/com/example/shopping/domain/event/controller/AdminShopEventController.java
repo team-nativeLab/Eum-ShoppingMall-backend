@@ -44,14 +44,22 @@ public class AdminShopEventController {
 		return ApiResponse.ok(adminShopEventService.create(request));
 	}
 
-	/** 전체 수정. 본문 구성도 통째로 바꾼다. */
+	/**
+	 * 전체 수정. 본문 구성도 통째로 바꾼다.
+	 *
+	 * @param eventId 이벤트 ID
+	 */
 	@PutMapping("/{eventId}")
 	public ApiResponse<ShopEventResponse.Admin> update(@PathVariable Long eventId,
 			@Valid @RequestBody ShopEventRequest request) {
 		return ApiResponse.ok(adminShopEventService.update(eventId, request));
 	}
 
-	/** 이벤트 삭제(본문 구성도 함께 지운다) */
+	/**
+	 * 이벤트 삭제(본문 구성도 함께 지운다)
+	 *
+	 * @param eventId 이벤트 ID
+	 */
 	@DeleteMapping("/{eventId}")
 	public ApiResponse<Void> delete(@PathVariable Long eventId) {
 		adminShopEventService.delete(eventId);

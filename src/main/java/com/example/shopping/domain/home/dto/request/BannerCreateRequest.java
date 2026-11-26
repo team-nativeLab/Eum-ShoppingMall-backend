@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
+ * 배너 등록
+ *
  * @param imageUrl  파일 업로드 API가 돌려준 주소
  * @param linkUrl   배너를 눌렀을 때 이동할 주소. 없으면 생략
  * @param sortOrder 생략하면 0

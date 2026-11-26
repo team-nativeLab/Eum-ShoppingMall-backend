@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
+ * 관리자 로그인 2단계(OTP 확인)
+ *
  * @param mfaToken 관리자 로그인 1단계가 준 토큰
  * @param code     OTP 앱의 6자리 숫자
  */

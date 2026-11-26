@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 /**
  * 회원가입 이메일 인증번호 요청, 비밀번호 재설정 인증번호 요청에 함께 쓴다.
  *
+ * @param email        인증번호를 받을 이메일
  * @param captchaToken 로봇 확인 위젯(action=send-code)이 준 토큰. 하루에 3통을 넘게 요청해 CAPTCHA_REQUIRED를 받은 뒤부터 보낸다.
  */
 public record EmailVerificationSendRequest(

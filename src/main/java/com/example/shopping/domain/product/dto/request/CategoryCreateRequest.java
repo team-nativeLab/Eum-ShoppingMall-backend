@@ -7,7 +7,10 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
+ * 카테고리 등록
+ *
  * @param parentId    최상위 카테고리면 생략
+ * @param name        카테고리 이름(100자 이하)
  * @param slug        주소에 쓰는 영문 이름 (예: head-protection). 다른 카테고리와 겹칠 수 없다.
  * @param description 전체 메뉴 등에 보여 줄 짧은 소개. 없으면 생략
  * @param iconKey     프론트가 아이콘을 고를 때 쓰는 이름 (예: hard-hat). 없으면 생략

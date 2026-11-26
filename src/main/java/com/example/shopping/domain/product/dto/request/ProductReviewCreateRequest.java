@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Size;
  *
  * @param orderItemId 리뷰를 쓸 주문 품목. GET /api/v1/me/reviewable-items에서 고른다.
  * @param rating      별점 1~5
+ * @param content     리뷰 내용(2,000자 이하)
  */
 public record ProductReviewCreateRequest(
 		@NotNull(message = "리뷰를 쓸 주문 상품을 골라 주세요.")

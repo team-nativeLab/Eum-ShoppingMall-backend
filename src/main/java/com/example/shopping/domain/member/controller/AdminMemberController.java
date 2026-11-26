@@ -38,7 +38,11 @@ public class AdminMemberController {
 	private final AdminMemberService adminMemberService;
 	private final AdminMfaService adminMfaService;
 
-	/** ADM-012 회원 목록 (?keyword=로 이메일·이름 검색) */
+	/**
+	 * ADM-012 회원 목록 (?keyword=로 이메일·이름 검색)
+	 *
+	 * @param keyword 이메일이나 이름에 들어간 글자
+	 */
 	@GetMapping
 	public ApiResponse<PageResponse<AdminMemberSummaryResponse>> users(
 			@RequestParam(required = false) String keyword,
@@ -46,27 +50,43 @@ public class AdminMemberController {
 		return ApiResponse.ok(adminMemberService.search(keyword, pageable));
 	}
 
-	/** ADM-013 회원 상세 + 최근 주문 이력 */
+	/**
+	 * ADM-013 회원 상세 + 최근 주문 이력
+	 *
+	 * @param userId 회원 ID
+	 */
 	@GetMapping("/{userId}")
 	public ApiResponse<AdminMemberDetailResponse> user(@PathVariable Long userId) {
 		return ApiResponse.ok(adminMemberService.getDetail(userId));
 	}
 
-	/** 최고 관리자가 회원의 일반·관리자 역할을 바꾼다. */
+	/**
+	 * 최고 관리자가 회원의 일반·관리자 역할을 바꾼다.
+	 *
+	 * @param userId 회원 ID
+	 */
 	@PatchMapping("/{userId}/role")
 	public ApiResponse<AdminMemberDetailResponse> changeRole(@AuthenticationPrincipal Jwt jwt,
 			@PathVariable Long userId, @Valid @RequestBody AdminMemberRoleUpdateRequest request) {
 		return ApiResponse.ok(adminMemberService.changeRole(CurrentMember.id(jwt), userId, request.role()));
 	}
 
-	/** 최고 관리자가 관리자의 OTP를 지운다(기기 분실·교체, #164). 그 관리자는 다시 로그인해 새로 등록한다. */
+	/**
+	 * 최고 관리자가 관리자의 OTP를 지운다(기기 분실·교체, #164). 그 관리자는 다시 로그인해 새로 등록한다.
+	 *
+	 * @param userId OTP를 초기화할 관리자의 회원 ID
+	 */
 	@DeleteMapping("/{userId}/mfa")
 	public ApiResponse<Void> resetMfa(@AuthenticationPrincipal Jwt jwt, @PathVariable Long userId) {
 		adminMfaService.reset(CurrentMember.id(jwt), userId);
 		return ApiResponse.ok(null);
 	}
 
-	/** 회원 정지(SUSPENDED)·해제(ACTIVE). 정지할 때는 사유가 필요하다. */
+	/**
+	 * 회원 정지(SUSPENDED)·해제(ACTIVE). 정지할 때는 사유가 필요하다.
+	 *
+	 * @param userId 회원 ID
+	 */
 	@PatchMapping("/{userId}/status")
 	public ApiResponse<AdminMemberDetailResponse> changeStatus(@AuthenticationPrincipal Jwt jwt,
 			@PathVariable Long userId, @Valid @RequestBody AdminMemberStatusUpdateRequest request) {

@@ -30,7 +30,13 @@ public class AdminProductReviewController {
 
 	private final AdminProductReviewService adminProductReviewService;
 
-	/** 리뷰 목록(?productId=&visible=&rating=). 정렬은 id·createdAt·rating */
+	/**
+	 * 리뷰 목록(?productId=&visible=&rating=). 정렬은 id·createdAt·rating
+	 *
+	 * @param productId 이 상품의 리뷰만
+	 * @param visible   true면 보이는 리뷰만, false면 숨긴 리뷰만. 없으면 모두
+	 * @param rating    이 별점(1~5)의 리뷰만
+	 */
 	@GetMapping
 	public ApiResponse<PageResponse<AdminProductReviewResponse>> reviews(
 			@RequestParam(required = false) Long productId,
@@ -40,7 +46,11 @@ public class AdminProductReviewController {
 		return ApiResponse.ok(adminProductReviewService.search(productId, visible, rating, pageable));
 	}
 
-	/** 숨기기·다시 보이기(visible), 답변(adminReply), 메모(adminMemo). 보낸 항목만 바꾼다. */
+	/**
+	 * 숨기기·다시 보이기(visible), 답변(adminReply), 메모(adminMemo). 보낸 항목만 바꾼다.
+	 *
+	 * @param reviewId 리뷰 ID
+	 */
 	@PatchMapping("/{reviewId}")
 	public ApiResponse<AdminProductReviewResponse> update(@PathVariable Long reviewId,
 			@Valid @RequestBody AdminProductReviewUpdateRequest request) {

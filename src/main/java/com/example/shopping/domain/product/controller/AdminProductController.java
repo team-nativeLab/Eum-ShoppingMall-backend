@@ -40,7 +40,13 @@ public class AdminProductController {
 
 	private final AdminProductService adminProductService;
 
-	/** ADM-003, 004 전체 상품 목록·검색 (?status=&categoryId=&keyword=, 비공개 포함) */
+	/**
+	 * ADM-003, 004 전체 상품 목록·검색 (?status=&categoryId=&keyword=, 비공개 포함)
+	 *
+	 * @param status     이 판매 상태의 상품만(ON_SALE, SOLD_OUT, HIDDEN). 없으면 삭제한 상품을 뺀 모두
+	 * @param categoryId 이 카테고리의 상품만
+	 * @param keyword    상품명에 들어간 글자
+	 */
 	@GetMapping
 	public ApiResponse<PageResponse<AdminProductSummaryResponse>> products(
 			@RequestParam(required = false) ProductStatus status,
@@ -50,7 +56,11 @@ public class AdminProductController {
 		return ApiResponse.ok(adminProductService.search(status, categoryId, keyword, pageable));
 	}
 
-	/** 수정 화면용 상품 상세. 고객용 상세와 달리 비공개 상품과 숨긴 가격·재고 수량까지 내려준다. */
+	/**
+	 * 수정 화면용 상품 상세. 고객용 상세와 달리 비공개 상품과 숨긴 가격·재고 수량까지 내려준다.
+	 *
+	 * @param productId 상품 ID
+	 */
 	@GetMapping("/{productId}")
 	public ApiResponse<AdminProductDetailResponse> product(@PathVariable Long productId) {
 		return ApiResponse.ok(adminProductService.getDetail(productId));
@@ -63,14 +73,22 @@ public class AdminProductController {
 		return ApiResponse.ok(adminProductService.create(request));
 	}
 
-	/** ADM-004, 005 상품 정보·판매 상태·금액 표시 여부 변경. 옵션과 재고는 옵션 전용 API에서 관리한다. */
+	/**
+	 * ADM-004, 005 상품 정보·판매 상태·금액 표시 여부 변경. 옵션과 재고는 옵션 전용 API에서 관리한다.
+	 *
+	 * @param productId 상품 ID
+	 */
 	@PatchMapping("/{productId}")
 	public ApiResponse<AdminProductDetailResponse> updateProduct(@PathVariable Long productId,
 			@Valid @RequestBody ProductUpdateRequest request) {
 		return ApiResponse.ok(adminProductService.update(productId, request));
 	}
 
-	/** 상품 옵션 추가 */
+	/**
+	 * 상품 옵션 추가
+	 *
+	 * @param productId 상품 ID
+	 */
 	@PostMapping("/{productId}/skus")
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<AdminProductDetailResponse> addSku(@PathVariable Long productId,
@@ -78,21 +96,35 @@ public class AdminProductController {
 		return ApiResponse.ok(adminProductService.addSku(productId, request));
 	}
 
-	/** 상품 옵션명·가격 수정. 재고는 이 API로 바꾸지 않는다. */
+	/**
+	 * 상품 옵션명·가격 수정. 재고는 이 API로 바꾸지 않는다.
+	 *
+	 * @param productId 상품 ID
+	 * @param skuId     옵션(SKU) ID
+	 */
 	@PatchMapping("/{productId}/skus/{skuId}")
 	public ApiResponse<AdminProductDetailResponse> updateSku(@PathVariable Long productId, @PathVariable Long skuId,
 			@Valid @RequestBody SkuUpdateRequest request) {
 		return ApiResponse.ok(adminProductService.updateSku(productId, skuId, request));
 	}
 
-	/** 주문 이력을 보존하기 위해 SKU 행을 지우지 않고 판매 중지한다. */
+	/**
+	 * 주문 이력을 보존하기 위해 SKU 행을 지우지 않고 판매 중지한다.
+	 *
+	 * @param productId 상품 ID
+	 * @param skuId     옵션(SKU) ID
+	 */
 	@DeleteMapping("/{productId}/skus/{skuId}")
 	public ApiResponse<AdminProductDetailResponse> deactivateSku(@PathVariable Long productId,
 			@PathVariable Long skuId) {
 		return ApiResponse.ok(adminProductService.deactivateSku(productId, skuId));
 	}
 
-	/** ADM-003, 004 상품 삭제. 행을 지우지 않고 상태만 DELETED로 바꾼다. */
+	/**
+	 * ADM-003, 004 상품 삭제. 행을 지우지 않고 상태만 DELETED로 바꾼다.
+	 *
+	 * @param productId 상품 ID
+	 */
 	@DeleteMapping("/{productId}")
 	public ApiResponse<Void> deleteProduct(@PathVariable Long productId) {
 		adminProductService.delete(productId);
@@ -102,6 +134,9 @@ public class AdminProductController {
 	/**
 	 * 옵션(SKU) 재고 조정. 입고는 양수, 파손·분실·실사 차이는 음수로 현재 재고에 더한다.
 	 * 0 아래로 내려가면 409(OUT_OF_STOCK), 상한(10억 개)을 넘으면 400(STOCK_LIMIT_EXCEEDED)
+	 *
+	 * @param productId 상품 ID
+	 * @param skuId     옵션(SKU) ID
 	 */
 	@PostMapping("/{productId}/skus/{skuId}/stock-adjustments")
 	public ApiResponse<AdminProductDetailResponse> adjustStock(@PathVariable Long productId,

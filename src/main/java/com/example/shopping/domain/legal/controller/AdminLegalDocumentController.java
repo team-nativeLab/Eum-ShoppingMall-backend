@@ -33,13 +33,21 @@ public class AdminLegalDocumentController {
 		return ApiResponse.ok(adminLegalDocumentService.latest());
 	}
 
-	/** 한 종류의 모든 버전(공개하지 않은 버전 포함) */
+	/**
+	 * 한 종류의 모든 버전(공개하지 않은 버전 포함)
+	 *
+	 * @param type 문서 종류(terms, privacy, guide, shipping)
+	 */
 	@GetMapping("/{type}/versions")
 	public ApiResponse<List<LegalDocumentResponse.Admin>> versions(@PathVariable String type) {
 		return ApiResponse.ok(adminLegalDocumentService.versions(type));
 	}
 
-	/** 같은 버전이 있으면 고치고, 없으면 새 버전으로 만든다. 시행 중이거나 지난 공개 버전은 409(LEGAL_DOCUMENT_LOCKED) */
+	/**
+	 * 같은 버전이 있으면 고치고, 없으면 새 버전으로 만든다. 시행 중이거나 지난 공개 버전은 409(LEGAL_DOCUMENT_LOCKED)
+	 *
+	 * @param type 문서 종류(terms, privacy, guide, shipping)
+	 */
 	@PutMapping("/{type}")
 	public ApiResponse<LegalDocumentResponse.Admin> save(@PathVariable String type,
 			@Valid @RequestBody LegalDocumentRequest request) {
