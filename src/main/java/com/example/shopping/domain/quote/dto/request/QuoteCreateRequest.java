@@ -8,7 +8,15 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
- * @param productId 특정 상품(금액 미표시 상품 등)에 대한 견적이면 그 상품의 ID. 아니면 생략
+ * 견적 문의 접수. 비회원도 보낼 수 있다.
+ *
+ * @param productId     특정 상품(금액 미표시 상품 등)에 대한 견적이면 그 상품의 ID. 아니면 생략
+ * @param companyName   회사명(100자 이하)
+ * @param managerName   담당자 이름(50자 이하)
+ * @param phone         연락처(예: 010-1234-5678, 하이픈은 생략 가능)
+ * @param email         이메일(선택)
+ * @param content       문의 내용(5,000자 이하)
+ * @param privacyAgreed 개인정보 수집·이용 동의. 비회원은 true여야 한다.
  */
 public record QuoteCreateRequest(
 		Long productId,

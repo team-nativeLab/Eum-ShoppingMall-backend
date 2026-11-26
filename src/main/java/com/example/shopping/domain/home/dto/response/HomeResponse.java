@@ -20,6 +20,13 @@ public record HomeResponse(List<BannerItem> banners, List<ProductSummaryResponse
 		List<HomeLayout.HeroSlide> heroSlides, List<HomeLayout.PromoBanner> promoBanners,
 		List<HomeLayout.ServiceBenefit> serviceBenefits, List<ProductSummaryResponse> featuredProducts) {
 
+	/**
+	 * 홈 배너 한 장
+	 *
+	 * @param id       배너 ID
+	 * @param imageUrl 배너 이미지 주소
+	 * @param linkUrl  배너를 눌렀을 때 이동할 주소. 없으면 null
+	 */
 	public record BannerItem(Long id, String imageUrl, String linkUrl) {
 
 		public static BannerItem from(Banner banner) {

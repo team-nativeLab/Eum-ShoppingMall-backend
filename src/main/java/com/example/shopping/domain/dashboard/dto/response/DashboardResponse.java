@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import com.example.shopping.domain.dashboard.dto.DashboardPeriod;
 
 /**
+ * 관리자 대시보드 요약
+ *
+ * @param period              집계 기간. TODAY(오늘), WEEK(최근 7일), MONTH(최근 30일)
  * @param from                집계 시작 시각 (이때부터 지금까지)
  * @param paidOrderCount      기간 내에 결제된 주문 수 (전체 취소 주문 제외)
  * @param salesAmount         위 주문들의 결제 금액 합계(원)

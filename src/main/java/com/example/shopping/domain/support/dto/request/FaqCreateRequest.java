@@ -4,6 +4,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
+ * FAQ 등록
+ *
+ * @param category  분류(50자 이하, 예: 배송)
+ * @param question  질문(300자 이하)
+ * @param answer    답변(5,000자 이하)
  * @param sortOrder 생략하면 0
  * @param visible   고객 FAQ 목록에 보일지. 생략하면 노출(true)
  */

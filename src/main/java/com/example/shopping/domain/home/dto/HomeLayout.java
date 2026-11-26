@@ -76,6 +76,9 @@ public record HomeLayout(
 	}
 
 	/**
+	 * 홈 맨 위 큰 배너의 한 장
+	 *
+	 * @param id           슬라이드 구분 ID(영문·숫자·-·_ 50자 이내). 화면이 항목을 구분할 때 쓴다.
 	 * @param eyebrow      제목 위 작은 문구(상단 문구)
 	 * @param title        제목 줄(1~3줄)
 	 * @param description  부제. 줄바꿈(\n)으로 줄을 나눈다.
@@ -128,6 +131,9 @@ public record HomeLayout(
 	}
 
 	/**
+	 * 홈 기획 배너 한 칸
+	 *
+	 * @param id          배너 구분 ID(영문·숫자·-·_ 50자 이내). 화면이 항목을 구분할 때 쓴다.
 	 * @param title       제목 줄(1~3줄)
 	 * @param description 설명. 줄바꿈(\n)으로 줄을 나눈다.
 	 * @param imageUrl    업로드 API가 돌려준 주소나 웹의 정적 이미지(/assets/...)
@@ -167,7 +173,10 @@ public record HomeLayout(
 	/**
 	 * 배송·서비스 안내 한 칸(예: 5만 원 이상 무료배송)
 	 *
-	 * @param visible 고객 홈에 보일지(#212). 보내지 않으면 true. 숨긴 안내는 관리자 편성에만 남는다.
+	 * @param id          안내 구분 ID(영문·숫자·-·_ 50자 이내). 화면이 항목을 구분할 때 쓴다.
+	 * @param title       안내 제목(50자 이하)
+	 * @param description 안내 설명(200자 이하)
+	 * @param visible     고객 홈에 보일지(#212). 보내지 않으면 true. 숨긴 안내는 관리자 편성에만 남는다.
 	 */
 	public record ServiceBenefit(
 			@NotBlank(message = "안내 ID를 입력해 주세요.")
@@ -189,7 +198,12 @@ public record HomeLayout(
 		}
 	}
 
-	/** 문구와 이동 경로(사이트 안 경로나 https 주소) */
+	/**
+	 * 문구와 이동 경로(사이트 안 경로나 https 주소)
+	 *
+	 * @param label       링크 문구(30자 이하)
+	 * @param destination 이동할 사이트 안 경로(/로 시작)나 https 주소
+	 */
 	public record Link(
 			@NotBlank(message = "링크 문구를 입력해 주세요.")
 			@Size(max = 30, message = "링크 문구는 30자 이하여야 합니다.")

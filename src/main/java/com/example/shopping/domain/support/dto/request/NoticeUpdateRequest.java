@@ -7,7 +7,15 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/** 보낸 항목만 수정한다. */
+/**
+ * 보낸 항목만 수정한다.
+ *
+ * @param title     제목(200자 이하)
+ * @param content   내용(20,000자 이하)
+ * @param pinned    상단 고정
+ * @param visible   공개 여부
+ * @param sortOrder 정렬 순서(0~9999). 작을수록 앞이고, 고정 공지 안팎에서 각각 정렬한다.
+ */
 public record NoticeUpdateRequest(
 		@Pattern(regexp = ValidationPatterns.HAS_TEXT, message = "제목을 입력해 주세요.")
 		@Size(max = 200, message = "제목은 200자 이하여야 합니다.")
