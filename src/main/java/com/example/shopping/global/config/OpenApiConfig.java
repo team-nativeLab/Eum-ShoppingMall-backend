@@ -62,7 +62,8 @@ public class OpenApiConfig {
 	static final String OPTIONAL_TOKEN_NOTE = "로그인 없이 부를 수 있다. 토큰을 붙이면 로그인한 회원으로 처리한다.";
 
 	/** 웹 전용: Refresh 토큰을 쿠키로 주고받는 웹 로그인·재발급·로그아웃. 앱은 앱 인증 API(/api/v1/app/auth)를 쓴다. */
-	static final List<String> WEB_ONLY = List.of("/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout");
+	static final List<String> WEB_ONLY = List.of("/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout",
+			"/api/v1/auth/social/**");
 
 	/** 앱 전용: 앱 인증, 앱 구동 설정 */
 	static final List<String> APP_ONLY = List.of("/api/v1/app/**");

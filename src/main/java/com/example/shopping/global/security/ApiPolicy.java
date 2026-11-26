@@ -33,12 +33,19 @@ public final class ApiPolicy {
 	public static final String APP_LOGIN = "/api/v1/app/auth/login";
 	public static final String APP_REFRESH = "/api/v1/app/auth/refresh";
 	public static final String APP_LOGOUT = "/api/v1/app/auth/logout";
+	public static final String APP_SOCIAL_LOGIN = "/api/v1/app/auth/social/*/login";
+	public static final String APP_SOCIAL_SIGNUP = "/api/v1/app/auth/social/signup";
+
+	/** 웹 카카오·구글 로그인과 그 가입(#225). 로그인하면 Refresh 토큰을 쿠키로 준다. */
+	public static final String SOCIAL_LOGIN = "/api/v1/auth/social/*/login";
+	public static final String SOCIAL_SIGNUP = "/api/v1/auth/social/signup";
 
 	/**
 	 * 앱 인증(#203). 웹(쿠키)과 달리 Refresh 토큰을 응답·요청 본문으로 주고받는다.
 	 * 브라우저 요청(Origin 헤더가 있는 요청)은 RefreshCookieOriginFilter가 모두 거절한다.
 	 */
-	public static final List<String> APP_AUTH = List.of(APP_LOGIN, APP_REFRESH, APP_LOGOUT);
+	public static final List<String> APP_AUTH = List.of(APP_LOGIN, APP_REFRESH, APP_LOGOUT, APP_SOCIAL_LOGIN,
+			APP_SOCIAL_SIGNUP);
 
 	/**
 	 * 로그인 없이 부르는 인증 API. 이 경로에서는 Access 토큰을 읽지 않아, 프론트가 만료된 토큰을 붙인 채
@@ -55,9 +62,13 @@ public final class ApiPolicy {
 			"/api/v1/auth/email-verifications/confirm",
 			"/api/v1/auth/password-reset",
 			"/api/v1/auth/password-reset/confirm",
+			SOCIAL_LOGIN,
+			SOCIAL_SIGNUP,
 			APP_LOGIN,
 			APP_REFRESH,
 			APP_LOGOUT,
+			APP_SOCIAL_LOGIN,
+			APP_SOCIAL_SIGNUP,
 			ADMIN_LOGIN,
 			ADMIN_MFA_SETUP,
 			ADMIN_MFA_VERIFY,
@@ -163,6 +174,11 @@ public final class ApiPolicy {
 			new RateLimit(HttpMethod.POST, "/api/v1/auth/login", "POST /api/v1/login", Limit.DEFAULT),
 			new RateLimit(HttpMethod.POST, APP_LOGIN, "POST /api/v1/login", Limit.DEFAULT),
 			new RateLimit(HttpMethod.POST, ADMIN_LOGIN, "POST /api/v1/login", Limit.DEFAULT),
+			// 카카오·구글 로그인(#225)도 같은 묶음으로 센다. 가입은 이메일 가입과 같은 묶음이다.
+			new RateLimit(HttpMethod.POST, SOCIAL_LOGIN, "POST /api/v1/login", Limit.DEFAULT),
+			new RateLimit(HttpMethod.POST, APP_SOCIAL_LOGIN, "POST /api/v1/login", Limit.DEFAULT),
+			new RateLimit(HttpMethod.POST, SOCIAL_SIGNUP, "POST /api/v1/auth/signup", Limit.DEFAULT),
+			new RateLimit(HttpMethod.POST, APP_SOCIAL_SIGNUP, "POST /api/v1/auth/signup", Limit.DEFAULT),
 			// OTP 코드 대입도 로그인과 같은 묶음으로 센다.
 			new RateLimit(HttpMethod.POST, ADMIN_MFA_VERIFY, "POST /api/v1/login", Limit.DEFAULT),
 			post(ADMIN_MFA_SETUP),

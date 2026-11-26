@@ -247,6 +247,11 @@ public class AuthService {
 		}
 	}
 
+	/** 다른 방법으로 본인을 확인한 회원(카카오·구글 로그인, #225)에게 회원 토큰을 준다. 상태·권한은 부르는 쪽이 확인한다. */
+	AuthTokens issueMemberTokens(Member member) {
+		return issueTokens(member);
+	}
+
 	private AuthTokens issueTokens(Member member) {
 		String refreshToken = refreshTokenService.issue(member.getId(), member.getAccessTokenVersion());
 		return new AuthTokens(accessToken(member), jwtTokenProvider.accessTokenExpiry(), refreshToken,
