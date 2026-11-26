@@ -8,6 +8,10 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
+ * 회원가입 이메일 인증번호 확인
+ *
+ * @param email        인증번호를 받은 이메일
+ * @param code         메일로 받은 인증번호(영문 대소문자·숫자 6자리)
  * @param captchaToken 로봇 확인 위젯이 준 토큰. 인증번호를 여러 번 틀려 CAPTCHA_REQUIRED를 받은 뒤부터 보낸다.
  */
 public record EmailVerificationConfirmRequest(

@@ -8,8 +8,9 @@ import jakarta.validation.constraints.Size;
 /**
  * 결제창이 성공 주소(successUrl)로 넘겨준 값을 그대로 보낸다.
  *
- * @param orderId 주문 생성 응답의 orderNo
- * @param amount  검증용. 서버에 저장된 주문 금액과 다르면 거절한다.
+ * @param paymentKey 결제창이 넘겨준 paymentKey
+ * @param orderId    주문 생성 응답의 orderNo
+ * @param amount     검증용. 서버에 저장된 주문 금액과 다르면 거절한다.
  */
 public record PaymentConfirmRequest(
 		@NotBlank(message = "결제 키가 없습니다.")

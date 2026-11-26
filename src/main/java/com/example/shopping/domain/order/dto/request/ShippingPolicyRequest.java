@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
 /**
+ * 배송비 정책 저장
+ *
  * @param shippingFee           배송비(원). 0이면 항상 무료배송
  * @param freeShippingThreshold 상품 금액이 이 값 이상이면 무료배송(원). 비우면 금액과 관계없이 배송비를 받는다.
  */

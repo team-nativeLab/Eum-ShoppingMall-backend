@@ -12,9 +12,12 @@ import jakarta.validation.constraints.Size;
  * 카카오·구글로 처음 온 사람의 가입(#225). 이메일은 카카오·구글이 알려 준 값으로 가입하고, 비밀번호는 없다.
  * 이용약관·개인정보 수집·이용 동의는 필수, 마케팅 수신 동의는 선택이다(이메일 가입과 같다).
  *
- * @param signupToken 소셜 로그인 응답의 signupToken(10분 동안 한 번만 쓴다)
- * @param name        이름. 소셜 로그인 응답의 name을 기본값으로 보여 준다.
- * @param phone       연락처(선택)
+ * @param signupToken     소셜 로그인 응답의 signupToken(10분 동안 한 번만 쓴다)
+ * @param name            이름. 소셜 로그인 응답의 name을 기본값으로 보여 준다.
+ * @param phone           연락처(선택)
+ * @param termsAgreed     이용약관 동의. 필수라 true만 받는다.
+ * @param privacyAgreed   개인정보 수집·이용 동의. 필수라 true만 받는다.
+ * @param marketingAgreed 마케팅 수신 동의(선택)
  */
 public record SocialSignupRequest(
 		@NotBlank(message = "가입 토큰을 보내 주세요.")
