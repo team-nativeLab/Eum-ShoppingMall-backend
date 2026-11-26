@@ -214,6 +214,25 @@ app:
   auth:
     # true면 회원가입에 이메일 인증 토큰이 필요하다. 프론트가 인증 화면을 붙이고 메일 서버(MAIL_HOST)를 설정한 뒤 켠다.
     signup-email-verification-required: ${SIGNUP_EMAIL_VERIFICATION_REQUIRED:false}
+  social:
+    # 카카오·구글 로그인(#225). 키가 없는 제공자는 503(SOCIAL_LOGIN_NOT_CONFIGURED)으로 알리고, 나머지 기능은 그대로 동작한다.
+    # 비밀 값(Client Secret, Admin 키)은 서버 환경변수·시크릿으로만 넣고 커밋하는 파일에는 넣지 않는다.
+    # 웹 로그인 요청의 redirectUri로 받을 주소(쉼표로 구분). 프론트가 카카오·구글 콘솔에 등록한 콜백 주소와 같아야 한다.
+    redirect-uris: ${SOCIAL_REDIRECT_URIS:}
+    google:
+      # 웹 OAuth 클라이언트(구글 클라우드 콘솔)
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+      # 앱(Android·iOS) OAuth 클라이언트 ID(쉼표로 구분). 앱이 보낸 ID 토큰의 대상(aud)으로 받는다.
+      app-client-ids: ${GOOGLE_APP_CLIENT_IDS:}
+    kakao:
+      # REST API 키(웹 로그인의 client_id). 콘솔에서 Client Secret을 켰으면 그 값도 넣는다.
+      rest-api-key: ${KAKAO_REST_API_KEY:}
+      client-secret: ${KAKAO_CLIENT_SECRET:}
+      # 앱 ID(숫자). 앱이 보낸 액세스 토큰이 이 앱에서 받은 것인지 확인한다. 없으면 앱 카카오 로그인을 쓸 수 없다.
+      app-id: ${KAKAO_APP_ID:}
+      # Admin 키. 탈퇴·연결 해제 때 카카오 연결 끊기를 부른다(카카오 정책). 없으면 부르지 않는다.
+      admin-key: ${KAKAO_ADMIN_KEY:}
   captcha:
     # 인증번호를 여러 번 틀린 요청에 로봇 확인(Cloudflare Turnstile)을 요구한다.
     # 프론트가 Turnstile 위젯(사이트 키)을 붙이고 서버에 비밀 키를 넣은 뒤 켠다. 꺼 두면 틀린 횟수 차단(security.verification-lock)만 동작한다.
