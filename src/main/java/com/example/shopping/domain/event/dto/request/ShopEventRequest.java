@@ -12,13 +12,17 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * 이벤트 등록·수정(전체 수정). 비워 둘 수 있는 글은 빈 문자열로 저장한다.
  *
+ * @param title           이벤트명(100자 이하)
  * @param subtitle        목록 카드의 부제
  * @param eyebrow         상세 제목 위 작은 문구
  * @param heroTitle       상세 화면 큰 제목 줄(1~3줄)
  * @param heroDescription 상세 제목 아래 설명
+ * @param body            상세 본문(5,000자 이하). 없으면 빈 문자열
  * @param sections        상세 본문 구성(소제목·본문, 10개까지). 없으면 빈 배열
  * @param searchKeyword   관련 상품을 찾을 검색어
  * @param startAt         시작 시각. 시간대를 포함한 ISO 8601(예: 2026-10-01T00:00:00+09:00)
@@ -67,7 +71,13 @@ public record ShopEventRequest(
 		@Max(value = 9999, message = "정렬 순서는 9999 이하여야 합니다.")
 		Integer sortOrder) {
 
-	/** 상세 본문의 한 구성 */
+	/**
+	 * 상세 본문의 한 구성
+	 *
+	 * @param heading 소제목(100자 이하)
+	 * @param body    본문(2,000자 이하)
+	 */
+	@Schema(name = "ShopEventSectionRequest")
 	public record Section(
 			@NotBlank(message = "소제목을 입력해 주세요.")
 			@Size(max = 100, message = "소제목은 100자 이하여야 합니다.")
