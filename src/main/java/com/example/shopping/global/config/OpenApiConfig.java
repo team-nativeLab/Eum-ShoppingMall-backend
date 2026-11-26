@@ -246,7 +246,7 @@ public class OpenApiConfig {
 	private static Schema<?> errorResponseSchema() {
 		return new ObjectSchema()
 				.description("실패 응답. 화면은 code로 분기한다.")
-				.addProperty("success", new BooleanSchema().example(false))
+				.addProperty("success", new BooleanSchema().description("실패라 항상 false").example(false))
 				.addProperty("code", new StringSchema().description("오류 코드(문서 첫 화면의 오류 코드 표 참고)")
 						.example("INVALID_INPUT"))
 				.addProperty("message", new StringSchema().description("사용자에게 보여 줄 안내 문구"))
@@ -255,7 +255,7 @@ public class OpenApiConfig {
 						.items(new ObjectSchema()
 								.addProperty("field", new StringSchema().description("요청 항목 이름"))
 								.addProperty("reason", new StringSchema().description("사유"))))
-				.addProperty("timestamp", new StringSchema().format("date-time"));
+				.addProperty("timestamp", new StringSchema().format("date-time").description("응답 시각"));
 	}
 
 	private static void appendDescription(Operation operation, String note) {
