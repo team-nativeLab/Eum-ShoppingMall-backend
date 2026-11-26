@@ -33,14 +33,22 @@ public class ProductQuestionController {
 
 	private final ProductQuestionService productQuestionService;
 
-	/** 문의 목록(누구나). 작성자 이름은 가리고, 비밀 문의는 작성자 본인만 내용과 답변을 본다. size는 50까지 */
+	/**
+	 * 문의 목록(누구나). 작성자 이름은 가리고, 비밀 문의는 작성자 본인만 내용과 답변을 본다. size는 50까지
+	 *
+	 * @param productId 상품 ID
+	 */
 	@GetMapping
 	public ApiResponse<PageResponse<ProductQuestionResponse>> questions(@PathVariable Long productId,
 			@AuthenticationPrincipal Jwt jwt, @PageableDefault(size = 10) Pageable pageable) {
 		return ApiResponse.ok(productQuestionService.list(productId, CurrentMember.idOrNull(jwt), pageable));
 	}
 
-	/** 문의 작성(회원). 고객에게 보이는 상품에만 남길 수 있다. */
+	/**
+	 * 문의 작성(회원). 고객에게 보이는 상품에만 남길 수 있다.
+	 *
+	 * @param productId 상품 ID
+	 */
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<ProductQuestionResponse> create(@PathVariable Long productId, @AuthenticationPrincipal Jwt jwt,

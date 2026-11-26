@@ -44,14 +44,22 @@ public class CartController {
 		return ApiResponse.ok(cartService.addItem(CurrentMember.id(jwt), request));
 	}
 
-	/** WEB-012 수량·선택 여부 변경 */
+	/**
+	 * WEB-012 수량·선택 여부 변경
+	 *
+	 * @param skuId 장바구니에 담은 옵션(SKU) ID
+	 */
 	@PatchMapping("/items/{skuId}")
 	public ApiResponse<CartResponse> updateItem(@AuthenticationPrincipal Jwt jwt, @PathVariable Long skuId,
 			@Valid @RequestBody CartItemUpdateRequest request) {
 		return ApiResponse.ok(cartService.updateItem(CurrentMember.id(jwt), skuId, request));
 	}
 
-	/** 장바구니에서 옵션을 뺀다. 바뀐 장바구니 전체를 돌려준다. */
+	/**
+	 * 장바구니에서 옵션을 뺀다. 바뀐 장바구니 전체를 돌려준다.
+	 *
+	 * @param skuId 장바구니에 담은 옵션(SKU) ID
+	 */
 	@DeleteMapping("/items/{skuId}")
 	public ApiResponse<CartResponse> removeItem(@AuthenticationPrincipal Jwt jwt, @PathVariable Long skuId) {
 		return ApiResponse.ok(cartService.removeItem(CurrentMember.id(jwt), skuId));

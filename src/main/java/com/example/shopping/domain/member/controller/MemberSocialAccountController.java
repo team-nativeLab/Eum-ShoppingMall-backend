@@ -37,6 +37,8 @@ public class MemberSocialAccountController {
 	/**
 	 * 카카오(kakao)·구글(google) 연결 끊기. 비밀번호가 없는 계정의 마지막 연결이면 로그인할 방법이 없어지므로 409
 	 * (SOCIAL_UNLINK_NOT_ALLOWED). 연결하지 않은 제공자면 404(SOCIAL_ACCOUNT_NOT_LINKED)
+	 *
+	 * @param provider 연결을 끊을 계정. kakao 또는 google(대소문자 무관)
 	 */
 	@DeleteMapping("/{provider}")
 	public ApiResponse<Void> unlink(@AuthenticationPrincipal Jwt jwt, @PathVariable String provider) {

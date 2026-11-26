@@ -38,7 +38,11 @@ public class ProductReviewController {
 
 	private final ProductReviewService productReviewService;
 
-	/** 리뷰 목록. sort = latest(기본) | rating_high | rating_low, size는 50까지 */
+	/**
+	 * 리뷰 목록. sort = latest(기본) | rating_high | rating_low, size는 50까지
+	 *
+	 * @param productId 상품 ID
+	 */
 	@GetMapping("/products/{productId}/reviews")
 	public ApiResponse<PageResponse<ProductReviewResponse>> reviews(@PathVariable Long productId,
 			@RequestParam(required = false) String sort, @AuthenticationPrincipal Jwt jwt,
@@ -46,13 +50,21 @@ public class ProductReviewController {
 		return ApiResponse.ok(productReviewService.list(productId, sort, CurrentMember.idOrNull(jwt), pageable));
 	}
 
-	/** 평균 별점과 별점별 리뷰 수 */
+	/**
+	 * 평균 별점과 별점별 리뷰 수
+	 *
+	 * @param productId 상품 ID
+	 */
 	@GetMapping("/products/{productId}/reviews/summary")
 	public ApiResponse<ProductReviewSummaryResponse> summary(@PathVariable Long productId) {
 		return ApiResponse.ok(productReviewService.summary(productId));
 	}
 
-	/** 리뷰 작성. 주문 품목(orderItemId)마다 하나 */
+	/**
+	 * 리뷰 작성. 주문 품목(orderItemId)마다 하나
+	 *
+	 * @param productId 상품 ID
+	 */
 	@PostMapping("/products/{productId}/reviews")
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApiResponse<ProductReviewResponse> create(@PathVariable Long productId, @AuthenticationPrincipal Jwt jwt,

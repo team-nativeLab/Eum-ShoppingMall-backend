@@ -74,14 +74,23 @@ public class AdminAuthController {
 				authService.verifyAdminMfa(request.mfaToken(), request.code(), httpRequest.getRemoteAddr()));
 	}
 
-	/** 관리자 Refresh 쿠키로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. */
+	/**
+	 * 관리자 Refresh 쿠키로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다.
+	 *
+	 * @param refreshToken 관리자 Refresh 토큰 쿠키(admin_refresh_token). 브라우저가 자동으로 붙인다.
+	 */
 	@PostMapping("/refresh")
 	public ResponseEntity<ApiResponse<LoginResponse>> refresh(
 			@CookieValue(name = AuthTokenResponder.ADMIN_REFRESH_COOKIE, required = false) String refreshToken) {
 		return responder.withTokens(Session.ADMIN, authService.adminRefresh(refreshToken));
 	}
 
-	/** Authorization 헤더의 Access 토큰과 관리자 Refresh 쿠키를 폐기한다. */
+	/**
+	 * Authorization 헤더의 Access 토큰과 관리자 Refresh 쿠키를 폐기한다.
+	 *
+	 * @param refreshToken        관리자 Refresh 토큰 쿠키(admin_refresh_token). 브라우저가 자동으로 붙인다.
+	 * @param authorizationHeader Bearer {Access 토큰}. 보내면 그 Access 토큰도 바로 폐기한다.
+	 */
 	@PostMapping("/logout")
 	public ResponseEntity<ApiResponse<Void>> logout(
 			@CookieValue(name = AuthTokenResponder.ADMIN_REFRESH_COOKIE, required = false) String refreshToken,

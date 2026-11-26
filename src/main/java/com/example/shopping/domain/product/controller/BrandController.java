@@ -35,7 +35,11 @@ public class BrandController {
 		return ApiResponse.ok(brandService.featured());
 	}
 
-	/** 브랜드 상세. 숨긴 브랜드는 404(BRAND_NOT_FOUND) */
+	/**
+	 * 브랜드 상세. 숨긴 브랜드는 404(BRAND_NOT_FOUND)
+	 *
+	 * @param brandId 브랜드 ID
+	 */
 	@GetMapping("/{brandId}")
 	public ApiResponse<BrandResponse.Detail> brand(@PathVariable Long brandId) {
 		return ApiResponse.ok(brandService.get(brandId));

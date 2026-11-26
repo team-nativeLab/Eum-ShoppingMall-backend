@@ -55,6 +55,9 @@ public class ProductController {
 	/**
 	 * 검색 화면의 카테고리 탭과 필터(브랜드, 인증)에 보여 줄 항목별 상품 수.
 	 * 목록 조회와 같은 categoryId·query를 넘긴다.
+	 *
+	 * @param categoryId 목록 조회와 같은 카테고리 ID
+	 * @param query      목록 조회와 같은 검색어
 	 */
 	@GetMapping("/products/facets")
 	public ApiResponse<ProductFacetsResponse> facets(@RequestParam(required = false) Long categoryId,
@@ -62,20 +65,32 @@ public class ProductController {
 		return ApiResponse.ok(productService.getFacets(categoryId, query));
 	}
 
-	/** 검색창 자동 완성. 상품명이나 브랜드에 검색어가 든 상품 최대 5개 */
+	/**
+	 * 검색창 자동 완성. 상품명이나 브랜드에 검색어가 든 상품 최대 5개
+	 *
+	 * @param query 검색창에 입력 중인 글자
+	 */
 	@GetMapping("/products/suggestions")
 	public ApiResponse<List<ProductSuggestionResponse>> suggestions(@RequestParam(required = false) String query) {
 		return ApiResponse.ok(productService.suggest(query));
 	}
 
-	/** 검색 결과가 없을 때의 추천 상품. 고객에게 보이는 상품을 추천순(관리자 추천 점수 → 최근 등록)으로 limit개(기본 10, 최대 20) */
+	/**
+	 * 검색 결과가 없을 때의 추천 상품. 고객에게 보이는 상품을 추천순(관리자 추천 점수 → 최근 등록)으로 limit개(기본 10, 최대 20)
+	 *
+	 * @param limit 가져올 개수(기본 10, 최대 20)
+	 */
 	@GetMapping("/products/recommended")
 	public ApiResponse<List<ProductSummaryResponse>> recommended(
 			@RequestParam(defaultValue = "" + ProductService.DEFAULT_COLLECTION_LIMIT) int limit) {
 		return ApiResponse.ok(productService.getRecommended(limit));
 	}
 
-	/** WEB-005, 006 상품 상세 */
+	/**
+	 * WEB-005, 006 상품 상세
+	 *
+	 * @param productId 상품 ID
+	 */
 	@GetMapping("/products/{productId}")
 	public ApiResponse<ProductDetailResponse> product(@PathVariable Long productId) {
 		return ApiResponse.ok(productService.getDetail(productId));
@@ -84,6 +99,9 @@ public class ProductController {
 	/**
 	 * 상품 상세의 "함께 구매하면 좋은 제품". 같은 최상위 카테고리의 상품을 추천순으로, 모자라면 전체 추천순으로 채워
 	 * limit개(기본 10, 최대 20). 기준 상품은 빠지고, 고객에게 보이지 않는 기준 상품이면 404다.
+	 *
+	 * @param productId 기준 상품 ID
+	 * @param limit     가져올 개수(기본 10, 최대 20)
 	 */
 	@GetMapping("/products/{productId}/related")
 	public ApiResponse<List<ProductSummaryResponse>> related(@PathVariable Long productId,

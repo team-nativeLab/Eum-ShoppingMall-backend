@@ -39,6 +39,8 @@ public class SocialAuthController {
 	/**
 	 * 카카오(kakao)·구글(google) 로그인. 같은 이메일의 회원이 있으면 카카오·구글이 인증한 이메일일 때만 연결한다.
 	 * 처음 온 사람이면 signupRequired와 가입 토큰을 준다(이때는 쿠키가 없다). 관리자 계정은 쓸 수 없다.
+	 *
+	 * @param provider kakao 또는 google(대소문자 무관)
 	 */
 	@PostMapping("/{provider}/login")
 	public ResponseEntity<ApiResponse<SocialLoginResponse>> login(@PathVariable String provider,

@@ -29,7 +29,11 @@ public class ShopEventController {
 		return ApiResponse.ok(shopEventService.list());
 	}
 
-	/** 이벤트 상세. 숨긴 이벤트는 404(EVENT_NOT_FOUND) */
+	/**
+	 * 이벤트 상세. 숨긴 이벤트는 404(EVENT_NOT_FOUND)
+	 *
+	 * @param eventId 이벤트 ID
+	 */
 	@GetMapping("/{eventId}")
 	public ApiResponse<ShopEventResponse> event(@PathVariable Long eventId) {
 		return ApiResponse.ok(shopEventService.get(eventId));

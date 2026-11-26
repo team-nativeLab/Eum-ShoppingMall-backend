@@ -50,7 +50,11 @@ public class AppAuthController {
 		return ApiResponse.ok(AppTokenResponse.from(authService.refresh(request.refreshToken())));
 	}
 
-	/** 앱 로그아웃. 본문의 Refresh 토큰과 Authorization 헤더의 Access 토큰을 폐기한다. 앱은 저장한 토큰도 지운다. */
+	/**
+	 * 앱 로그아웃. 본문의 Refresh 토큰과 Authorization 헤더의 Access 토큰을 폐기한다. 앱은 저장한 토큰도 지운다.
+	 *
+	 * @param authorizationHeader Bearer {Access 토큰}. 보내면 그 Access 토큰도 바로 폐기한다.
+	 */
 	@PostMapping("/logout")
 	public ApiResponse<Void> logout(@Valid @RequestBody AppRefreshRequest request,
 			@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader) {

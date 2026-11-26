@@ -41,7 +41,11 @@ public class HomeController {
 		return ApiResponse.ok(companyInfoService.get());
 	}
 
-	/** WEB-025 회사소개(company)·이용약관(terms)·개인정보처리방침(privacy-policy) 등 서버가 허용한 고정 콘텐츠. */
+	/**
+	 * WEB-025 회사소개(company)·이용약관(terms)·개인정보처리방침(privacy-policy) 등 서버가 허용한 고정 콘텐츠.
+	 *
+	 * @param code 콘텐츠 코드(company, terms, privacy-policy)
+	 */
 	@GetMapping("/contents/{code}")
 	public ApiResponse<ContentResponse> content(@PathVariable String code) {
 		return ApiResponse.ok(homeService.getContent(code));

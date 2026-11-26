@@ -37,7 +37,13 @@ public class AdminOrderController {
 
 	private final AdminOrderService adminOrderService;
 
-	/** ADM-010 전체 주문 목록·검색 (?status=&memberId=&orderNo=). 주문번호는 전체나 앞부분(예: 주문일 20261028)으로 찾는다. */
+	/**
+	 * ADM-010 전체 주문 목록·검색 (?status=&memberId=&orderNo=). 주문번호는 전체나 앞부분(예: 주문일 20261028)으로 찾는다.
+	 *
+	 * @param status   이 주문 상태의 주문만. 없으면 모두
+	 * @param memberId 이 회원(회원 ID)의 주문만
+	 * @param orderNo  주문번호 전체나 앞부분(예: 주문일 20261028)
+	 */
 	@GetMapping
 	public ApiResponse<PageResponse<AdminOrderSummaryResponse>> orders(
 			@RequestParam(required = false) OrderStatus status,
@@ -47,20 +53,32 @@ public class AdminOrderController {
 		return ApiResponse.ok(adminOrderService.search(status, memberId, orderNo, pageable));
 	}
 
-	/** ADM-011 주문 상세 (품목·배송지·결제 정보) */
+	/**
+	 * ADM-011 주문 상세 (품목·배송지·결제 정보)
+	 *
+	 * @param orderId 주문 ID(주문번호가 아니다)
+	 */
 	@GetMapping("/{orderId}")
 	public ApiResponse<AdminOrderDetailResponse> order(@PathVariable Long orderId) {
 		return ApiResponse.ok(adminOrderService.getDetail(orderId));
 	}
 
-	/** ADM-011 주문 상태 변경·송장 등록 */
+	/**
+	 * ADM-011 주문 상태 변경·송장 등록
+	 *
+	 * @param orderId 주문 ID(주문번호가 아니다)
+	 */
 	@PatchMapping("/{orderId}")
 	public ApiResponse<AdminOrderDetailResponse> updateOrder(@PathVariable Long orderId,
 			@Valid @RequestBody AdminOrderUpdateRequest request) {
 		return ApiResponse.ok(adminOrderService.update(orderId, request));
 	}
 
-	/** 결제 환불 또는 결제 대기 주문 만료를 처리한다. */
+	/**
+	 * 결제 환불 또는 결제 대기 주문 만료를 처리한다.
+	 *
+	 * @param orderId 주문 ID(주문번호가 아니다)
+	 */
 	@PostMapping("/{orderId}/cancel")
 	public ApiResponse<AdminOrderDetailResponse> cancelOrder(@AuthenticationPrincipal Jwt jwt,
 			@PathVariable Long orderId, @Valid @RequestBody AdminOrderCancelRequest request) {

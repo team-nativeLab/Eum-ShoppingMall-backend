@@ -27,6 +27,9 @@ public class LegalDocumentController {
 	/**
 	 * 지금 시행 중인 공개 버전. version을 주면 그 공개 버전(이전·시행 예정 버전 보기).
 	 * 없는 종류, 공개하지 않은 버전, 아직 시행 중인 버전이 없으면 404(LEGAL_DOCUMENT_NOT_FOUND)
+	 *
+	 * @param type    문서 종류(terms, privacy, guide, shipping)
+	 * @param version 볼 공개 버전(예: 2.0). 없으면 지금 시행 중인 버전
 	 */
 	@GetMapping("/{type}")
 	public ApiResponse<LegalDocumentResponse> document(@PathVariable String type,
@@ -34,7 +37,11 @@ public class LegalDocumentController {
 		return ApiResponse.ok(legalDocumentService.get(type, version));
 	}
 
-	/** 공개 버전 목록(시행 예정 포함, 본문 제외). 시행일이 늦은 순 */
+	/**
+	 * 공개 버전 목록(시행 예정 포함, 본문 제외). 시행일이 늦은 순
+	 *
+	 * @param type 문서 종류(terms, privacy, guide, shipping)
+	 */
 	@GetMapping("/{type}/versions")
 	public ApiResponse<List<LegalDocumentResponse.Version>> versions(@PathVariable String type) {
 		return ApiResponse.ok(legalDocumentService.versions(type));

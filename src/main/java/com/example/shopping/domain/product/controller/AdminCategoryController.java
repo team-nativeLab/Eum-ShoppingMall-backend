@@ -45,14 +45,22 @@ public class AdminCategoryController {
 		return ApiResponse.ok(adminCategoryService.create(request));
 	}
 
-	/** 이름·정렬 순서·노출 여부(active) 수정 */
+	/**
+	 * 이름·정렬 순서·노출 여부(active) 수정
+	 *
+	 * @param categoryId 카테고리 ID
+	 */
 	@PatchMapping("/{categoryId}")
 	public ApiResponse<AdminCategoryResponse> updateCategory(@PathVariable Long categoryId,
 			@Valid @RequestBody CategoryUpdateRequest request) {
 		return ApiResponse.ok(adminCategoryService.update(categoryId, request));
 	}
 
-	/** 하위 카테고리나 소속 상품이 있으면 409로 거부하고, 비어 있을 때만 삭제한다. */
+	/**
+	 * 하위 카테고리나 소속 상품이 있으면 409로 거부하고, 비어 있을 때만 삭제한다.
+	 *
+	 * @param categoryId 카테고리 ID
+	 */
 	@DeleteMapping("/{categoryId}")
 	public ApiResponse<Void> deleteCategory(@PathVariable Long categoryId) {
 		adminCategoryService.delete(categoryId);

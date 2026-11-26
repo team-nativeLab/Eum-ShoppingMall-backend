@@ -35,6 +35,8 @@ public class AppSocialAuthController {
 	/**
 	 * 카카오(kakao)는 카카오 SDK의 액세스 토큰, 구글(google)은 Google Sign-In의 ID 토큰을 보낸다.
 	 * 다른 앱용으로 발급된 토큰은 받지 않는다. 처음 온 사람이면 signupRequired와 가입 토큰을 준다.
+	 *
+	 * @param provider kakao 또는 google(대소문자 무관)
 	 */
 	@PostMapping("/{provider}/login")
 	public ApiResponse<AppSocialLoginResponse> login(@PathVariable String provider,

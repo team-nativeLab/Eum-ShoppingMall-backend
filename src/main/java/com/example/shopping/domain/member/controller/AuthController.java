@@ -102,14 +102,23 @@ public class AuthController {
 		return responder.withTokens(Session.MEMBER, authService.login(request, httpRequest.getRemoteAddr()));
 	}
 
-	/** Refresh 쿠키로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. 관리자 토큰은 발급하지 않는다. */
+	/**
+	 * Refresh 쿠키로 Access 토큰을 다시 발급한다. Refresh 토큰도 새것으로 교체된다. 관리자 토큰은 발급하지 않는다.
+	 *
+	 * @param refreshToken Refresh 토큰 쿠키(refresh_token). 브라우저가 자동으로 붙인다.
+	 */
 	@PostMapping("/refresh")
 	public ResponseEntity<ApiResponse<LoginResponse>> refresh(
 			@CookieValue(name = AuthTokenResponder.REFRESH_COOKIE, required = false) String refreshToken) {
 		return responder.withTokens(Session.MEMBER, authService.refresh(refreshToken));
 	}
 
-	/** Authorization 헤더의 Access 토큰과 Refresh 쿠키를 폐기한다. */
+	/**
+	 * Authorization 헤더의 Access 토큰과 Refresh 쿠키를 폐기한다.
+	 *
+	 * @param refreshToken        Refresh 토큰 쿠키(refresh_token). 브라우저가 자동으로 붙인다.
+	 * @param authorizationHeader Bearer {Access 토큰}. 보내면 그 Access 토큰도 바로 폐기한다.
+	 */
 	@PostMapping("/logout")
 	public ResponseEntity<ApiResponse<Void>> logout(
 			@CookieValue(name = AuthTokenResponder.REFRESH_COOKIE, required = false) String refreshToken,

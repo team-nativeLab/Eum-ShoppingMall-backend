@@ -44,14 +44,22 @@ public class AdminSupplierController {
 		return ApiResponse.ok(adminSupplierService.create(request));
 	}
 
-	/** 발주처 전체 수정 */
+	/**
+	 * 발주처 전체 수정
+	 *
+	 * @param supplierId 발주처 ID
+	 */
 	@PutMapping("/{supplierId}")
 	public ApiResponse<SupplierResponse> update(@PathVariable Long supplierId,
 			@Valid @RequestBody SupplierRequest request) {
 		return ApiResponse.ok(adminSupplierService.update(supplierId, request));
 	}
 
-	/** 발주처 삭제. 상품에 연결된 발주처는 409(SUPPLIER_IN_USE) */
+	/**
+	 * 발주처 삭제. 상품에 연결된 발주처는 409(SUPPLIER_IN_USE)
+	 *
+	 * @param supplierId 발주처 ID
+	 */
 	@DeleteMapping("/{supplierId}")
 	public ApiResponse<Void> delete(@PathVariable Long supplierId) {
 		adminSupplierService.delete(supplierId);
