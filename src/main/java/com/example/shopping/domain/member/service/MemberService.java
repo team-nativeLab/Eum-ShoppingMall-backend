@@ -2,6 +2,7 @@ package com.example.shopping.domain.member.service;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import com.example.shopping.domain.member.dto.response.MeResponse;
 import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
@@ -31,6 +32,7 @@ public class MemberService {
 	private final MemberAddressRepository memberAddressRepository;
 	private final OrderRepository orderRepository;
 	private final MemberTokenStateCache memberTokenStateCache;
+	private final SocialAuthService socialAuthService;
 
 	public MeResponse getMe(Long memberId) {
 		return MeResponse.from(findActive(memberId));
@@ -47,6 +49,10 @@ public class MemberService {
 	/** 비밀번호를 바꾸면 다른 기기에 남아 있는 로그인(Refresh 토큰)을 모두 끊는다. 비밀번호가 유출됐을 때를 대비한 조치다. */
 	public void changePassword(Long memberId, PasswordChangeRequest request) {
 		Member member = findActive(memberId);
+		// 카카오·구글로만 가입해 비밀번호가 없으면 비밀번호 찾기(이메일 인증)로 정한다(#225).
+		if (!member.hasPassword()) {
+			throw new BusinessException(ErrorCode.PASSWORD_NOT_SET);
+		}
 		if (!passwordEncoder.matches(request.currentPassword(), member.getPasswordHash())) {
 			throw new BusinessException(ErrorCode.CURRENT_PASSWORD_MISMATCH);
 		}
@@ -60,9 +66,14 @@ public class MemberService {
 	}
 
 	@org.springframework.transaction.annotation.Transactional
+	/**
+	 * 비밀번호가 있는 계정은 현재 비밀번호를 확인한다. 카카오·구글로만 가입해 비밀번호가 없는 계정은 로그인(Access 토큰)만으로 탈퇴한다.
+	 * 카카오·구글 연결을 지우고, 탈퇴가 끝나면 제공자 쪽 연결도 끊는다(#225).
+	 */
 	public void withdraw(Long memberId, String password) {
 		Member member = findActive(memberId);
-		if (!passwordEncoder.matches(password, member.getPasswordHash())) {
+		if (member.hasPassword() && (!StringUtils.hasText(password)
+				|| !passwordEncoder.matches(password, member.getPasswordHash()))) {
 			throw new BusinessException(ErrorCode.CURRENT_PASSWORD_MISMATCH);
 		}
 		if (orderRepository.countOrdersBlockingWithdrawal(memberId) > 0) {
@@ -70,6 +81,7 @@ public class MemberService {
 		}
 		cartItemRepository.deleteAllByMemberId(memberId);
 		memberAddressRepository.deleteAllByMemberId(memberId);
+		socialAuthService.unlinkAllForWithdrawal(memberId);
 		member.withdraw();
 		memberRepository.save(member);
 		memberTokenStateCache.refresh(member);
