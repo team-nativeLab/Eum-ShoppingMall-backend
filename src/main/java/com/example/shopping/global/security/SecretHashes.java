@@ -24,6 +24,7 @@ public class SecretHashes {
 	public static final String RATE_LIMIT_KEY = "rate-limit-key";
 	public static final String ADMIN_MFA_CHALLENGE = "admin-mfa-challenge";
 	public static final String ADMIN_MFA_FAILURE_KEY = "admin-mfa-failure-key";
+	public static final String SOCIAL_SIGNUP_TICKET = "social-signup-ticket";
 	/** 암호화 키(SecretCipher) 용도 */
 	public static final String ADMIN_MFA_SECRET_ENCRYPTION = "admin-mfa-secret-encryption";
 
