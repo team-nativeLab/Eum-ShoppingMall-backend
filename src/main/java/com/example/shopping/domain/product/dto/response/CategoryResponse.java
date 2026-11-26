@@ -3,6 +3,11 @@ package com.example.shopping.domain.product.dto.response;
 import com.example.shopping.domain.product.entity.Category;
 
 /**
+ * 카테고리
+ *
+ * @param id          카테고리 ID
+ * @param parentId    상위 카테고리 ID. 최상위면 null
+ * @param name        이름
  * @param slug        주소에 쓰는 영문 이름 (예: /category/head-protection)
  * @param description 짧은 소개. 없으면 null
  * @param iconKey     아이콘 이름. 없으면 null

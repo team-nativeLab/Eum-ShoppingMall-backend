@@ -9,7 +9,13 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-/** 관리자가 새 상품 옵션을 추가할 때 보낸다. */
+/**
+ * 관리자가 새 상품 옵션을 추가할 때 보낸다.
+ *
+ * @param optionName 옵션 이름(100자 이하)
+ * @param price      옵션 가격(원)
+ * @param stock      처음 재고 수량
+ */
 public record SkuCreateRequest(
 		@NotBlank(message = "옵션 이름을 입력해 주세요.")
 		@Size(max = 100, message = "옵션 이름은 100자 이하여야 합니다.")

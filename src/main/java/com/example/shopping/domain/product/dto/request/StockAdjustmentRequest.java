@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
+ * 재고 조정(입고·차감)
+ *
  * @param delta  늘릴 수량(입고)은 양수, 줄일 수량(파손·분실·실사 차이)은 음수. 현재 재고에 더한다.
  * @param reason 조정 사유 (예: 입고, 파손, 실사 차이). 관리자 변경 기록에 남는다.
  */

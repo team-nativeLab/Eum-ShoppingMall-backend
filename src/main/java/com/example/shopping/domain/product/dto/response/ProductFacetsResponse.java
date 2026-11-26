@@ -15,6 +15,8 @@ public record ProductFacetsResponse(long totalCount, long keywordTotalCount, Lis
 		List<FacetItem<String>> brands, List<FacetItem<String>> certifications) {
 
 	/**
+	 * 필터 항목 하나와 상품 수
+	 *
 	 * @param value 필터 요청에 그대로 쓰는 값 (카테고리 ID, 브랜드 이름, 인증 코드)
 	 * @param label 화면에 보여 줄 이름
 	 * @param count 상품 수

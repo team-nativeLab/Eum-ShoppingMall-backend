@@ -18,17 +18,31 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 /**
- * @param listPrice       정가. 판매가(basePrice)보다 높으면 할인 전 가격으로 표시된다. 없으면 생략
- * @param priceVisible    생략하면 가격 공개(true)
- * @param brand           브랜드 이름. 브랜드 필터에 쓰인다.
- * @param certifications  받은 안전 인증 (KCS, SELF_CONFIRMATION, TYPE_APPROVAL). 없으면 생략
- * @param recommendScore  추천순 정렬 점수. 클수록 앞에 나온다. 생략하면 0
- * @param status          생략하면 판매중(ON_SALE)
- * @param skus            옵션 목록. 고객에게 노출하는 상품은 하나 이상 필요하고, 비공개 상품은 생략 가능
- * @param featured        베스트 상품 목록(?collection=featured)에 넣을지(#207). 없으면 false
- * @param todayDeal       오늘의 상품 목록(?collection=today)에 넣을지(#207). 없으면 false
- * @param supplierId      발주처 ID(#208). 없는 발주처는 404. 없으면 지정하지 않는다
- * @param images          상세 갤러리. 보내면 첫 이미지가 대표 이미지(imageUrl)가 된다. 나머지 상세 정보는 ProductDetailFields 참고
+ * 상품 등록
+ *
+ * @param categoryId        카테고리 ID. 없으면 생략
+ * @param name              상품명(200자 이하)
+ * @param description       상품 설명(20,000자 이하). 서식은 descriptionFormat
+ * @param imageUrl          대표 이미지 주소(업로드 API가 돌려준 주소). images를 보내면 첫 이미지로 정한다.
+ * @param basePrice         판매가(원)
+ * @param listPrice         정가. 판매가(basePrice)보다 높으면 할인 전 가격으로 표시된다. 없으면 생략
+ * @param priceVisible      생략하면 가격 공개(true)
+ * @param brand             브랜드 이름. 브랜드 필터에 쓰인다.
+ * @param certifications    받은 안전 인증 (KCS, SELF_CONFIRMATION, TYPE_APPROVAL). 없으면 생략
+ * @param recommendScore    추천순 정렬 점수. 클수록 앞에 나온다. 생략하면 0
+ * @param status            생략하면 판매중(ON_SALE)
+ * @param skus              옵션 목록. 고객에게 노출하는 상품은 하나 이상 필요하고, 비공개 상품은 생략 가능
+ * @param productCode       상품 코드(영문·숫자로 시작, 영문·숫자·-·_ 50자 이내). 다른 상품과 겹치면 409(PRODUCT_CODE_DUPLICATED)
+ * @param modelName         모델명(100자 이하)
+ * @param summary           목록·상세 위쪽의 한 줄 요약(300자 이하)
+ * @param countryOfOrigin   원산지(50자 이하)
+ * @param shippingEstimate  배송 예정 안내(100자 이하, 예: 평일 기준 2~3일 이내 출고)
+ * @param descriptionFormat 상품 설명 서식. PLAIN(평문), RICH_V1(제한된 서식). 없으면 PLAIN
+ * @param images            상세 갤러리. 보내면 첫 이미지가 대표 이미지(imageUrl)가 된다. 나머지 상세 정보는 ProductDetailFields 참고
+ * @param specifications    사양 표(20줄까지)
+ * @param featured          베스트 상품 목록(?collection=featured)에 넣을지(#207). 없으면 false
+ * @param todayDeal         오늘의 상품 목록(?collection=today)에 넣을지(#207). 없으면 false
+ * @param supplierId        발주처 ID(#208). 없는 발주처는 404. 없으면 지정하지 않는다
  */
 public record ProductCreateRequest(
 		Long categoryId,

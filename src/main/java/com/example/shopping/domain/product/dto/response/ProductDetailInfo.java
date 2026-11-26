@@ -10,10 +10,21 @@ public final class ProductDetailInfo {
 	private ProductDetailInfo() {
 	}
 
-	/** @param alt 대체 문구. 없으면 빈 문자열 */
+	/**
+	 * 상세 갤러리 이미지
+	 *
+	 * @param url 이미지 주소
+	 * @param alt 대체 문구. 없으면 빈 문자열
+	 */
 	public record Image(String url, String alt) {
 	}
 
+	/**
+	 * 사양 표의 한 행
+	 *
+	 * @param label 항목(예: 재질)
+	 * @param value 값(예: ABS)
+	 */
 	public record Specification(String label, String value) {
 	}
 

@@ -12,7 +12,10 @@ import jakarta.validation.constraints.Size;
 /**
  * 발주처 등록·수정(전체 수정, #208).
  *
+ * @param companyName  회사명(100자 이하)
+ * @param contactName  담당자 이름(50자 이하)
  * @param contactPhone 담당자 연락처(예: 02-1234-5678, 010-1234-5678)
+ * @param contactEmail 담당자 이메일(100자 이하)
  * @param orderChannel 주문(발주) 정보를 받는 방식. EMAIL이면 orderEmail, FAX면 orderFax가 필요하다.
  * @param orderEmail   주문을 받을 이메일. 수신 방식이 EMAIL이 아니면 저장하지 않는다.
  * @param orderFax     주문을 받을 팩스 번호. 수신 방식이 FAX가 아니면 저장하지 않는다.

@@ -8,6 +8,13 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
+/**
+ * 상품 등록 때 함께 만드는 옵션
+ *
+ * @param optionName 옵션 이름(100자 이하, 예: L 사이즈)
+ * @param price      옵션 가격(원)
+ * @param stock      재고 수량
+ */
 public record ProductSkuRequest(
 		@NotBlank(message = "옵션 이름을 입력해 주세요.")
 		@Size(max = 100, message = "옵션 이름은 100자 이하여야 합니다.")

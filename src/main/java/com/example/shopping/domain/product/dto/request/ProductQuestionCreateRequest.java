@@ -6,6 +6,8 @@ import jakarta.validation.constraints.Size;
 /**
  * 상품 문의 작성
  *
+ * @param title     제목(100자 이하)
+ * @param content   문의 내용(2,000자 이하)
  * @param isPrivate true면 비밀 문의. 작성자 본인과 관리자만 내용과 답변을 본다.
  */
 public record ProductQuestionCreateRequest(

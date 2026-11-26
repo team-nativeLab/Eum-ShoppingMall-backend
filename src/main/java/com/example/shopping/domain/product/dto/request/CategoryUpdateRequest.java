@@ -5,7 +5,16 @@ import com.example.shopping.global.validation.ValidationPatterns;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/** 보낸 항목만 수정한다. 소개 문구와 아이콘 이름은 빈 문자열을 보내면 지운다. */
+/**
+ * 보낸 항목만 수정한다. 소개 문구와 아이콘 이름은 빈 문자열을 보내면 지운다.
+ *
+ * @param name        카테고리 이름(100자 이하)
+ * @param slug        주소에 쓰는 영문 이름(예: head-protection). 다른 카테고리와 겹칠 수 없다.
+ * @param description 짧은 소개(200자 이하). 빈 문자열이면 지운다.
+ * @param iconKey     아이콘 이름(예: hard-hat). 빈 문자열이면 지운다.
+ * @param sortOrder   정렬 순서. 작을수록 앞
+ * @param active      고객 화면에 보일지
+ */
 public record CategoryUpdateRequest(
 		@Pattern(regexp = ValidationPatterns.HAS_TEXT, message = "카테고리 이름을 입력해 주세요.")
 		@Size(max = 100, message = "카테고리 이름은 100자 이하여야 합니다.")
