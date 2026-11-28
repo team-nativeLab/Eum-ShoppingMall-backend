@@ -13,7 +13,7 @@ import com.example.shopping.domain.product.entity.ProductStatus;
  * @param name           상품명
  * @param brand          브랜드 이름. 없으면 null
  * @param imageUrl       대표 이미지. 없으면 null
- * @param price          판매가(원). 금액 미표시 상품이면 null
+ * @param price          대표 판매가(원). 주문 단가는 옵션 가격이다. 금액 미표시 상품이면 null
  * @param listPrice      정가. 판매가(price)보다 높을 때만 할인 전 가격으로 보여 주면 된다. 없으면 null
  * @param priceVisible   금액 공개 여부. false면 견적 문의로 안내한다.
  * @param certifications 받은 안전 인증

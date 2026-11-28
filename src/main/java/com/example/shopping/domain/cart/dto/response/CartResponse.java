@@ -34,7 +34,7 @@ public record CartResponse(List<Item> items, int orderableCount, long itemAmount
 	 * @param quantity     담은 수량
 	 * @param selected     주문할 품목으로 골랐는지
 	 * @param priceVisible 금액을 공개하는 상품인지. false면 주문 대신 견적 문의로 안내한다.
-	 * @param price        옵션 단가(원)
+	 * @param price        옵션 판매가(원). 주문에 그대로 쓰는 최종 단가
 	 * @param amount       단가와 수량을 곱한 금액(원)
 	 * @param status       지금 주문할 수 있는지. ORDERABLE(주문 가능), PRICE_HIDDEN(금액 미표시, 견적 문의), NOT_ON_SALE(판매하지 않음),
 	 *                     OUT_OF_STOCK(품절이거나 재고 부족)

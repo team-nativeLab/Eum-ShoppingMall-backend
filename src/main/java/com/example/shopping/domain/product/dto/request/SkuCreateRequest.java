@@ -13,7 +13,7 @@ import jakarta.validation.constraints.Size;
  * 관리자가 새 상품 옵션을 추가할 때 보낸다.
  *
  * @param optionName 옵션 이름(100자 이하)
- * @param price      옵션 가격(원)
+ * @param price      옵션 판매가(원). 기본가에 더하는 금액이 아니라 장바구니·주문에 그대로 쓰는 최종 단가다.
  * @param stock      처음 재고 수량
  */
 public record SkuCreateRequest(

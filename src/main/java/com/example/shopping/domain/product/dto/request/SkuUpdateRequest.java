@@ -12,7 +12,7 @@ import jakarta.validation.constraints.Size;
  * 옵션 이름과 가격만 바꾼다. 재고 변경은 입고·재고 조정 API로 처리한다.
  *
  * @param optionName 옵션 이름(100자 이하)
- * @param price      옵션 가격(원)
+ * @param price      옵션 판매가(원). 기본가에 더하는 금액이 아니라 장바구니·주문에 그대로 쓰는 최종 단가다.
  */
 public record SkuUpdateRequest(
 		@NotBlank(message = "옵션 이름을 입력해 주세요.")

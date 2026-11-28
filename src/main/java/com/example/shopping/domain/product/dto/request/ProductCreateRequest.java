@@ -24,7 +24,7 @@ import jakarta.validation.constraints.Size;
  * @param name              상품명(200자 이하)
  * @param description       상품 설명(20,000자 이하). 서식은 descriptionFormat
  * @param imageUrl          대표 이미지 주소(업로드 API가 돌려준 주소). images를 보내면 첫 이미지로 정한다.
- * @param basePrice         판매가(원)
+ * @param basePrice         대표 판매가(원). 목록·상세의 가격 표시, 가격순 정렬, 할인 표시(정가와 비교)에 쓴다. 주문 단가는 옵션 가격이다.
  * @param listPrice         정가. 판매가(basePrice)보다 높으면 할인 전 가격으로 표시된다. 없으면 생략
  * @param priceVisible      생략하면 가격 공개(true)
  * @param brand             브랜드 이름. 브랜드 필터에 쓰인다.

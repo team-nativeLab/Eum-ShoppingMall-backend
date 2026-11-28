@@ -24,7 +24,7 @@ import jakarta.validation.constraints.Size;
  * @param name              상품명(200자 이하)
  * @param description       상품 설명(20,000자 이하). 빈 문자열이면 지운다.
  * @param imageUrl          대표 이미지 주소. 빈 문자열이면 지운다.
- * @param basePrice         판매가(원)
+ * @param basePrice         대표 판매가(원). 목록·상세의 가격 표시, 가격순 정렬, 할인 표시(정가와 비교)에 쓴다. 주문 단가는 옵션 가격이다.
  * @param listPrice         정가(원). 0이면 지운다.
  * @param brand             브랜드 이름(100자 이하). 빈 문자열이면 지운다.
  * @param certifications    보낸 목록으로 통째로 바꾼다. 빈 목록을 보내면 인증을 모두 지운다.
