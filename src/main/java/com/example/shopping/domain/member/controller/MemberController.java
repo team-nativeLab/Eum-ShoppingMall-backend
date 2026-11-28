@@ -5,10 +5,13 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.shopping.domain.consent.dto.request.MarketingConsentRequest;
+import com.example.shopping.domain.consent.dto.response.MarketingConsentResponse;
 import com.example.shopping.domain.member.dto.response.MeResponse;
 import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
 import com.example.shopping.domain.member.dto.request.ProfileUpdateRequest;
@@ -20,7 +23,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-/** 내 정보 조회·수정, 비밀번호 변경, 회원 탈퇴 */
+/** 내 정보 조회·수정, 마케팅 정보 수신 동의, 비밀번호 변경, 회원 탈퇴 */
 @Tag(name = "내 정보")
 @RestController
 @RequestMapping("/api/v1/me")
@@ -40,6 +43,17 @@ public class MemberController {
 	public ApiResponse<MeResponse> updateProfile(@AuthenticationPrincipal Jwt jwt,
 			@Valid @RequestBody ProfileUpdateRequest request) {
 		return ApiResponse.ok(memberService.updateProfile(CurrentMember.id(jwt), request));
+	}
+
+	/**
+	 * 마케팅 정보 수신 동의·철회(#229). 가입할 때 고른 값을 언제든 바꿀 수 있다.
+	 * 바꿀 때마다 동의 기록을 새로 남기고(기존 기록은 고치지 않음), 지금 상태와 같으면 기록하지 않고 그대로 돌려준다.
+	 * 응답의 changedAt으로 처리 결과(동의·철회한 날짜)를 안내한다.
+	 */
+	@PutMapping("/marketing-consent")
+	public ApiResponse<MarketingConsentResponse> changeMarketingConsent(@AuthenticationPrincipal Jwt jwt,
+			@Valid @RequestBody MarketingConsentRequest request) {
+		return ApiResponse.ok(memberService.changeMarketingConsent(CurrentMember.id(jwt), request.agreed()));
 	}
 
 	/** WEB-020 비밀번호 변경. 현재 비밀번호를 확인한 뒤 바꾸고, 다른 기기의 로그인을 모두 끊는다. */

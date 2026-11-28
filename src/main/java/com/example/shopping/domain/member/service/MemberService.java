@@ -4,6 +4,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import com.example.shopping.domain.consent.dto.response.MarketingConsentResponse;
+import com.example.shopping.domain.consent.service.ConsentService;
 import com.example.shopping.domain.member.dto.response.MeResponse;
 import com.example.shopping.domain.member.dto.request.PasswordChangeRequest;
 import com.example.shopping.domain.member.dto.request.ProfileUpdateRequest;
@@ -33,9 +35,10 @@ public class MemberService {
 	private final OrderRepository orderRepository;
 	private final MemberTokenStateCache memberTokenStateCache;
 	private final SocialAuthService socialAuthService;
+	private final ConsentService consentService;
 
 	public MeResponse getMe(Long memberId) {
-		return MeResponse.from(findActive(memberId));
+		return MeResponse.of(findActive(memberId), consentService.marketingAgreed(memberId));
 	}
 
 	public MeResponse updateProfile(Long memberId, ProfileUpdateRequest request) {
@@ -43,7 +46,13 @@ public class MemberService {
 		String name = request.name() == null ? null : request.name().trim();
 		String phone = ContactFormats.phone(request.phone());
 		member.updateProfile(name, phone);
-		return MeResponse.from(memberRepository.save(member));
+		return MeResponse.of(memberRepository.save(member), consentService.marketingAgreed(memberId));
+	}
+
+	/** 마케팅 정보 수신 동의·철회(#229). 이메일·카카오·구글 가입 회원 모두 같다. */
+	public MarketingConsentResponse changeMarketingConsent(Long memberId, boolean agreed) {
+		findActive(memberId);
+		return consentService.changeMarketing(memberId, agreed);
 	}
 
 	/** 비밀번호를 바꾸면 다른 기기에 남아 있는 로그인(Refresh 토큰)을 모두 끊는다. 비밀번호가 유출됐을 때를 대비한 조치다. */

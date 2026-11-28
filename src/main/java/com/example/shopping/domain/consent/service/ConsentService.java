@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.shopping.domain.consent.dto.response.MarketingConsentResponse;
 import com.example.shopping.domain.consent.entity.ConsentType;
 import com.example.shopping.domain.consent.entity.MemberConsent;
 import com.example.shopping.domain.consent.repository.MemberConsentRepository;
@@ -41,6 +42,27 @@ public class ConsentService {
 				MemberConsent.of(memberId, ConsentType.PRIVACY, true,
 						version(LegalDocumentType.PRIVACY, SiteContent.PRIVACY_POLICY)),
 				MemberConsent.of(memberId, ConsentType.MARKETING, marketingAgreed, null)));
+	}
+
+	/** 지금 마케팅 정보 수신에 동의한 상태인지. 기록이 없으면 동의하지 않은 것으로 본다. */
+	@Transactional(readOnly = true)
+	public boolean marketingAgreed(Long memberId) {
+		return memberConsentRepository.findFirstByMemberIdAndConsentTypeOrderByIdDesc(memberId, ConsentType.MARKETING)
+				.map(MemberConsent::isAgreed)
+				.orElse(false);
+	}
+
+	/**
+	 * 마케팅 정보 수신에 동의하거나 철회한다(#229). 기록은 고치지 않고 새 행을 남기며,
+	 * 지금 상태와 같으면 남기지 않고 마지막 기록을 돌려준다.
+	 */
+	public MarketingConsentResponse changeMarketing(Long memberId, boolean agreed) {
+		MemberConsent current = memberConsentRepository
+				.findFirstByMemberIdAndConsentTypeOrderByIdDesc(memberId, ConsentType.MARKETING)
+				.filter(consent -> consent.isAgreed() == agreed)
+				.orElseGet(() -> memberConsentRepository.save(
+						MemberConsent.of(memberId, ConsentType.MARKETING, agreed, null)));
+		return MarketingConsentResponse.from(current);
 	}
 
 	/**
