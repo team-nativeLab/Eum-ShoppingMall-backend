@@ -18,7 +18,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param brand             브랜드 이름. 없으면 null
  * @param description       상품 설명. 서식은 descriptionFormat
  * @param imageUrl          대표 이미지. 갤러리가 있으면 첫 이미지와 같다.
- * @param price             판매가(원). 금액 미표시 상품이면 null
+ * @param price             대표 판매가(원). 주문 단가는 고른 옵션의 가격(skus[].price)이다. 금액 미표시 상품이면 null
  * @param listPrice         정가. 없으면 null
  * @param priceVisible      금액 공개 여부. false면 주문 대신 견적 문의로 안내한다.
  * @param certifications    받은 안전 인증
@@ -49,7 +49,7 @@ public record ProductDetailResponse(Long id, Long categoryId, String name, Strin
 	 *
 	 * @param id         옵션(SKU) ID. 장바구니 담기·주문에 보낸다.
 	 * @param optionName 옵션 이름
-	 * @param price      옵션 가격(원). 금액 미표시 상품이면 null
+	 * @param price      옵션 판매가(원). 기본가에 더하는 금액이 아니라 장바구니·주문에 그대로 쓰는 최종 단가다. 금액 미표시 상품이면 null
 	 * @param soldOut    재고가 없는지
 	 */
 	@Schema(name = "ProductSkuResponse")
