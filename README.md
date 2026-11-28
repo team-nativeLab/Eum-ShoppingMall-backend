@@ -377,6 +377,7 @@ DB·Redis에는 원래 값 대신 해시를 저장합니다(#136).
 ## 약관 동의
 
 - **회원가입:** `POST /api/v1/auth/signup`에 `termsAgreed`(이용약관), `privacyAgreed`(개인정보 수집·이용)를 `true`로 보내야 합니다. 빠지거나 `false`면 400입니다. `marketingAgreed`(마케팅 수신)는 선택이고, 보내지 않으면 동의하지 않은 것으로 기록합니다.
+- **마케팅 수신 동의 변경:** 가입 뒤에도 `PUT /api/v1/me/marketing-consent`에 `{"agreed": true}`(동의)나 `{"agreed": false}`(철회)를 보내 바꿉니다(#229). 기존 기록은 고치지 않고 새 기록을 남기며, 지금 상태와 같으면 기록하지 않습니다. 응답의 `changedAt`(처리한 시각)으로 처리 결과를 안내하고, 지금 상태는 `GET /api/v1/me`의 `marketingAgreed`로 봅니다.
 - **비회원 문의·견적:** `POST /api/v1/support/inquiries`, `POST /api/v1/quotes`에 `privacyAgreed: true`가 없으면 `400 PRIVACY_CONSENT_REQUIRED`입니다. 회원은 가입할 때 동의했으므로 보내지 않아도 됩니다.
 - **기록:** 회원 동의는 `member_consent`에 항목별로 동의 여부와 시각을 남깁니다. 비회원 동의는 문의·견적 행의 `privacy_agreed_at`에 남깁니다. 둘 다 그때 시행 중인 약관·개인정보 처리방침 버전(약관 문서의 버전 이름, 예: `2.0`)을 함께 남깁니다. 약관 문서를 아직 공개하지 않았으면 예전처럼 고정 콘텐츠 `terms`, `privacy-policy`의 수정 시각을 남기고, 그것도 없으면 버전은 비워 둡니다. 동의 기록은 탈퇴해도 지우지 않습니다.
 
