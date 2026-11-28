@@ -2,7 +2,9 @@ package com.example.shopping;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -23,7 +25,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 회원가입·비회원 문의 때 받는 동의(#21) */
+/** 회원가입·비회원 문의 때 받는 동의(#21), 가입 뒤 마케팅 수신 동의 변경(#229) */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -106,6 +108,67 @@ class ConsentApiTests {
 				Long.class);
 
 		postJson("/api/v1/support/inquiries", inquiry(null), member(memberId)).andExpect(status().isCreated());
+	}
+
+	@Test
+	void 가입한_뒤에도_마케팅_수신에_동의하거나_철회할_수_있고_바꿀_때마다_기록을_새로_남긴다() throws Exception {
+		signup("""
+				{"email":"consent-3@example.com","password":"test-pass-1234","name":"홍길동",
+				 "termsAgreed":true,"privacyAgreed":true,"marketingAgreed":true}
+				""").andExpect(status().is2xxSuccessful());
+		long memberId = jdbcTemplate.queryForObject("select id from member where email = 'consent-3@example.com'",
+				Long.class);
+
+		mockMvc.perform(get("/api/v1/me").with(member(memberId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.marketingAgreed").value(true))
+				.andExpect(jsonPath("$.data.joinedAt").isNotEmpty());
+
+		putJson("/api/v1/me/marketing-consent", "{\"agreed\":false}", member(memberId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.agreed").value(false))
+				.andExpect(jsonPath("$.data.changedAt").isNotEmpty());
+		// 지금 상태와 같은 값을 다시 보내면 기록을 늘리지 않는다.
+		putJson("/api/v1/me/marketing-consent", "{\"agreed\":false}", member(memberId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.agreed").value(false));
+		mockMvc.perform(get("/api/v1/me").with(member(memberId)))
+				.andExpect(jsonPath("$.data.marketingAgreed").value(false));
+		putJson("/api/v1/me/marketing-consent", "{\"agreed\":true}", member(memberId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.agreed").value(true));
+
+		// 기존 기록은 고치지 않고 바꿀 때마다 새 행을 남긴다(가입 때 동의 → 철회 → 다시 동의).
+		assertThat(jdbcTemplate.queryForList(
+				"select agreed from member_consent where member_id = ? and consent_type = 'MARKETING' order by id",
+				Boolean.class, memberId)).containsExactly(true, false, true);
+	}
+
+	@Test
+	void 마케팅_수신_기록이_없는_회원은_동의하지_않은_것으로_보고_로그인과_동의_여부가_있어야_바꿀_수_있다() throws Exception {
+		jdbcTemplate.update("""
+				insert into member (email, password_hash, name, role, status, created_at, updated_at)
+				values ('consent-4@example.com', 'x', '회원', 'USER', 'ACTIVE', now(), now())
+				""");
+		long memberId = jdbcTemplate.queryForObject("select id from member where email = 'consent-4@example.com'",
+				Long.class);
+
+		mockMvc.perform(get("/api/v1/me").with(member(memberId)))
+				.andExpect(jsonPath("$.data.marketingAgreed").value(false));
+		putJson("/api/v1/me/marketing-consent", "{}", member(memberId)).andExpect(status().isBadRequest());
+		putJson("/api/v1/me/marketing-consent", "{\"agreed\":true}", null).andExpect(status().isUnauthorized());
+
+		putJson("/api/v1/me/marketing-consent", "{\"agreed\":true}", member(memberId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.agreed").value(true));
+		assertThat(jdbcTemplate.queryForObject(
+				"select count(*) from member_consent where member_id = ? and consent_type = 'MARKETING' and agreed = true",
+				Long.class, memberId)).isEqualTo(1);
+	}
+
+	private ResultActions putJson(String uri, String body, RequestPostProcessor auth) throws Exception {
+		var request = put(uri).contentType(MediaType.APPLICATION_JSON).content(body);
+		return mockMvc.perform(auth == null ? request : request.with(auth));
 	}
 
 	private String inquiry(Boolean privacyAgreed) {
